@@ -1,6 +1,7 @@
 import { hasExplicitPlatformPaystackGrant, hasTenantMembership } from '../../../supabase/functions/_shared/admin-finance-access.mjs';
 
 import { resolveEventWorkspace, scopeCalendarQuery } from '../../utils/adminCalendarScope.js';
+import { standaloneFinanceEventGrant } from './financeGrantScope.js';
 
 export const reviewPages = [
   'home', 'events', 'registrations', 'calendar', 'messaging', 'help', 'federations', 'organisations',
@@ -19,16 +20,7 @@ export function isReviewTenant(permissions) {
 }
 
 export function standaloneFinanceSummary(permissions) {
-  if (permissions?.role !== 'custom' || !Array.isArray(permissions.allowed_tabs) || !permissions.allowed_tabs.includes('finance')
-    || isReviewTenant(permissions)) return null;
-  const finance = permissions.module_permissions?.finance;
-  if (!Array.isArray(finance?.allowedTabs) || !finance.allowedTabs.includes('summary')) return null;
-  for (const values of [finance.allowedEvents, permissions.module_permissions?.['event-mgmt']?.allowedEvents]) {
-    if (values === undefined || (Array.isArray(values) && !values.length)) continue;
-    if (!Array.isArray(values) || values.some(id => !/^\d+$/.test(String(id)) || !Number.isSafeInteger(Number(id)) || Number(id) <= 0)) return null;
-    return { mode: 'assigned', assigned: [...new Set(values.map(Number))].sort((a, b) => a - b), label: 'Assigned finance events' };
-  }
-  return { mode: 'managed', label: 'Finance-managed events' };
+  return standaloneFinanceEventGrant(permissions, 'summary');
 }
 
 export function canOpenReviewPage(permissions, page) {
@@ -50,7 +42,7 @@ export function canOpenReviewPage(permissions, page) {
   if (page === 'organisations') return Boolean(permissions.orgs?.length) || (!tenant && tabs.includes('organisations'));
   if (page === 'clubs') return clubAdmin || (!tenant && tabs.includes('clubs'));
   if (page === 'federations') return federationAdmin || (!tenant && tabs.includes('federations'));
-  if (page === 'reports') return organisationAdmin || Boolean(standaloneFinanceSummary(permissions))
+  if (page === 'reports') return organisationAdmin || Boolean(standaloneFinanceSummary(permissions) || standaloneFinanceEventGrant(permissions, 'users'))
     || (!tenant && tabs.includes('finance') && permissions.module_permissions?.finance?.allowedEvents?.length > 0);
   if (page === 'payments') return !tenant && hasExplicitPlatformPaystackGrant(permissions);
   if (page === 'events' || page === 'registrations' || page === 'audit-log') return organisationAdmin || clubAdmin || (!tenant && (assignedEvents.length > 0 || tabs.includes('event-mgmt')));

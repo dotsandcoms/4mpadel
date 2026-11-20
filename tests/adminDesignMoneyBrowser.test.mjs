@@ -21,12 +21,26 @@ const licence = { id:'fixture-licence', player_id:5, name:player.name, email:pla
 const request = {id:'existing-payout',event_id:14,event_name:event.event_name,amount:200,last_four:'0155',status:'pending',created_at:'2026-08-05T10:00:00Z'};
 let banking = { saved:true, bank_name:'Fixture Bank', last_four:'0155', version:'account-version' }, requests = fb.mode === 'payout-admin' ? [request] : [];
 const platform = fb.permissions.role === 'super_admin';
+const ledgerScopeTest = fb.mode.startsWith('finance-ledger-');
+const gatewayBulk = fb.mode === 'gateway-bulk';
+const retrievalFailures = new Set(gatewayBulk ? ['bulk-12'] : []);
+const otherPlayer = {id:6,name:'Outside ledger player',email:'outside@example.invalid'};
+const failed = {...pay,id:'failed-own',reference:'assigned-entry-failed',status:'failed',amount:20};
+const otherPayment = {...pay,id:'other-pay',event_id:15,player_id:6,reference:'outside-scope-reference',players:otherPlayer,calendar:other};
 const tables = { calendar:[event,other], players:[player], payments:[pay], payment_refunds:[], license_seasons:[season],
     commerce_config:[{id:'default',temp_license_price:120,temp_license_enabled:true}], organisations:[{id:'our-org',name:'Our organisation',status:'approved'}] };
+if (ledgerScopeTest) {
+    tables.calendar[1] = {...other,finance_managed:false};
+    tables.players.push(otherPlayer);
+    tables.payments.push(failed,otherPayment,{...otherPayment,id:'other-pay-same-player',player_id:5,reference:'outside-for-same-player'});
+}
+if (gatewayBulk) tables.payments.push({...pay,id:'linked-bulk',reference:'bulk-linked'});
 function select(table) {
     const predicates = [];
     let remove=false, update, from=0, to=Infinity;
-    const rows=()=> (tables[table] || []).filter(row => predicates.every(fn=>fn(row)));
+    const filters = [];
+    const rows=()=> (table==='admin_sidebar_permissions' && ledgerScopeTest
+        ? [{...fb.liveGrant,email:actor.email}] : tables[table] || []).filter(row => predicates.every(fn=>fn(row)));
     const execute=(mode='all')=>{
         const result=rows();
         if(update && table==='calendar') counters.push(['update',table,result.map(r=>r.id),update]);
@@ -34,11 +48,11 @@ function select(table) {
         if(update) for(const row of result) Object.assign(row,update);
         return {data: structuredClone(mode==='single'?result[0]||null:result.slice(from,to+1))};
     };
-    return { select(){return this}, eq(key,value){predicates.push(row=>(row[key] !== null && typeof row[key] === 'object' ? JSON.stringify(row[key]) : String(row[key]))===String(value));return this}, neq(key,value){predicates.push(row=>row[key]!==value);return this},
-        in(key,ids){predicates.push(row=>ids.includes(key === 'metadata->>client_reference' ? row.client_reference : row[key]));return this}, is(key,val){predicates.push(row=>row[key]===val);return this},
+    return { select(){return this}, ilike(key,value){predicates.push(row=>String(row[key]||'').toLowerCase()===value.toLowerCase());return this}, eq(key,value){filters.push(['eq',key,value]);predicates.push(row=>(row[key] !== null && typeof row[key] === 'object' ? JSON.stringify(row[key]) : String(row[key]))===String(value));return this}, neq(key,value){predicates.push(row=>row[key]!==value);return this},
+        in(key,ids){filters.push(['in',key,ids]);predicates.push(row=>ids.includes(key === 'metadata->>client_reference' ? row.client_reference : row[key]));return this}, is(key,val){predicates.push(row=>row[key]===val);return this},
         order(){return this}, limit(){return this}, abortSignal(){return this},
         update(value){update=value;return this}, delete(){remove=true;return this},
-        range(start,end){counters.push(['table',table]);from=start;to=end;return this}, async single(){counters.push(['event',table]);return execute('single')},
+        range(start,end){counters.push(['table',table]);if(ledgerScopeTest)counters.push(['filtered-read',table,filters]);from=start;to=end;return this}, async single(){counters.push(['event',table]);return execute('single')},
         async maybeSingle(){if(remove)counters.push(['delete',table]);return execute('single')}, then(done,fail){return Promise.resolve(execute()).then(done,fail)} };
 }
 export const supabase = {
@@ -50,6 +64,8 @@ export const supabase = {
     from:select,
     async rpc(name,args) {
         counters.push([name,args]);
+        if(name==='is_super_admin' && ledgerScopeTest) return {data:platform};
+        if(name==='account_is_active') return {data:true};
         if(name==='can_manage_licenses' || name==='is_organisation_admin' || name==='is_super_admin') return {data:true};
         if(name==='get_player_licenses') return {data:{...player,licenses:[licence],payments:[],history:[]}};
         if(name==='license_sales_overview') return {data:{series:[],total_sold:1,new_full:1,license_years:[{license_year:2026,total_sold:1,new_full:1,ends_on:'2026-12-31',purchase_years:[]}]}};
@@ -81,12 +97,23 @@ export const supabase = {
         if(name.startsWith('paystack-transactions?'))return {data:{mode:'live',transactions:[
             {id:pay.reference,user:player.email,amount:'R 600.00',status:'Success',rawDate:pay.created_at,is_test:false},
             {id:'unmatched-reference',user:player.email,amount:'R 45.00',status:'Success',rawDate:pay.created_at,is_test:false},
+            ...(gatewayBulk ? [...Array.from({length:12}, (_,index)=>({id:'bulk-'+String(index+1).padStart(2,'0'),user:player.email,
+                amount:'R 45.00',status:'Success',rawDate:pay.created_at,is_test:false})),
+                {id:'bulk-linked',user:player.email,amount:'R 600.00',status:'Success',rawDate:pay.created_at,is_test:false},
+                {id:'bulk-failed',user:player.email,amount:'R 45.00',status:'Failed',rawDate:pay.created_at,is_test:false},
+                {id:'different-customer',user:player.email,amount:'R 45.00',status:'Success',rawDate:pay.created_at,is_test:false},
+            ] : []),
         ]}};
         if(name==='confirm-manual-payment')return {data:{processed:true}};
         if(name==='admin-paystack-backfill') {
-            if(args.body.action==='review')return {data:{state:'review',token:'a'.repeat(64),kind:'unallocated',reference:args.body.reference,amountMinor:4500,payer:player.email}};
-            tables.payments.push({...pay, reference:'700000',id:'backfilled',event_id:null,payment_type:'other',amount:45,
+            if(args.body.action==='review') {
+                if(retrievalFailures.delete(args.body.reference))return {error:new Error('Fixture verification temporarily unavailable')};
+                if(tables.payments.some(row=>row.id==='backfilled-'+args.body.reference))return {data:{state:'already_recorded'}};
+                return {data:{state:'review',token:'a'.repeat(64),kind:'unallocated',reference:args.body.reference,amountMinor:4500,payer:player.email}};
+            }
+            tables.payments.push({...pay, reference:String(700000+tables.payments.length),id:'backfilled-'+args.body.reference,event_id:null,payment_type:'other',amount:45,
                  checkout_source:'admin_paystack_backfill',client_reference:args.body.reference,verified_gateway_amount_minor:'4500'});
+            if(gatewayBulk && args.body.reference==='bulk-11')return {error:new Error('Fixture recording response lost')};
             return {data:{state:'recorded',kind:'unallocated'}};
         }
         if(name==='event-cash-receipts')return {data:{next_offset:null,receipts:[{reference:pay.reference,amount:600,status:'success',verified:true}]}};
@@ -133,7 +160,19 @@ async function withPage(mode, permissions, scopeId, run) {
     try {
         await page.setContent('<main id="root"></main>');
         await page.evaluate((mode,permissions,scopeId)=>{
-            window.fixture={mode,permissions,scopeId,calls:[]};
+            window.fixture={mode,permissions,scopeId,calls:[],liveGrant:permissions};
+            if (mode.startsWith('finance-ledger-')) {
+                const pending = new Map();
+                URL.createObjectURL = blob => {
+                    const url = 'blob:ledger-fixture-' + pending.size;
+                    pending.set(url, blob);
+                    return url;
+                };
+                URL.revokeObjectURL = url => pending.delete(url);
+                HTMLAnchorElement.prototype.click = function () {
+                    if (this.download) pending.get(this.href)?.text().then(csv=>window.fixture.calls.push(['csv',this.download,csv]));
+                };
+            }
             let nextId=0;
             if (!crypto.randomUUID) Object.defineProperty(crypto,'randomUUID',{value:()=> `11111111-1111-4111-8111-${String(++nextId).padStart(12,'0')}`});
         },mode,permissions,scopeId);
@@ -327,5 +366,100 @@ test('the original gateway confirms reviewed unmatched funds and links the recor
         await click(page,'Close and refresh gateway');
         await includesText(page,'Exact 4M gateway alias match');
         assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].some(node=>node.textContent==='Review missing receipt')),false);
+    });
+});
+
+test('gateway bulk reviews every matching page in bounded confirmed batches and retries using fresh evidence',async()=>{
+    await withPage('gateway-bulk',platform,'all',async page=>{
+        const reviewed = async () => (await calls(page)).filter(([name,args])=>name==='admin-paystack-backfill'&&args.action==='review').map(([,args])=>args.reference);
+        const recorded = async () => (await calls(page)).filter(([name,args])=>name==='admin-paystack-backfill'&&args.action==='record').map(([,args])=>args.reference);
+        const expected = Array.from({length:12},(_,index)=>'bulk-'+String(index+1).padStart(2,'0'));
+        await click(page,'Paystack gateway');
+        await input(page,'input[aria-label="Search gateway transactions"]','bulk-');
+        await includesText(page,'Page 1 of 2');
+        assert.equal((await page.$eval('table[aria-label], .fo-detail-table',table=>table.innerText)).includes('bulk-12'),false);
+        await click(page,'Review all missing receipts');
+        await includesText(page,'12 missing receipts in the filtered results. Batch 1 of 2.');
+        await includesText(page,'Record as unallocated funds.');
+        assert.deepEqual(await reviewed(),expected.slice(0,10));
+        assert.deepEqual(await recorded(),[]);
+        await input(page,'section[aria-label="Review missing Paystack receipts"] textarea','Reviewed first batch');
+        await click(page,'Confirm receipt recording');
+        await includesText(page,'Receipt recording results');
+        assert.deepEqual(await recorded(),expected.slice(0,10));
+        await click(page,'Review next batch');
+        await includesText(page,'Batch 2 of 2.');
+        await includesText(page,'The receipt operation could not be confirmed.');
+        assert.deepEqual(await reviewed(),expected);
+        assert.deepEqual(await recorded(),expected.slice(0,10));
+        await click(page,'Retry batch verification');
+        await page.waitForFunction(()=>document.querySelectorAll('section[aria-label="Review missing Paystack receipts"] li').length>=2
+            && [...document.querySelectorAll('section[aria-label="Review missing Paystack receipts"] li')].filter(row=>row.innerText.includes('Record as unallocated funds.')).length===2);
+        await input(page,'section[aria-label="Review missing Paystack receipts"] textarea','Verified remaining receipts');
+        await click(page,'Confirm receipt recording');
+        await includesText(page,'Receipt recording results');
+        assert.deepEqual(await recorded(),expected);
+        assert.deepEqual(await reviewed(),[...expected,'bulk-11','bulk-12']);
+        await click(page,'Recheck receipt results');
+        await includesText(page,'An existing ledger entry already uses this receipt.');
+        assert.deepEqual(await reviewed(),[...expected,'bulk-11','bulk-12','bulk-11','bulk-12']);
+        assert.deepEqual(await recorded(),expected);
+        await click(page,'Close and refresh gateway');
+        await click(page,'Review all missing receipts');
+        await includesText(page,'There are no unmatched successful receipts in these results.');
+        assert.deepEqual(await recorded(),expected);
+    });
+});
+
+const financeLedgerGrant = (events = [14]) => ({
+    role:'custom', allowed_tabs:['finance'], module_permissions:{finance:{allowedTabs:['users'],allowedEvents:events}},
+});
+
+test('standalone Finance Users can inspect and export only exact assigned ledger payments',async()=>{
+    await withPage('finance-ledger-assigned',financeLedgerGrant(),'all',async page=>{
+        await click(page,'User ledger');
+        await includesText(page,'Assigned finance events');
+        await click(page,'View ledger');
+        await includesText(page,'assigned-entry-failed');
+        const ledgerText = await page.$eval('table[aria-label="Selected player payment records"]',table=>table.innerText);
+        assert.match(ledgerText,/EVREG-FIXTURE-14/);
+        assert.doesNotMatch(ledgerText,/outside|Delete record/);
+        assert.equal(await page.evaluate(()=>document.body.innerText.includes('Delete record')),false);
+        await click(page,'Export detailed ledger CSV');
+        await page.waitForFunction(()=>window.fixture.calls.some(([name])=>name==='csv'));
+        await click(page,'Export player summary CSV');
+        await page.waitForFunction(()=>window.fixture.calls.filter(([name])=>name==='csv').length===2);
+        const scopes = (await calls(page)).filter(([type,table])=>type==='filtered-read'&&['payments','players'].includes(table));
+        assert.ok(scopes.some(([,table])=>table==='payments'));
+        assert.ok(scopes.some(([,table])=>table==='players'));
+        for (const [,table,filters] of scopes) assert.deepEqual(filters,[table==='payments'?['in','event_id',[14]]:['in','id',[5]]]);
+        const exports = (await calls(page)).filter(([name])=>name==='csv');
+        assert.match(exports[0][2],/assigned-entry-failed/);
+        assert.match(exports[1][2],/Fixture player/);
+        assert.doesNotMatch(exports.map(row=>row[2]).join(' '),/outside|Outside/);
+        await page.evaluate(()=>{window.fixture.liveGrant.module_permissions.finance.allowedEvents=[15]});
+        await click(page,'Export detailed ledger CSV');
+        await includesText(page,'Your User Ledger access or assigned events changed.');
+        assert.equal((await calls(page)).filter(([name])=>name==='csv').length,2);
+    });
+});
+
+test('standalone Users with no assignments only query IDs of current finance-managed events',async()=>{
+    await withPage('finance-ledger-managed',financeLedgerGrant([]),'all',async page=>{
+        await includesText(page,'Finance-managed events');
+        await click(page,'View ledger');
+        await includesText(page,'assigned-entry-failed');
+        const actions = (await calls(page)).filter(([type])=>type==='filtered-read');
+        assert.deepEqual(actions.find(([,table])=>table==='calendar'),['filtered-read','calendar',[['eq','finance_managed',true]]]);
+        assert.deepEqual(actions.find(([,table])=>table==='payments'),['filtered-read','payments',[['in','event_id',[14]]]]);
+        assert.equal(await page.evaluate(()=>document.body.innerText.includes('Delete record')),false);
+    });
+});
+
+test('organisation owners receive no scoped or platform User Ledger from a direct-looking Users grant',async()=>{
+    await withPage('finance-ledger-owner',{...financeLedgerGrant(),...owner},'org:our-org',async page=>{
+        await includesText(page,'Our fixture event');
+        assert.equal(await page.evaluate(()=>document.body.innerText.includes('User ledger')),false);
+        assert.equal((await calls(page)).some(([type,table])=>type==='filtered-read'&&['payments','players'].includes(table)),false);
     });
 });

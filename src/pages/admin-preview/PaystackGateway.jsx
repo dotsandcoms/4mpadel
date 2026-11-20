@@ -9,6 +9,7 @@ import { loadGatewayLinks, gatewayLinkLabel } from './gatewayLinks.js';
 import { canConfirmGatewayCheckout, canReadPlatformPaystack, confirmGatewayCheckout, loadPlatformGatewayTransactions } from './platformPaystack.js';
 import { financeStatusTone } from './financePresentation.js';
 import { canReviewGatewayBackfill } from './paystackBackfill.js';
+import { canSelectGatewayBackfill, selectMissingGatewayReceipts } from './gatewayBackfillSelection.js';
 import GatewayBackfillReview from './GatewayBackfillReview.jsx';
 import GatewayComparisonCell from './GatewayComparisonCell.jsx';
 import RecordLoading from './RecordLoading.jsx';
@@ -33,7 +34,9 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
   const [notice, setNotice] = useState('');
   const [review, setReview] = useState(null);
   const [backfill, setBackfill] = useState(null);
-  const [backfillBusy, setBackfillBusy] = useState(false);
+  const [recordingKey, setRecordingKey] = useState(null);
+  const [selection, setSelection] = useState(null);
+  const bulkRequest = useRef(null);
   const [action, setAction] = useState(null);
   const lifetime = useRef(null);
   const running = useRef(false);
@@ -60,6 +63,12 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
     return () => controller.abort();
   }, [client, allowed, filterKey, actor, grant, scopeId, mode, from, to, stageStatus, stagePage, staging]);
 
+  const filteredRows = useMemo(() => {
+    if (staging || !response?.data) return null;
+    const filter = query.trim().toLowerCase();
+    return response.data.filter(row => (!status || (status === 'pending' ? row.status !== 'success' : row.status === status))
+      && (!filter || [row.reference, row.payerEmail].some(value => String(value).toLowerCase().includes(filter))));
+  }, [response, query, staging, status]);
   const screen = useMemo(() => {
     if (!response?.data) return null;
     const filter = query.trim().toLowerCase();
@@ -67,13 +76,13 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
       ...response.data,
       transactions: response.data.transactions.filter(row => !filter || row.reference.toLowerCase().includes(filter)),
     };
-    const rows = response.data.filter(row => (!status || (status === 'pending' ? row.status !== 'success' : row.status === status))
-      && (!filter || [row.reference, row.payerEmail].some(value => String(value).toLowerCase().includes(filter))));
+    const rows = filteredRows;
     const pageCount = Math.ceil(rows.length / PER_PAGE);
     return { environment: mode, transactions: rows.slice((page - 1) * PER_PAGE, page * PER_PAGE), pagination: {
       page, perPage: PER_PAGE, total: rows.length, pageCount, hasMore: page < pageCount,
     } };
-  }, [response, query, staging, status, mode, page]);
+  }, [response, query, staging, filteredRows, mode, page]);
+  const resultKey = JSON.stringify([filterKey, status, query]);
   const linkKey = JSON.stringify([filterKey, page, query, screen?.transactions.map(row => row.reference)]);
   useEffect(() => {
     if (!allowed || !screen) return;
@@ -88,14 +97,40 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
     lifetime.current = controller.signal;
     return () => controller.abort();
   }, [client, userId, scopeId, allowed, mode]);
+  useEffect(() => {
+    const controller = new AbortController();
+    bulkRequest.current = controller;
+    return () => controller.abort();
+  }, [resultKey, client, allowed]);
   if (!allowed) return <section className="ap-section"><h2>Paystack gateway</h2><p>Platform Paystack access is required.</p></section>;
 
   const result = linked?.key === linkKey ? linked : null;
   const data = result?.data;
   const eligible = (data?.transactions || []).filter(canConfirmGatewayCheckout);
-  const backfillReview = backfill?.key === linkKey ? backfill.rows : null;
-  const missing = (data?.transactions || []).filter(row => canReviewGatewayBackfill(actor, grant, scopeId, row));
+  const backfillReview = backfill && (backfill.bulk ? backfill.key === resultKey : backfill.key === linkKey) ? backfill : null;
+  const bulkLookup = selection?.key === resultKey ? selection : null;
+  const backfillBusy = Boolean(recordingKey && recordingKey === backfillReview?.key);
+  const trackRecording = busy => setRecordingKey(previous => busy ? backfillReview.key : previous === backfillReview.key ? null : previous);
+  const canLookup = !staging && mode === 'live' && canSelectGatewayBackfill(actor, grant, scopeId)
+    && filteredRows?.some(row => row.status === 'success');
   const openBackfill = rows => { setReview(null); setBackfill({ key:linkKey, rows }); };
+  async function reviewAllMissing() {
+    const controller = bulkRequest.current;
+    if (!controller || controller.signal.aborted || !canLookup || bulkLookup?.busy || backfillReview) return;
+    setReview(null);
+    setNotice('');
+    setSelection({ key:resultKey, busy:true });
+    try {
+      const rows = await selectMissingGatewayReceipts(client, actor, grant, scopeId, filteredRows, controller.signal);
+      if (controller.signal.aborted) return;
+      if (rows.length) {
+        setBackfill({ key:resultKey, rows, bulk:true });
+        setSelection(null);
+      } else setSelection({ key:resultKey, message:'There are no unmatched successful receipts in these results.' });
+    } catch (failure) {
+      if (!controller.signal.aborted) setSelection({ key:resultKey, error:failure.message });
+    }
+  }
   const loading = !response || (!response.error && !result);
   const error = response?.error || result?.error;
   const update = (name, value) => { setFilters(current => ({ ...current, [name]: value })); setPage(1); setReview(null); setNotice(''); };
@@ -146,6 +181,9 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
       </div>
     </header>
     {notice && <p className="fo-note" role="status">{notice}</p>}
+    {bulkLookup?.message && <p className="fo-note" role="status">{bulkLookup.message}</p>}
+    {bulkLookup?.error && <p className="fo-note" role="alert">{bulkLookup.error}</p>}
+    <fieldset disabled={backfillBusy} style={{ border:0, padding:0, margin:0, minWidth:0 }}>
     <div className="fo-ledger-filters">
       {!staging && <label className="fo-status-filter">Environment<SearchableDropdown value={mode} onChange={event => {
         setMode(event.target.value); setPage(1); setReview(null); setAction(null); setNotice(''); setExporting(false);
@@ -161,9 +199,10 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
         <button className="ap-secondary" onClick={() => setRange({ from: ago(90), to: southAfricanToday() })}>Last 90 days</button>
       </div>}
     </div>
+    </fieldset>
     <p className="fo-note">Date filters use South African time. {staging ? 'Test gateway access is read-only.' : 'The gateway returns a bounded history. Narrow the date range to review more transactions.'}</p>
-    {backfillReview && <GatewayBackfillReview key={linkKey} client={client} session={actor} permissions={grant} scopeId={scopeId}
-      rows={backfillReview} onBusyChange={setBackfillBusy} onClose={() => setBackfill(null)}
+    {backfillReview && <GatewayBackfillReview key={backfillReview.key} client={client} session={actor} permissions={grant} scopeId={scopeId}
+      rows={backfillReview.rows} bulk={backfillReview.bulk} onBusyChange={trackRecording} onClose={() => setBackfill(null)}
       onRecorded={() => { setBackfill(null); setReload(value => value + 1); }}/>}
     {review && <section className="ap-section" style={{ padding: 18 }} aria-label="Review checkout reconciliation"><h2>Confirm checkout reconciliation</h2>
       <p>4M verifies each chosen reference against its saved event checkout and Paystack.</p><ul>{review.map(row => <li key={row.reference}>{row.reference}</li>)}</ul>
@@ -175,22 +214,22 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
     {loading && <section className="ap-section"><RecordLoading label="Loading Paystack transactions…" detail="Fetching Paystack history and matching saved 4M references." /></section>}
     {error && <section className="ap-section" role="alert" style={{ padding: 18 }}><h2>Gateway could not be loaded</h2><p>{error}</p><button className="ap-secondary" onClick={() => setReload(n => n + 1)}>Try again</button></section>}
     {data && <>
-      <div className="fo-actions fo-report-actions"><p role="status">{data.pagination.total.toLocaleString()} matching {mode} transactions</p>{!staging && mode === 'live' && <button className="ap-secondary" disabled={!eligible.length || action?.busy || backfillBusy} onClick={() => { setBackfill(null); setReview(eligible); }}>Review page reconciliation</button>}
-        {!!missing.length && !staging && <button className="ap-secondary" disabled={backfillBusy || action?.busy || Boolean(backfillReview)}
-          onClick={() => openBackfill(missing)}>Review missing receipts on this page</button>}</div>
+      <div className="fo-actions fo-report-actions"><p role="status">{data.pagination.total.toLocaleString()} matching {mode} transactions</p>{!staging && mode === 'live' && <button className="ap-secondary" disabled={!eligible.length || action?.busy || backfillBusy || bulkLookup?.busy || Boolean(backfillReview)} onClick={() => { setBackfill(null); setReview(eligible); }}>Review page reconciliation</button>}
+        {canLookup && <button className="ap-secondary" disabled={backfillBusy || action?.busy || bulkLookup?.busy || Boolean(backfillReview)}
+          onClick={reviewAllMissing}>{bulkLookup?.busy ? 'Checking ledger matches…' : 'Review all missing receipts'}</button>}</div>
       <div className="fo-table-scroll" role="region" aria-label="Paystack gateway transactions" tabIndex={0}><table className="fo-detail-table"><thead><tr><th>Date</th><th>Reference</th><th>Player / event in 4M</th><th>Status</th><th>4M comparison</th><th>Amount</th>{!staging && mode === 'live' && <th>Actions</th>}</tr></thead>
         <tbody>{data.transactions.map(row => <tr key={row.reference}><td>{financeDate(row.createdAt) || 'Not provided'}</td><td>{row.reference}</td>
           <td><div className="fo-player-copy">{row.link?.state === 'matched' && <><span className="fo-player-name">{row.link.playerName || 'Player details unavailable'}</span><small>{row.link.eventName || 'Event details unavailable'}</small></>}<small>{gatewayLinkLabel(row.link)}</small></div></td>
           <td><span className={`ap-status ap-status--${financeStatusTone(row.status)}`}>{row.status}</span></td><td>{row.channel && <small>{row.channel}</small>}<GatewayComparisonCell link={row.link}/></td>
           <td>{(row.amountMinor / 100).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {row.currency}</td>
-          {!staging && mode === 'live' && <td>{canConfirmGatewayCheckout(row) ? <button className="fo-type-link" disabled={action?.busy || backfillBusy} onClick={() => { setBackfill(null); setReview([row]); }}>Verify checkout</button>
-            : canReviewGatewayBackfill(actor, grant, scopeId, row) ? <button className="fo-type-link" disabled={action?.busy || backfillBusy || Boolean(backfillReview)}
+          {!staging && mode === 'live' && <td>{canConfirmGatewayCheckout(row) ? <button className="fo-type-link" disabled={action?.busy || backfillBusy || bulkLookup?.busy || Boolean(backfillReview)} onClick={() => { setBackfill(null); setReview([row]); }}>Verify checkout</button>
+            : canReviewGatewayBackfill(actor, grant, scopeId, row) ? <button className="fo-type-link" disabled={action?.busy || backfillBusy || bulkLookup?.busy || Boolean(backfillReview)}
               onClick={() => openBackfill([row])}>Review missing receipt</button> : <small>—</small>}</td>}
         </tr>)}</tbody></table></div>
       {!data.transactions.length && <p>No gateway transactions match these filters.</p>}
       <nav className="fo-pagination" aria-label="Gateway pages"><span>Page {page} of {Math.max(1, data.pagination.pageCount)}</span>
-        <button className="ap-secondary" disabled={page === 1 || action?.busy || backfillBusy} onClick={() => { setPage(n => n - 1); setReview(null); }}>Previous</button>
-        <button className="ap-secondary" disabled={!data.pagination.hasMore || action?.busy || backfillBusy} onClick={() => { setPage(n => n + 1); setReview(null); }}>Next</button>
+        <button className="ap-secondary" disabled={page === 1 || action?.busy || backfillBusy || Boolean(backfillReview)} onClick={() => { setPage(n => n - 1); setReview(null); }}>Previous</button>
+        <button className="ap-secondary" disabled={!data.pagination.hasMore || action?.busy || backfillBusy || Boolean(backfillReview)} onClick={() => { setPage(n => n + 1); setReview(null); }}>Next</button>
       </nav>
     </>}
   </section>;

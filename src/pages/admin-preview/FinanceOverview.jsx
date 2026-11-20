@@ -12,6 +12,7 @@ import FinanceTypeDetails from './FinanceTypeDetails.jsx';
 import RecordLoading from './RecordLoading.jsx';
 import EventSettlementOverview from './EventSettlementOverview.jsx';
 import FinanceUserLedger from './FinanceUserLedger.jsx';
+import { userLedgerScope } from './financeUserLedgerData.js';
 import FinanceCollectionsWorkspace from './FinanceCollectionsWorkspace.jsx';
 import FinancialSummaryWorkspace from './FinancialSummaryWorkspace.jsx';
 import { financialSummaryScope } from './financialSummaryData.js';
@@ -103,19 +104,21 @@ function ReceiptOverview({session, permissions, scopeId, client = supabase, refr
 export default function FinanceOverview(props) {
   const platform = canReadFinanceOverview(props.session, props.permissions, props.scopeId);
   const summary = props.session?.user?.id ? financialSummaryScope(props.permissions, props.scopeId) : null;
+  const ledger = props.session?.user?.id ? userLedgerScope(props.permissions, props.scopeId) : null;
   const [selection, setSelection] = useState(null);
   const workspaceProps = { client: supabase, ...props };
   const views = [
     ...(platform ? [['receipts', 'Receipts and refunds']] : []),
-    ...(summary?.mode === 'managed' ? [] : [['settlements', 'Event settlements']]),
-    ...(platform ? [['users', 'User ledger'], ['collections', 'Collections']] : []),
+    ...(summary?.mode === 'managed' || (!platform && ledger?.mode === 'managed' && !summary) ? [] : [['settlements', 'Event settlements']]),
+    ...(ledger ? [['users', 'User ledger']] : []),
+    ...(platform ? [['collections', 'Collections']] : []),
     ...(summary ? [['summary', 'Summary report']] : []),
   ];
-  const view = views.some(([id]) => id === selection) ? selection : views[0][0];
+  const view = views.some(([id]) => id === selection) ? selection : views[0]?.[0];
 
   let report = <EventSettlementOverview {...workspaceProps} />;
   if (view === 'receipts') report = <ReceiptOverview {...workspaceProps} />;
-  if (view === 'users') report = <FinanceUserLedger {...workspaceProps} />;
+  if (view === 'users') report = <FinanceUserLedger key={JSON.stringify([props.session?.user?.id, ledger])} {...workspaceProps} ledgerScope={ledger} />;
   if (view === 'collections') report = <FinanceCollectionsWorkspace {...workspaceProps} />;
   if (view === 'summary') report = <FinancialSummaryWorkspace {...workspaceProps} />;
 

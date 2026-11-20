@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { fetchAllRows } from '../../utils/fetchAllRows';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { loadUserLedger, requirePlatformLedger, verifyUserLedgerExport } from './financeUserLedgerData.js';
 import { financeDate } from './financeOverviewData';
 import { licenseCsvCell } from './licenseData';
 import RecordLoading from './RecordLoading';
@@ -15,29 +15,7 @@ function saveCsv(name, rows) {
   anchor.href = url; anchor.download = name; anchor.click(); URL.revokeObjectURL(url);
 }
 
-async function requirePlatformLedger(client, session, signal) {
-  signal?.throwIfAborted();
-  const auth = await client.auth.getUser();
-  const user = auth.data?.user;
-  if (auth.error || !user?.id || user.id !== session?.user?.id || !user.email) throw new Error('Sign in again to open the User Ledger.');
-  const result = await client.rpc('is_super_admin', { user_email: user.email });
-  signal?.throwIfAborted();
-  if (result.error || result.data !== true) throw new Error('Platform super-admin access is required.');
-}
-
-async function loadUserLedger(client, session, signal) {
-  await requirePlatformLedger(client, session, signal);
-  const read = (table, fields) => fetchAllRows(() => {
-    signal.throwIfAborted();
-    return client.from(table).select(fields).order('id');
-  });
-  return await Promise.all([
-    read('players','id,name,email'),
-    read('payments','id,player_id,created_at,reference,payment_type,payment_method,status,amount,is_test,calendar(event_name)'),
-  ]);
-}
-
-export default function FinanceUserLedger({ session, client, refreshRevision = 0 }) {
+export default function FinanceUserLedger({ session, client, ledgerScope, refreshRevision = 0 }) {
   const [response, setResponse] = useState(null);
   const [filter, setFilter] = useState('');
   const [sort, setSort] = useState({ field:'name', direction:1 });
@@ -46,19 +24,25 @@ export default function FinanceUserLedger({ session, client, refreshRevision = 0
   const [review, setReview] = useState(null);
   const [retry, setRetry] = useState(0);
   const [action, setAction] = useState(null);
+  const [exportKey, setExportKey] = useState(null);
+  const work = useRef(null);
   const userId = session?.user?.id;
-  const key = JSON.stringify([userId, refreshRevision, retry]);
+  const scopeKey = JSON.stringify(ledgerScope ?? null);
+  const platform = ledgerScope?.mode === 'platform';
+  const key = JSON.stringify([userId, scopeKey, refreshRevision, retry]);
   const reply = response?.key === key ? response : null;
+  const exporting = exportKey === key;
   useEffect(() => {
     const controller = new AbortController();
-    loadUserLedger(client, { user:{ id:userId } }, controller.signal)
+    work.current = controller;
+    loadUserLedger(client, userId, JSON.parse(scopeKey), controller.signal)
       .then(data => { if (!controller.signal.aborted) setResponse({ key, data }); })
       .catch(error => { if (!controller.signal.aborted) setResponse({ key, error:error.message }); });
     return () => controller.abort();
-  }, [key, client, userId]);
+  }, [key, client, userId, scopeKey]);
   const users = useMemo(() => {
     if (!reply?.data) return [];
-    const [players, ledger] = reply.data;
+    const { players, payments:ledger } = reply.data;
     const payments = new Map();
     for (const row of ledger) {
       if (!payments.has(row.player_id)) payments.set(row.player_id, []);
@@ -71,15 +55,38 @@ export default function FinanceUserLedger({ session, client, refreshRevision = 0
       return { ...row, entries, total: collected.reduce((sum, entry) => sum + Number(entry.amount || 0), 0), last: collected[0] || entries[0] };
     }).sort((a,b) => (sort.field==='name' ? String(a.name).localeCompare(String(b.name)) : a.total-b.total) * sort.direction);
   }, [reply, filter, sort]);
-  const [players, paymentRows] = reply?.data || [];
   const selectedPlayer = users.find(row => row.id === selected);
   const maxPage = Math.max(1, Math.ceil(users.length / PAGE_SIZE));
   const current = Math.min(page, maxPage);
+  async function exportCsv(detailed) {
+    if (!reply?.data || exporting || !work.current || work.current.signal.aborted) return;
+    const { signal } = work.current;
+    setExportKey(key);
+    setAction(null);
+    try {
+      const { players, payments, eventIds } = reply.data;
+      await verifyUserLedgerExport(client, userId, ledgerScope, eventIds, signal);
+      signal.throwIfAborted();
+      if (detailed) {
+        const playerById = new Map(players.map(row => [row.id, row]));
+        saveCsv('4M-detailed-payment-ledger.csv', [['Player','Email',...columns], ...payments.map(row =>
+          [playerById.get(row.player_id)?.name, playerById.get(row.player_id)?.email, ...reportRow(row)])]);
+      } else {
+        saveCsv('4M-player-payments.csv', [['Name','Email','Collected (R)','Last payment'], ...users.map(row =>
+          [row.name, row.email, row.total, financeDate(row.last?.created_at)])]);
+      }
+    } catch (error) {
+      if (!signal.aborted) setAction({ error:error.message });
+    } finally {
+      setExportKey(previous => previous === key ? null : previous);
+    }
+  }
+
   async function removePayment() {
-    if (!review || action?.busy) return;
+    if (!platform || !review || action?.busy) return;
     setAction({ busy:true });
     try {
-      await requirePlatformLedger(client, session);
+      await requirePlatformLedger(client, userId);
       const result = await client.from('payments').delete().eq('id', review.id).eq('player_id', review.player_id).select('id').maybeSingle();
       if (result.error || result.data?.id !== review.id) throw new Error('The ledger record could not be deleted. Refresh and check your permissions.');
       setReview(null);
@@ -88,13 +95,10 @@ export default function FinanceUserLedger({ session, client, refreshRevision = 0
     } catch (error) { setAction({ error: error.message }); }
   }
   return <section className="fo-root">
-    <header className="fo-heading"><div><p className="ap-kicker">Money / Finance reports</p><h1>User ledger</h1><p>Review individual payment records, including unsuccessful attempts.</p></div></header>
+    <header className="fo-heading"><div><p className="ap-kicker">Money / Finance reports</p><h1>User ledger</h1><p>Review individual payment records, including unsuccessful attempts.</p>{!platform && <p>{ledgerScope?.label}</p>}</div></header>
     <div className="fo-ledger-filters"><label className="fo-search"><input aria-label="Search ledger players" value={filter} onChange={e=>{setFilter(e.target.value);setPage(1);setSelected(null);setReview(null);}} placeholder="Search by name or email…" /></label>
-      <button className="ap-secondary" disabled={!reply?.data} onClick={()=>saveCsv('4M-player-payments.csv',[['Name','Email','Collected (R)','Last payment'],...users.map(row=>[row.name,row.email,row.total,financeDate(row.last?.created_at)])])}>Export player summary CSV</button>
-      <button className="ap-secondary" disabled={!reply?.data} onClick={()=>{
-        const playerById = new Map(players.map(row => [row.id,row]));
-        saveCsv('4M-detailed-payment-ledger.csv',[['Player','Email',...columns],...paymentRows.map(row=>[playerById.get(row.player_id)?.name,playerById.get(row.player_id)?.email,...reportRow(row)])]);
-      }}>Export detailed ledger CSV</button>
+      <button className="ap-secondary" disabled={!reply?.data || exporting} onClick={()=>exportCsv(false)}>Export player summary CSV</button>
+      <button className="ap-secondary" disabled={!reply?.data || exporting} onClick={()=>exportCsv(true)}>Export detailed ledger CSV</button>
       <button className="ap-secondary" onClick={()=>setRetry(value=>value+1)}>Refresh ledger</button>
     </div>
     {action?.message && <p role="status">{action.message}</p>}{action?.error && <p role="alert">{action.error}</p>}
@@ -114,12 +118,12 @@ export default function FinanceUserLedger({ session, client, refreshRevision = 0
     </>}
     {selectedPlayer && <section className="ap-section" style={{padding:18}}><header className="fo-heading"><div><h2>{selectedPlayer.name}</h2><p>{selectedPlayer.email}</p></div>
       <button className="ap-secondary" disabled={action?.busy} onClick={()=>{setSelected(null);setReview(null);}}>Back to users</button></header>
-      {review && <section aria-label="Confirm payment record deletion"><h3>Delete payment record?</h3><p>{review.reference || review.id} · {cash(review.amount)} · {review.status}. This permanently removes the ledger record.</p>
+      {platform && review && <section aria-label="Confirm payment record deletion"><h3>Delete payment record?</h3><p>{review.reference || review.id} · {cash(review.amount)} · {review.status}. This permanently removes the ledger record.</p>
         <div className="fo-report-actions"><button className="ap-primary" disabled={action?.busy} onClick={removePayment}>{action?.busy?'Deleting…':'Confirm delete'}</button>
           <button className="ap-secondary" disabled={action?.busy} onClick={()=>setReview(null)}>Cancel</button></div></section>}
-      <div className="fo-table-scroll"><table className="fo-detail-table" aria-label="Selected player payment records"><thead><tr>{columns.map(label=><th key={label}>{label}</th>)}<th>Action</th></tr></thead>
+      <div className="fo-table-scroll"><table className="fo-detail-table" aria-label="Selected player payment records"><thead><tr>{columns.map(label=><th key={label}>{label}</th>)}{platform && <th>Action</th>}</tr></thead>
         <tbody>{selectedPlayer.entries.map(row=><tr key={row.id}>{reportRow(row).map((value,index)=><td key={index}>{value ?? '—'}</td>)}
-          <td><button className="fo-type-link" disabled={action?.busy} onClick={()=>setReview(row)}>Delete record</button></td></tr>)}</tbody></table></div>
+          {platform && <td><button className="fo-type-link" disabled={action?.busy} onClick={()=>setReview(row)}>Delete record</button></td>}</tr>)}</tbody></table></div>
       {!selectedPlayer.entries.length && <p>No payments recorded for this player.</p>}
     </section>}
   </section>;
