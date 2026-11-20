@@ -744,7 +744,7 @@ const ageFromDivisionName = (name) => {
     return '';
 };
 
-const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisation = null, organisationClubs, renderEditor, beforeSave, theme, reviewedWeeklySeries, reloadSavedEvent }) => {
+const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDate, organisation = null, organisationClubs, renderEditor, beforeSave, theme, reviewedWeeklySeries, reloadSavedEvent }) => {
     const previewTheme = theme === 'preview';
     const organisationBound = previewTheme && Boolean(organisation?.id);
     const guardedEditor = Boolean(renderEditor || previewTheme);
@@ -1094,7 +1094,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             regOpenTouchedRef.current = false;
             pointsTouchedRef.current = false;
             // New events start with the standard SAPA content pre-filled (editable per event).
-            const base = { ...blankForm, ...SAPA_DEFAULTS, is_weekly: false, weekly_count: 8 };
+            const base = { ...blankForm, ...SAPA_DEFAULTS, is_weekly: false, weekly_count: 8,
+                ...(initialDate && { start_date: initialDate, end_date: initialDate }) };
             // Org portal mode: prefill organiser identity from the organisation
             setForm(organisation ? {
                 ...base,
@@ -1117,7 +1118,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         return () => { disposed = true; coverUploadRef.current = null; };
         // Only re-init when the modal opens or a different event is loaded — not after in-session saves.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen, editingEvent?.id]);
+    }, [isOpen, editingEvent?.id, initialDate]);
 
     const parsePrizeBreakdownField = (raw) => {
         if (Array.isArray(raw)) return raw;

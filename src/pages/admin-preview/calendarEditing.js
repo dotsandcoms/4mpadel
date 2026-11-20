@@ -3,7 +3,10 @@
 export function calendarEditMode(event, canManageEvents = false) {
   if (!event?.id) return null;
   if (String(event.id).startsWith('demo-')) return 'preview';
-  if (!event.is_manual || event.event_status === 'cancelled') return null;
+  if (event.event_status === 'cancelled') return null;
+  if (!event.is_manual) {
+    return canManageEvents && !event.is_quick_event && !(event.is_weekly && event.series_id) ? 'live-imported' : null;
+  }
   if (event.is_quick_event) return canManageEvents ? 'live-quick' : null;
   return canManageEvents ? 'live' : null;
 }

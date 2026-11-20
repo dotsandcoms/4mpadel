@@ -4,7 +4,7 @@ import { supabase } from '../../supabaseClient';
 import { verifyEventCreationAccess } from './eventCreation';
 import useEventEditorIdentity from './useEventEditorIdentity';
 
-export default function CreateEventDialog({ onClose, client = supabase, session, scopeId = 'all', Builder = EventBuilder, verify = verifyEventCreationAccess }) {
+export default function CreateEventDialog({ onClose, client = supabase, session, scopeId = 'all', initialDate, Builder = EventBuilder, verify = verifyEventCreationAccess }) {
   const identity = useEventEditorIdentity(client, session, scopeId);
   const attempted = useRef(false);
   const complete = useRef(false);
@@ -17,7 +17,7 @@ export default function CreateEventDialog({ onClose, client = supabase, session,
     attempted.current = true;
     return { verifyContinuing: actor.verifyContinuing };
   };
-  return <Builder isOpen theme="preview" beforeSave={beforeSave}
+  return <Builder isOpen theme="preview" initialDate={initialDate} beforeSave={beforeSave}
     onClose={() => onClose({ refresh: attempted.current })}
     onSaved={result => {
       if (complete.current) return;

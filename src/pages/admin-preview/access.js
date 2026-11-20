@@ -90,6 +90,16 @@ export function canReadPreviewEvents(permissions, scope) {
   return Boolean(resolveEventWorkspace(permissions, scope.id, 'event-mgmt'));
 }
 
+export function canOpenPreviewEventRecord(permissions, scope, event) {
+  if (!scope || !canOpenReviewPage(permissions, 'events') || !/^\d+$/.test(String(event?.id))) return false;
+  const workspace = resolveEventWorkspace(permissions, scope.id, 'event-mgmt');
+  const id = Number(event.id);
+  if (!workspace || !Number.isSafeInteger(id) || id < 1 || (workspace.allowedEvents.length && !workspace.allowedEvents.includes(id))) return false;
+  if (workspace.scopeId === 'all') return true;
+  const [kind, owner] = workspace.scopeId.split(':');
+  return String(event[kind === 'org' ? 'organisation_id' : 'club_id']) === owner;
+}
+
 export function restrictPreviewEvents(query, permissions, scope) {
   if (!canReadPreviewEvents(permissions, scope)) throw new Error('Event Manager access is required.');
   const workspace = resolveEventWorkspace(permissions, scope.id, 'event-mgmt');

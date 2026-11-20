@@ -92,7 +92,7 @@ const blankForm = {
     contact_details: '', organiser_phone: '', organiser_email: '', other_info: '',
 };
 
-const QuickEventBuilder = ({ isOpen, onClose: closeRequested, onSaved, organisation = null, organisationClubs, editingEvent = null, beforeSave, theme, renderEditor }) => {
+const QuickEventBuilder = ({ isOpen, onClose: closeRequested, onSaved, organisation = null, organisationClubs, editingEvent = null, initialDate, beforeSave, theme, renderEditor }) => {
     const previewTheme = theme === 'preview';
     const organisationBound = previewTheme && Boolean(organisation?.id);
     const mutationLock = useRef(false);
@@ -135,7 +135,7 @@ const QuickEventBuilder = ({ isOpen, onClose: closeRequested, onSaved, organisat
         setActiveOrganisationIndex(0);
         setClubOpen(false);
         setActiveClubIndex(0);
-        const source = editingEvent || {};
+        const source = editingEvent || { start_date: initialDate };
         endDateTouchedRef.current = Boolean(source.end_date && source.end_date !== source.start_date);
         setClubQuery(source.club_id ? (source.venue || '') : '');
         const sponsorLogos = Array.isArray(source.sponsor_logos) ? source.sponsor_logos : [];
@@ -172,7 +172,7 @@ const QuickEventBuilder = ({ isOpen, onClose: closeRequested, onSaved, organisat
             organiser_email: source.organiser_email || organisation?.contact_email || '',
             other_info: source.rules_regs || '',
         });
-    }, [isOpen, editingEvent, organisation]);
+    }, [isOpen, editingEvent, organisation, initialDate]);
 
     useEffect(() => {
         if (!isOpen || organisation) return undefined;

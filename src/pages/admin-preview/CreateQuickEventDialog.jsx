@@ -4,10 +4,10 @@ import { supabase } from '../../supabaseClient';
 import { verifyEventCreationAccess } from './eventCreation';
 import useEventEditorIdentity from './useEventEditorIdentity';
 
-export default function CreateQuickEventDialog({ onClose, client = supabase, session, scopeId = 'all', Builder = QuickEventBuilder }) {
+export default function CreateQuickEventDialog({ onClose, client = supabase, session, scopeId = 'all', initialDate, Builder = QuickEventBuilder }) {
   const identity = useEventEditorIdentity(client, session, scopeId);
   const attempted = useRef(false), saved = useRef(null);
-  return <Builder isOpen theme="preview"
+  return <Builder isOpen theme="preview" initialDate={initialDate}
     beforeSave={async context => {
       if (client !== supabase && Builder === QuickEventBuilder) throw new Error('This editor cannot write through a different database connection.');
       if (saved.current) throw new Error('This event has already been created.');
