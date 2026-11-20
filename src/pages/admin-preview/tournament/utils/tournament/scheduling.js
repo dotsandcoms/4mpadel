@@ -1,5 +1,6 @@
 import { planningMatches } from '../drawPlanning.js';
 import { generateKnockoutDraft } from '../../../../../utils/nativeDrawGenerator.js';
+import { qualificationSize } from '../../../../../utils/drawQualification.js';
 import { RESOLVED, tournamentWorkflow, defaultSettings, activeDivisions } from './workflow.js';
 
 const minute = 60000;
@@ -60,7 +61,14 @@ export function tournamentFixtures({ draws = [], matches = [], entries = [], div
             }
         }
         if (draw.format === 'group_knockout' && !fixtures.some(m => m.draw_id === draw.id && m.stage === 'knockout')) {
-            const count = Number(draw.group_count) * Number(draw.advancers_per_group);
+            const { mode = 'fixed', extras = 0 } = draw.scoring_rules?.qualification || {};
+            const places = Number(draw.advancers_per_group);
+            const groupSizes = new Map();
+            for (const entry of entries) {
+                if (entry.draw_id === draw.id && entry.group_id) groupSizes.set(entry.group_id, (groupSizes.get(entry.group_id) || 0) + 1);
+            }
+            const count = mode === 'fixed' ? Number(draw.group_count) * places
+                : qualificationSize([...groupSizes.values()], mode, places, Number(extras)).total;
             if (!Number.isInteger(count) || count < 2) throw new Error('Confirm the number of group qualifiers before scheduling.');
             const source = fixtures.filter(m => m.draw_id === draw.id);
             const allPlayers = [...new Set(source.flatMap(m => m.players))];
@@ -68,12 +76,22 @@ export function tournamentFixtures({ draws = [], matches = [], entries = [], div
                 plateMode: draw.scoring_rules?.plate_mode || 'none', placementPlayoff: draw.scoring_rules?.playoff_mode || 'none',
             });
             const idFor = key => `${draw.id}:future:${key}`;
+            const upcoming = new Map();
             for (const m of provisional.matches) {
+                const opening = m.stage === 'knockout' && m.round_number === 1;
+                const feeds = m.source_slots.filter(slot => slot.source_match_key);
+                const entrants = opening ? Number(Boolean(m.entry_one)) + Number(Boolean(m.entry_two))
+                    : feeds.filter(slot => upcoming.get(slot.source_match_key).entrants >= (slot.type === 'loser' ? 2 : 1)).length;
+                const dependencies = opening ? source.map(match => match.id) : feeds.flatMap(slot => {
+                    const feeder = upcoming.get(slot.source_match_key);
+                    return feeder.entrants === 2 ? [idFor(slot.source_match_key)] : feeder.dependencies;
+                });
+                upcoming.set(m.key, { entrants, dependencies });
                 fixtures.push({ ...m, id: idFor(m.key), draw_id: draw.id, division_id: draw.division_id,
                     virtual: true, can_plan: true, label: `Pending qualification · ${m.round_label}`,
-                    players: allPlayers, status: m.result_type === 'walkover' ? 'bye' : 'pending',
-                    final: m.stage === 'knockout' && !provisional.matches.some(n => n.source_slots?.some(s => s.source_match_key === m.key && s.type !== 'loser')),
-                    dependency_ids: m.round_number === 1 ? source.map(s => s.id) : (m.source_slots || []).filter(s => s.source_match_key).map(s => idFor(s.source_match_key)),
+                    players: allPlayers, status: entrants < 2 ? 'bye' : 'pending',
+                    final: m.stage === 'knockout' && !m.winner_to_match_key,
+                    dependency_ids: [...new Set(dependencies)],
                 });
             }
         }
@@ -123,7 +141,7 @@ export function generateTournamentSchedule(data, suppliedSettings, pinned = {}) 
     const fixtures = tournamentFixtures(data);
     const required = fixtures.filter(m => !RESOLVED.includes(m.status));
     if (required.some(m => !m.can_plan)) throw new Error('Resolve incomplete teams or byes in Draws before scheduling.');
-    const assignments = Object.fromEntries(Object.entries(pinned).filter(([id]) => fixtures.some(m => m.id === id)));
+    const assignments = Object.fromEntries(Object.entries(pinned).filter(([id]) => fixtures.some(m => m.id === id && m.status !== 'bye')));
     for (const m of fixtures) if ((RESOLVED.includes(m.status) || m.status === 'in_progress') && m.scheduled_start) assignments[m.id] = { court_name: m.court_name, scheduled_start: m.scheduled_start, scheduled_end: m.scheduled_end, pinned: true };
     const last = days.at(-1);
     const finals = required.filter(m => m.final);

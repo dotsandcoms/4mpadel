@@ -66,6 +66,8 @@ function DivisionPanel({ data, workspace, division, confirmation, draw, client, 
     const canEditRegistrations = !hostPreparation;
     const rotationFormat = ['americano', 'team_americano'].includes(config.format);
     const hostRotation = hostPreparation && locked && draw?.format === 'americano' && Boolean(draw.scoring_rules?.americano);
+    const privateRotation = hostPreparation && draw?.status === 'draft' && draw.format === 'americano' && !preview
+        && Boolean(draw.scoring_rules?.americano);
     const entries = divisionEntries(data, division.id, review, config.ranking_source || 'active');
     const colours = divisionColorMap(data.divisions, data.settings.divisionColors);
     const setField = (key, value) => setConfig(current => ({ ...current, [key]: value }));
@@ -128,7 +130,7 @@ function DivisionPanel({ data, workspace, division, confirmation, draw, client, 
                 {locked && !hostRotation && <p className="muted">{hostPreparation ? 'The published draw is locked.' : 'The published draw is locked. Results and schedules are managed in their own workspaces.'}</p>}
             </section>
         </>}
-        {workspace === 'draws' && hostRotation && data.event.is_visible && draw.status !== 'completed'
+        {workspace === 'draws' && (privateRotation || (hostRotation && data.event.is_visible && draw.status !== 'completed'))
             && <HostRotationSchedule {...{ data, draw, client, act, busy }} />}
         {workspace === 'draws' && hostRotation && <HostRotationResults {...{ data, draw, client, act, busy, saving, error }} />}
         {workspace === 'draws' && hostPreparation && draw?.format === 'group_knockout' && ['published', 'in_progress'].includes(draw.status)

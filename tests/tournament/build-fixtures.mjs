@@ -99,6 +99,13 @@ for (const example of [
     if (example.mode === 'best_placed') {
         const entryIds = [id(12)];
         const overridden = rankGroupQualifiers({ ...input, overrideIds: entryIds });
+        const placementDividers = rankGroupQualifiers({ ...input, extras: 2 }).advancing;
+        payload.finishingPlaces = {
+            ranked: placementDividers.map(row => row.id),
+            bracket: generateRankedElimination(placementDividers, {
+                id: drawId, scoring_rules: { plate_mode: 'double', playoff_mode: 'top4' },
+            }),
+        };
         payload.override = {
             ranked: overridden.advancing.map(row => row.id),
             bracket: generateRankedElimination(overridden.advancing, { id: drawId, scoring_rules: {} }),
@@ -106,5 +113,15 @@ for (const example of [
         };
     }
     sql.push(`INSERT INTO ranked_fixture_reference VALUES (${q(example.mode)},${q(payload)});`);
+}
+sql.push('create temporary table finishing_place_reference(teams integer, plate jsonb, playoff text, qualifies uuid[], bracket jsonb);');
+for (const count of [2, 3, 4, 5, 8, 9, 16, 17, 32]) {
+    const qualifiers = Array.from({ length: count }, (_, i) => ({ id: hostId(4000 + i), seed_number: i + 1 }));
+    const modes = ['none', 'double', 'triple', 'all', [], ['places_3_4'], ['places_7_8', 'places_13_16']];
+    for (const plate of modes) for (const playoff of count < 5 ? ['none','top4'] : ['none','top4','top8']) {
+        const matches = generateRankedElimination(qualifiers, { scoring_rules: { plate_mode: plate, playoff_mode: playoff } });
+        const ids = 'array[' + qualifiers.map(row => q(row.id) + '::uuid').join(',') + ']';
+        sql.push(`INSERT INTO finishing_place_reference VALUES (${count},${q(JSON.stringify(plate))},${q(playoff)},${ids},${q(matches)});`);
+    }
 }
 writeFileSync('tests/tournament/fixtures.generated.sql',sql.join('\n')+'\n');

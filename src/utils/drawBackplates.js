@@ -33,10 +33,11 @@ export function addBackplates(draw, mode = 'none') {
         else if (mode === 'triple' && depth === 1) branch(rounds[0],low+(high-low+1)/2,high,2);
     };
     if (topEight) branch(main.filter(m => m.round_number === draw.total_rounds - 2), 5, 8, 1, true);
+    if (mode === 'all' || (draw.draw_size === 4 && ['double', 'triple'].includes(mode))) {
+        // In a four-slot draw Silver uses the same semifinal losers and court.
+        matches.splice(0, matches.length, ...matches.filter(m => m.round_code !== '3_4'));
+    }
     if (mode === 'all') {
-        // Full placement owns the 3–4 route too.
-        draw.matches = matches.filter(m=>m.round_code !== '3_4');
-        matches.splice(0,matches.length,...draw.matches);
         for (let r=1;r<=draw.total_rounds;r++) branch(main.filter(m=>m.round_number===r),draw.draw_size/2**r+1,draw.draw_size/2**(r-1),1);
     } else if (['double', 'triple'].includes(mode)) branch(main.filter(m=>m.round_number===1),draw.draw_size/2+1,draw.draw_size,1);
     if (selected) {

@@ -22,14 +22,16 @@ export default function HostGroupQualification({ data, draw, client, act, busy }
     const rankedMode = RANKED_MODES.includes(mode);
     const places = Number(draw.advancers_per_group);
     const extras = Number(rules.qualification?.extras || 0);
-    const hasPlate = Array.isArray(rules.plate_mode) ? rules.plate_mode.length > 0 : Boolean(rules.plate_mode && rules.plate_mode !== 'none');
-    const extended = (mode !== 'fixed' && !rankedMode) || hasPlate || (rules.playoff_mode || 'none') !== 'none';
+    const unsupportedQualification = mode !== 'fixed' && !rankedMode;
+    const hasPlacement = (Array.isArray(rules.plate_mode) ? rules.plate_mode.length > 0 : Boolean(rules.plate_mode && rules.plate_mode !== 'none'))
+        || Boolean(rules.playoff_mode && rules.playoff_mode !== 'none');
+    const bookingReview = data.groupPlacementReservations?.[draw.id];
     const resolved = (matches.length > 0 || mode === 'all') && matches.every(match => RESOLVED_GROUP.includes(match.status)
         && entries.get(match.entry_one_id)?.group_id === match.group_id && entries.get(match.entry_two_id)?.group_id === match.group_id
         && [match.entry_one_id, match.entry_two_id].includes(match.winner_entry_id));
     const latestReview = JSON.stringify([
         draw.id, draw.updated_at,
-        rules.qualification, places,
+        rules.qualification, rules.plate_mode, rules.playoff_mode, places, bookingReview?.token,
         matches.map(match => [match.id, match.updated_at, match.group_id, match.entry_one_id, match.entry_two_id, match.winner_entry_id, match.status, match.result_summary]),
         matchSets.map(set => [set.id, set.set_number, set.entry_one_games, set.entry_two_games, set.is_match_tiebreak]),
         [...entries.values()].map(entry => [entry.id, entry.group_id, entry.seed_number]),
@@ -64,11 +66,12 @@ export default function HostGroupQualification({ data, draw, client, act, busy }
         setError('');
     };
     const makePreview = () => {
-        if (!validSelection) return;
+        if (!validSelection || (hasPlacement && !bookingReview?.token)) return;
         try {
             setPreview({ revision: latestReview,
                 matches: rankedMode ? generateRankedElimination(ranked.advancing, draw) : generateElimination(data, draw),
                 rankedQualifiers: rankedMode ? ranked.advancing.map(entry => entry.id) : undefined,
+                bookingToken: hasPlacement ? bookingReview.token : undefined,
                 rankedOverride: changed ? {
                     candidate_ids: automatic.comparison.map(row => row.entry_id),
                     entry_ids: ranked.comparison.filter(row => row.qualified).map(row => row.entry_id),
@@ -82,7 +85,7 @@ export default function HostGroupQualification({ data, draw, client, act, busy }
 
     return <section className="tm-panel tm-stack" aria-label="Elimination phase">
         <h3>Elimination phase</h3>
-        {extended ? <p className="muted">This division’s placement or playoff rules require an assigned Tournament Manager account.</p>
+        {unsupportedQualification ? <p className="muted">This division’s qualification rules require an assigned Tournament Manager account.</p>
             : !resolved ? <p className="muted">Finish all group matches to review their qualifiers.</p>
                 : !ready ? <p className="muted">{rankedMode ? 'Check the saved qualification settings and refresh the group results.' : 'Resolve ties and refresh the final group standings to continue.'}</p>
                     : <>
@@ -118,15 +121,17 @@ export default function HostGroupQualification({ data, draw, client, act, busy }
                                 </>}
                             </>}
                         </> : <ul>{qualifiers.map((group, index) => <li key={groupIds[index]}>Group {index + 1} · {group.map(standing => entries.get(standing.entry_id)?.team_name).join(', ')}</li>)}</ul>}
-                        <div><button className="tm-button" disabled={busy || !validSelection} onClick={makePreview}>Review elimination bracket</button></div>
+                        {hasPlacement && !bookingReview?.token && <p className="tm-notice">Reload the draw to review its reserved courts.</p>}
+                        <div><button className="tm-button" disabled={busy || !validSelection || (hasPlacement && !bookingReview?.token)}
+                            onClick={makePreview}>Review elimination bracket</button></div>
                         {planned && <>
-                            <DrawBracketPreview title="Elimination preview" matches={planned.matches.map(match => ({ ...match,
+                            <DrawBracketPreview title="Elimination preview" matches={planned.matches.map(match => ({ ...match, ...bookingReview?.fixtures?.[match.key],
                                 entry_one: entries.get(match.entry_one_id), entry_two: entries.get(match.entry_two_id),
                             }))} />
                             {planned.rankedOverride && <p><strong>Override reason</strong> {planned.rankedOverride.reason}</p>}
                             <label className="tm-check"><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} />I have checked the qualifiers and opening matchups.</label>
                             <div><button className="tm-button primary" disabled={busy || !reviewed}
-                                onClick={() => act(() => client.qualify(data, draw, planned.matches, planned.rankedQualifiers, planned.rankedOverride), 'Elimination matches created from group standings')}>Create elimination phase</button></div>
+                                onClick={() => act(() => client.qualify(data, draw, planned.matches, planned.rankedQualifiers, planned.rankedOverride, planned.bookingToken), 'Elimination matches created from group standings')}>Create elimination phase</button></div>
                         </>}
                     </>}
         {error && <p role="alert" className="tm-notice">{error}</p>}

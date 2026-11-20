@@ -130,6 +130,9 @@ before(async () => {
                     if (name==='correct_manual_event_payment') return {data:{paymentId:receipt.id,method:args.p_method,recipient:args.p_recipient}};
                     if (name==='reopen_native_draw_for_corrections') { nativeDraw.status='draft'; return { data:null }; }
                     if (name==='account_is_active' || name==='is_super_admin') return { data:true };
+                    if (name==='tm_host_rotation_schedule' && args.p_action==='read_draft_rotation_schedule') {
+                        return {data:{organisationId:'org-a',eventId:505,drawId:args.p_payload.p_draw,action:args.p_action,bookings:[],review:''}};
+                    }
                     if (['tm_host_draw_preparation','tm_host_rotation_preparation','tm_host_group_qualification','tm_host_rotation_result'].includes(name)) {
                         if (args.p_organisation!=='org-a' || String(args.p_event)!=='505') {
                             return {error:{message:'No access to this host event'}};
@@ -350,16 +353,22 @@ before(async () => {
                     }
                     return <MemoryRouter initialEntries={['/admin-preview/event?event=505&tab=draws']}><HostGeneratorFixture /></MemoryRouter>;
                 }
-                if (['host-ranked-all','host-ranked-best','host-ranked-singletons'].includes(kind)) {
+                if (['host-ranked-all','host-ranked-best','host-ranked-singletons','host-ranked-placement'].includes(kind)) {
                     if (!hostTournament.draws.length) {
                         generator.divisions=[generatorDivision];
                         hostTournament.divisions=[generatorDivision];
                         const drawId='host-published-group';
                         const singletons=kind==='host-ranked-singletons';
-                        const all=kind!=='host-ranked-best';
+                        const placement=kind==='host-ranked-placement';
+                        const all=!placement && kind!=='host-ranked-best';
                         hostTournament.draws=[{id:drawId,event_id:505,division_id:generatorDivision.id,draw_kind:'main',
                             status:'published',format:'group_knockout',group_count:2,advancers_per_group:all?null:1,
-                            updated_at:'published-v1',scoring_rules:{qualification:{mode:all?'all':'best_placed',extras:all?0:1}}}];
+                            updated_at:'published-v1',scoring_rules:placement
+                                ? {qualification:{mode:'best_placed',extras:2},plate_mode:'double',playoff_mode:'top4'}
+                                : {qualification:{mode:all?'all':'best_placed',extras:all?0:1}}}];
+                        if (placement) hostTournament.groupPlacementReservations={[drawId]:{token:'placement-court-v1',fixtures:{
+                            places_3_4_r1_m1:{court_name:'Court 7',scheduled_start:'2035-06-07T20:00:00Z',scheduled_end:'2035-06-07T21:00:00Z',published:true},
+                        }}};
                         hostTournament.entries=(singletons?[1,4]:[1,2,3,4,5]).map(n=>({id:'team-'+n,draw_id:drawId,team_name:'Team '+n,
                             group_id:n<4?'ga':'gb',seed_number:n}));
                         const games=singletons?[]:[[1,2,6,1],[1,3,6,2],[2,3,6,0],[4,5,6,4]];
@@ -1162,7 +1171,7 @@ test('organisation hosts review and publish both Americano rotation variants ins
             await clickText(page, 'Publish draw');
             await page.waitForFunction(() => document.querySelector('.tm-body [role=status]')?.textContent === 'Draw published');
             assert.deepEqual(await page.$$eval('.tm-tabs a', links => links.map(link => link.textContent)), ['Players','Divisions','Draws']);
-            const writes = (await page.evaluate(() => window.calls)).filter(([, args]) => args.p_action !== 'snapshot');
+            const writes = (await page.evaluate(() => window.calls)).filter(([, args]) => !['snapshot','read_draft_rotation_schedule'].includes(args.p_action));
             assert.ok(writes.every(([, args]) => args.p_organisation === 'org-a' && String(args.p_event)==='505'));
             assert.deepEqual(writes.map(([method, args]) => [method, args.p_action]), [
                 ['tm_host_draw_preparation', 'confirm'], ['tm_host_rotation_preparation', 'confirm'],
@@ -1390,5 +1399,36 @@ test('legacy all-team draws can qualify singleton groups without requiring nonex
         assert.deepEqual(new Set(payload.p_ranked_qualifiers), new Set(['team-1', 'team-4']));
         assert.deepEqual(payload.p_group_versions, {});
         assert.equal(payload.p_matches.length, 1);
+    } finally { await page.close(); }
+});
+
+test('hosts review the exact finishing-place routes and their reserved court before creating elimination', async () => {
+    const page = await open('host-ranked-placement');
+    const panel = 'section[aria-label="Elimination phase"]';
+    try {
+        await clickText(page, 'Draw generator');
+        await clickText(page, 'Review elimination bracket', panel + ' button');
+        const playoff = panel + ' section[aria-label="Places 3–4"]';
+        await page.waitForSelector(playoff);
+        const bracketText = await page.$eval(playoff, section => section.textContent);
+        assert.match(bracketText, /Loser of M1/);
+        assert.match(bracketText, /Loser of M2/);
+        assert.match(bracketText, /Court 7/);
+        assert.equal(await page.$$eval(panel + ' section[aria-label="Places 3–4"]', sections => sections.length), 1);
+        assert.deepEqual(await page.evaluate(() => window.calls.filter(([name]) => name === 'tm_host_group_qualification')), []);
+        await page.click(panel + ' input[type="checkbox"]');
+        await clickText(page, 'Create elimination phase', panel + ' button');
+        await page.waitForFunction(() => document.querySelector('.tm-body [role=status]')?.textContent.includes('Elimination matches created'));
+        const calls = await page.evaluate(() => window.calls.filter(([name]) => name === 'tm_host_group_qualification'));
+        assert.equal(calls.length, 1);
+        const [, args] = calls[0];
+        assert.equal(args.p_organisation, 'org-a');
+        assert.equal(args.p_payload.p_group_booking_token, 'placement-court-v1');
+        assert.deepEqual(new Set(args.p_payload.p_ranked_qualifiers), new Set(['team-1','team-2','team-4','team-5']));
+        const rows = args.p_payload.p_matches;
+        const [placement] = rows.filter(match => match.stage === 'placement');
+        assert.equal(rows.length, 4);
+        assert.equal(placement.key, 'places_3_4_r1_m1');
+        assert.deepEqual(rows.filter(match => match.loser_to_match_id === placement.id).map(match => match.loser_to_slot), [1,2]);
     } finally { await page.close(); }
 });

@@ -1,6 +1,7 @@
 // Exact current MAIN tm_* contracts, isolated from the legacy admin.
 const HOST_ROTATION_RESULTS = ['record_rotation_score', 'complete_rotation'];
-const HOST_ROTATION_SCHEDULE = ['preview_rotation_schedule', 'apply_rotation_schedule'];
+const HOST_ROTATION_SCHEDULE = ['preview_rotation_schedule', 'apply_rotation_schedule',
+    'read_draft_rotation_schedule', 'discard_draft_rotation_schedule'];
 const HOST_ACTIONS = new Set(['snapshot', 'confirm', 'save_draw', 'publish_draw', 'qualify', ...HOST_ROTATION_RESULTS, ...HOST_ROTATION_SCHEDULE]);
 const isRotation = format => ['americano', 'team_americano'].includes(format);
 const CONTEXT_CHANGED = 'Tournament context changed. No further changes were sent.';
@@ -68,11 +69,12 @@ function rotationSchedule(name, data, draw, minutes, rest, review) {
 return {
     saveRegistration: (data, division, registration, payload) => tournamentRpc('save_registration', { p_event: data.event.id, p_division: division, p_registration: registration?.id || null, p_payload: payload, p_expected: registration?._revision || null }),
     saveDivision: (data, division, name, active) => tournamentRpc('save_division', { p_event: data.event.id, p_division: division, p_name: name, p_active: active }),
-    qualify: (data, draw, matches, rankedQualifiers, rankedOverride) => {
+    qualify: (data, draw, matches, rankedQualifiers, rankedOverride, groupBookingToken) => {
         const payload = { p_event: data.event.id, p_draw: draw.id, p_expected: draw.updated_at, p_matches: matches };
         if (hostEvent) {
             const groupMatches = new Map(data.matches.filter(m => m.draw_id === draw.id && m.stage === 'group').map(m => [m.id, m.updated_at]));
             payload.p_group_versions = Object.fromEntries(groupMatches);
+            if (groupBookingToken) payload.p_group_booking_token = groupBookingToken;
             payload.p_group_sets = Object.fromEntries(data.sets.filter(set => groupMatches.has(set.match_id))
                 .map(set => [set.match_id + ':' + set.set_number, [set.entry_one_games, set.entry_two_games, set.is_match_tiebreak]]));
             if (rankedQualifiers) {
@@ -89,6 +91,8 @@ return {
     saveSettings: (data, settings, days) => tournamentRpc('save_settings', { p_event: data.event.id, p_expected: data.settingsRevision, p_settings: settings, p_days: days }),
     confirm: (data, division, kind, payload) => tournamentRpc('confirm', { p_event: data.event.id, p_division: division, p_kind: kind, p_payload: payload, p_expected: data.confirmations.find(c => c.division_id === division)?.revision || 0 }),
     ...(hostEvent ? {
+        readDraftRotationSchedule: (data, draw) => rotationSchedule('read_draft_rotation_schedule', data, draw),
+        discardDraftRotationSchedule: (data, draw) => rotationSchedule('discard_draft_rotation_schedule', data, draw),
         previewRotationSchedule: (data, draw, minutes, rest) => rotationSchedule('preview_rotation_schedule', data, draw, minutes, rest),
         applyRotationSchedule: (data, draw, minutes, rest, review) => rotationSchedule('apply_rotation_schedule', data, draw, minutes, rest, review),
         recordRotationScore: (data, draw, match, score, reason) => tournamentRpc('record_rotation_score', {

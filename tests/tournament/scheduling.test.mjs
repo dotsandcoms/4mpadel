@@ -84,3 +84,25 @@ test('division duration overrides retain explicit match minimums',()=>{
  assert.equal(elapsed(first.id),45);
  const final=p.fixtures.find(f=>f.final&&f.division_id===d.divisions[0].id);assert.equal(elapsed(final.id),20);
 });
+
+test('ranked provisional placement bookings retain only playable slots and their real feeder waits', async () => {
+ const { tournamentFixtures: nextAdminFixtures } = await import('../../src/pages/admin-preview/tournament/utils/tournament/scheduling.js');
+ const draw = { id:'group-stage',division_id:'division',format:'group_knockout',status:'published',group_count:2,advancers_per_group:1 };
+ const entries = Array.from({length:5}, (_, i) => ({id:'team-'+i,draw_id:draw.id,group_id:i<3?'ga':'gb'}));
+ const matches = [{ id:'group-result', draw_id:draw.id, stage:'group', status:'scheduled' }];
+ const future = settings => {
+  const data = {draws:[{...draw,scoring_rules:settings}],entries,matches};
+  const reference = tournamentFixtures(data).filter(row => row.virtual);
+  assert.deepEqual(nextAdminFixtures(data).filter(row => row.virtual), reference);
+  return reference;
+ };
+ const best = future({plate_mode:'double',playoff_mode:'top4',qualification:{mode:'best_placed',extras:1}});
+ assert.equal(best.length,4);
+ assert.equal(best.find(row => row.stage==='placement').status, 'bye');
+ const all = future({plate_mode:['places_7_8'],playoff_mode:'top4',qualification:{mode:'all'}});
+ assert.equal(all.filter(row => row.stage==='knockout').length,7);
+ assert.equal(all.find(row => row.key==='places_7_8_r1_m1').status,'bye');
+ assert.ok(all.some(row => row.stage==='placement' && row.key==='places_3_4_r1_m1' && row.status==='pending'));
+ const semifinals = all.filter(row => row.round_number === 2);
+ assert.ok(semifinals.every(row => row.dependency_ids.every(id => id === 'group-result' || all.some(feeder => feeder.id===id && feeder.status==='pending'))));
+});

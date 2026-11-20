@@ -20,6 +20,8 @@ BEGIN;
 \ir ../../supabase/migrations/20261120081256_scope_host_ranked_group_qualification.sql
 \ir ../../supabase/migrations/20261120083443_scope_host_americano_court_schedule.sql
 \ir ../../supabase/migrations/20261120083448_scope_host_best_placed_qualification_override.sql
+\ir ../../supabase/migrations/20261120085840_publish_reviewed_private_rotation_schedules.sql
+\ir ../../supabase/migrations/20261120085850_scope_host_group_placement_and_reservations.sql
 CREATE FUNCTION pg_temp.expect_denied(query text) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
  BEGIN EXECUTE query; EXCEPTION WHEN insufficient_privilege THEN RETURN; END;
@@ -33,4 +35,5 @@ END $$;
 \ir host-rotation-results.sql
 \ir host-ranked-qualification.sql
 \ir host-rotation-schedule.sql
+\ir host-private-rotation-schedule.sql
 ROLLBACK;
