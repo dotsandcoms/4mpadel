@@ -13,6 +13,8 @@ import AdvancedEventDetailsDialog from './AdvancedEventDetailsDialog';
 import CreateEventDialog from './CreateEventDialog';
 import CreateQuickEventDialog from './CreateQuickEventDialog';
 import QuickEventDetailsDialog from './QuickEventDetailsDialog';
+import CalendarDuplicateDialog from './CalendarDuplicateDialog.jsx';
+import { canDuplicateCalendarEvent } from './calendarDuplicate.js';
 import CalendarRecordAction from './CalendarRecordAction';
 import CalendarRankedinBulkDialog from './CalendarRankedinBulkDialog';
 import { calendarRankedinId } from './calendarRecordActions.js';
@@ -50,7 +52,7 @@ function SponsorLogos({ logos }) {
 
 function SetupPreview({ event, mode, onClose, onApply }) {
   const [draft, setDraft] = useState(() => {
-    const initial = { ...event, is_visible: event.is_visible !== false, ...(mode === 'duplicate' ? { id: `demo-${Date.now()}`, event_name: `${event.event_name} (copy)`, slug: '', is_visible: false } : {}) };
+    const initial = { ...event, is_visible: event.is_visible !== false };
     for (const field of ['registration_opens_at', 'registration_closes_at', 'early_bird_ends_at']) {
       if (initial[field] && !Number.isNaN(new Date(initial[field]).getTime())) initial[field] = new Date(initial[field]).toLocaleString('sv-SE', { timeZone: 'Africa/Johannesburg' }).replace(' ', 'T').slice(0,16);
     }
@@ -68,7 +70,7 @@ function SetupPreview({ event, mode, onClose, onApply }) {
     for (const field of ['registration_opens_at', 'registration_closes_at', 'early_bird_ends_at']) if (result[field]) result[field] = new Date(`${result[field]}:00+02:00`).toISOString();
     onApply(result);
   };
-  return <Dialog title={`${mode === 'duplicate' ? 'Duplicate event' : mode === 'new' ? 'Create event' : 'Edit event'} · demo`} onClose={onClose}>
+  return <Dialog title={`${mode === 'new' ? 'Create event' : 'Edit event'} · demo`} onClose={onClose}>
     <form className="cw-editor" onSubmit={submit}>
       <p className="pp-notice">This changes only your in-memory demo. No publishing, uploads, payments or database writes occur.</p>
       <nav className="pp-tabs" aria-label="Event setup sections">{['Details', 'Registration', 'Publishing'].map(s => <button type="button" key={s} aria-current={step === s ? 'page' : undefined} onClick={() => setStep(s)}>{s}</button>)}</nav>
@@ -106,7 +108,7 @@ function EventDrawer({ event, client, onClose, onAction, canManageEvents, canMan
   }, [client, event.id, retry]);
   const url = publicEventUrl(event);
   const phase = eventPhase(event);
-  const copy = async () => { try { await navigator.clipboard.writeText(new URL(url, window.location.origin).href); setNotice('Public event link copied.'); } catch { setNotice('Clipboard unavailable. Use the Public event link below.'); } };
+  const copy = async () => { try { await navigator.clipboard.writeText(url); setNotice('Public event link copied.'); } catch { setNotice('Clipboard unavailable. Use the Public event link below.'); } };
   return <Dialog title="Calendar event" onClose={onClose} drawer>
     <div className="cw-record-heading"><EventImage event={event} large /><div><h3>{event.event_name || 'Unnamed event'}</h3><p>{dateLabel(event.start_date)}{event.end_date && event.end_date !== event.start_date ? ` – ${dateLabel(event.end_date)}` : ''}</p><dl className="cw-record-statuses">
       <div><dt>Event tier</dt><dd><Tag tone={tierTone(event.sapa_status)}>{event.sapa_status || 'Untiered'}</Tag></dd></div>
@@ -123,7 +125,7 @@ function EventDrawer({ event, client, onClose, onAction, canManageEvents, canMan
       {tab === 'Source' && <><Facts entries={[["Source", event.rankedin_id ? 'RankedIn linked' : 'Manual'], ['Calendar ID', event.id], ['RankedIn ID', event.rankedin_id], ['RankedIn URL', event.rankedin_url], ['Organisation', event._organisation?.name || event.organisation_id], ['Created by', event._audit?.creator_name || event._audit?.creator_email], ['Created at', event._audit?.created_at], ['Quick event', event.is_quick_event], ['Weekly series', event.series_id]]} /><details className="cw-division"><summary>All recorded calendar fields <ChevronRight size={16} /></summary><Facts entries={Object.entries(event).filter(([k]) => !k.startsWith('_')).map(([k, v]) => [label(k), v])} /></details>{canManageRecords && calendarRankedinId(event) && <button className="ap-secondary" onClick={() => onAction('sync-source', event)}>Refresh RankedIn cache</button>}</>}
       {notice && <p role="status" className="pp-notice">{notice}</p>}
     </div>
-    <footer className="cw-record-footer"><div className="cw-record-action-row">{!String(event.id).startsWith('demo-') && <Link className="ap-primary" to={`/admin-preview/event?event=${encodeURIComponent(event.id)}`}>Event Manager <ArrowRight size={15} /></Link>}{url && <a href={url} className="ap-secondary" target="_blank" rel="noreferrer">Public event <ExternalLink size={15} /></a>}<div className="cw-more-actions" ref={actionsRef}><button className="ap-secondary" aria-expanded={actionsOpen} aria-controls="cw-event-actions" onClick={() => setActionsOpen(v => !v)}>More actions <ChevronRight size={15} style={{ transform: actionsOpen ? 'rotate(-90deg)' : 'rotate(90deg)' }} /></button>{actionsOpen && <div className="cw-action-menu" id="cw-event-actions">{url && <button onClick={() => { setActionsOpen(false); copy(); }}>Copy public link</button>}{editMode && <button onClick={() => onAction('edit', event)}>{editLabel}</button>}<button onClick={() => onAction('duplicate', event)}>Preview duplicate</button>{canManageRecords && <>
+    <footer className="cw-record-footer"><div className="cw-record-action-row">{!String(event.id).startsWith('demo-') && <Link className="ap-primary" to={`/admin-preview/event?event=${encodeURIComponent(event.id)}`}>Event Manager <ArrowRight size={15} /></Link>}{url && <a href={url} className="ap-secondary" target="_blank" rel="noreferrer">Public event <ExternalLink size={15} /></a>}<div className="cw-more-actions" ref={actionsRef}><button className="ap-secondary" aria-expanded={actionsOpen} aria-controls="cw-event-actions" onClick={() => setActionsOpen(v => !v)}>More actions <ChevronRight size={15} style={{ transform: actionsOpen ? 'rotate(-90deg)' : 'rotate(90deg)' }} /></button>{actionsOpen && <div className="cw-action-menu" id="cw-event-actions">{url && <button onClick={() => { setActionsOpen(false); copy(); }}>Copy public link</button>}{editMode && <button onClick={() => onAction('edit', event)}>{editLabel}</button>}{canDuplicateCalendarEvent(event, canManageRecords) && <button onClick={() => onAction('duplicate', event)}>Duplicate event</button>}{canManageRecords && <>
     <button onClick={() => onAction('visibility', event)}>{event.is_visible === false ? 'Show on website' : 'Hide from website'}</button>
     <button onClick={() => onAction('finance', event)}>{event.finance_managed ? 'Remove from Event Manager' : 'Add to Event Manager'}</button>
     <button className="cw-action-delete" onClick={() => onAction('delete', event)}>Delete event</button>
@@ -179,6 +181,7 @@ export default function CalendarWorkspace({ session, permissions, scope, scopeId
   const open = event => update({ calendarEvent: String(event.id) });
   const chooseAction = (mode, event) => {
     if (mode === 'edit' && !calendarEditMode(event, canManageEvents)) return;
+    if (mode === 'duplicate' && !canDuplicateCalendarEvent(event, canManageRecords)) return;
     if (['delete', 'visibility', 'finance', 'sync-source', ...rankedinBulkActions].includes(mode) && !canManageRecords) return;
     if (mode !== 'edit') update({ calendarEvent: '' });
     setAction({ mode, event });
@@ -207,7 +210,7 @@ export default function CalendarWorkspace({ session, permissions, scope, scopeId
   };
   if (!sessionId) return <section className="pp-gate"><LockKeyhole size={28} /><h1>Calendar</h1><p>Sign in to read the calendar using your existing admin permissions.</p><a className="ap-primary" href="/admin">Sign in</a></section>;
   return <div className="cw-workspace"><header className="pp-heading"><div><p className="ap-eyebrow">Operate / Calendar</p><h1>Calendar</h1><p>Plan dates. Check setup. Control what players see.</p></div><div className="cw-actions"><button className="ap-secondary" disabled={!data || exporting} onClick={exportCalendar}><Download size={16} />{exporting ? 'Exporting…' : 'Export Excel'}</button><button className="ap-secondary" onClick={() => newEvent(true)}>{canManageEvents ? 'Create quick event' : 'Preview quick event'}</button><button className="ap-primary" onClick={() => newEvent(false)}><Plus size={16} />{canManageEvents ? 'Create event' : 'Preview create event'}</button></div></header>
-    <div className="pp-notice"><LockKeyhole size={16} />{canManageEvents ? 'Create events and edit existing manual events with the live event editor. Saving, publishing and uploads affect live records. Duplication is preview-only.' : 'Read-only calendar connection. Actions labelled Preview are local demonstrations and do not save or publish records.'}</div>
+    <div className="pp-notice"><LockKeyhole size={16} />{canManageEvents ? 'Create events and edit existing manual events with the live event editor. Saving, publishing and uploads affect live records.' : 'Read-only calendar connection. Actions labelled Preview are local demonstrations and do not save or publish records.'}</div>
     {Object.keys(overrides).length > 0 && <div className="pp-notice">{Object.keys(overrides).length} local demo changes <button className="ap-text-button" onClick={() => { setOverrides({}); setNotice('Demo reset. Original records restored.'); }}>Reset demo</button></div>}
     <nav className="pp-tabs" aria-label="Calendar views">{[['dashboard','Dashboard'], ['month','Month view'], ['list','All events']].map(([id,name]) => <button key={id} aria-current={view === id ? 'page' : undefined} onClick={() => update({ calView: id, calPage: '' })}>{name}</button>)}</nav>
     <div className="pp-load-status"><span role="status">{loading ? 'Reading calendar records…' : `${events.length.toLocaleString()} accessible events`}</span><button className="ap-text-button" disabled={loading} onClick={() => setRefresh(n => n + 1)}><RefreshCw size={14} />Refresh calendar</button></div>
@@ -224,7 +227,10 @@ export default function CalendarWorkspace({ session, permissions, scope, scopeId
     {action?.mode === 'create-quick' && canManageEvents && <QuickCreationDialog client={client} session={session} scopeId={scopeId} onClose={closeEditor}/>}
     {action?.mode === 'edit' && calendarEditMode(action.event, canManageEvents) === 'live-quick' && <QuickDetailsDialog key={action.event.id} event={action.event} client={client} session={session} scopeId={scopeId} onClose={closeEditor}/>}
     {action?.mode === 'edit' && calendarEditMode(action.event, canManageEvents) === 'live' && <DetailsDialog key={action.event.id} event={action.event} client={client} session={session} scopeId={scopeId} onClose={closeEditor}/>}
-    {action && !['delete', 'visibility', 'finance', 'sync-source', 'create', 'create-quick', ...rankedinBulkActions].includes(action.mode) && (action.mode !== 'edit' || calendarEditMode(action.event, canManageEvents) === 'preview') && <SetupPreview key={action.event.id} event={action.event} mode={action.mode} onClose={()=>setAction(null)} onApply={draft=>{setOverrides(v=>({...v,[draft.id]:draft}));setAction(null);setNotice('Applied to this demo only. Reload or Reset demo to discard.');update({calendarEvent:String(draft.id)});}}/>}
+    {action && !['delete', 'visibility', 'finance', 'sync-source', 'duplicate', 'create', 'create-quick', ...rankedinBulkActions].includes(action.mode) && (action.mode !== 'edit' || calendarEditMode(action.event, canManageEvents) === 'preview') && <SetupPreview key={action.event.id} event={action.event} mode={action.mode} onClose={()=>setAction(null)} onApply={draft=>{setOverrides(v=>({...v,[draft.id]:draft}));setAction(null);setNotice('Applied to this demo only. Reload or Reset demo to discard.');update({calendarEvent:String(draft.id)});}}/>}
+    {action?.mode === 'duplicate' && canDuplicateCalendarEvent(action.event, canManageRecords) && <CalendarDuplicateDialog
+      client={client} event={action.event} session={session} scopeId={scopeId}
+      onClose={result => closeEditor({ ...result, eventId: result?.eventId || action.event.id })} />}
     {action && canManageRecords && rankedinBulkActions.includes(action.mode) && <CalendarRankedinBulkDialog key={action.mode} client={client} session={session} scopeId={scopeId} mode={action.mode} events={data?.events || []} onClose={closeEditor} />}
     {action && canManageRecords && ['delete', 'visibility', 'finance', 'sync-source'].includes(action.mode) && <CalendarRecordAction client={client} event={action.event} action={action.mode} session={session} scopeId={scopeId} onClose={closeEditor} />}
   </div>;

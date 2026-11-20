@@ -1,3 +1,4 @@
+import { FOURM_PUBLIC_ORIGIN } from '../../constants/site.js';
 import { readAll } from './playersData.js';
 import { resolveEventWorkspace, scopeCalendarQuery } from '../../utils/adminCalendarScope.js';
 
@@ -79,4 +80,4 @@ export function monthDays(month) {
 }
 export const occursOn = (event, day) => Boolean(dayKey(event.start_date)) && dayKey(event.start_date) <= day && (dayKey(event.end_date) || dayKey(event.start_date)) >= day;
 export const tierTone = tier => ({ Major: 'violet', Gold: 'warning', 'Super Gold': 'amber', 'S Gold': 'amber', Silver: 'neutral', Bronze: 'bronze', 'Key Event': 'positive', 'FIP event': 'info' }[tier] || 'neutral');
-export const publicEventUrl = event => event.slug ? `/calendar/${encodeURIComponent(event.slug)}` : null;
+export const publicEventUrl = event => event.slug ? FOURM_PUBLIC_ORIGIN + `/calendar/${encodeURIComponent(event.slug)}` : null;
