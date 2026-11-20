@@ -40,9 +40,11 @@ function mainRanking(value: unknown): MainRanking | null {
 export function feedRankingChange(item: Pick<FeedItem, 'kind' | 'path' | 'payload'>) {
   if (item.kind !== 'ranking') return null;
   const beforeRank = rankingPosition(item.payload.before_rank), rank = rankingPosition(item.payload.rank);
-  if (beforeRank === null || rank === null || !(Math.abs(beforeRank - rank) > 5
-    || [10, 20, 100].some(threshold => beforeRank > threshold && rank <= threshold))) return null;
-  const movement = { beforeRank, rank, change: beforeRank - rank };
+  if (beforeRank === null || rank === null || rank >= 500) return null;
+  const change = beforeRank - rank;
+  const enteredMilestone = [10, 100].some(threshold => beforeRank > threshold && rank <= threshold);
+  if (change < 25 && !enteredMilestone) return null;
+  const movement = { beforeRank, rank, change };
   if (item.path.startsWith('/pro/player/')) return { ...movement, label: 'FIP ranking', points: typeof item.payload.points === 'number' && Number.isFinite(item.payload.points) ? item.payload.points : null, scope: 'fip' };
   const main = item.payload.ranking_source === 'sapa_main_v1' ? mainRanking(item.payload) : null;
   return main ? { ...movement, label: `SAPA ${main.label}`, points: main.points, scope: main.scope } : null;
@@ -120,6 +122,58 @@ export function feedParticipants(item: FeedItem): FeedPlayer[][] {
   });
 }
 export function feedEventPhoto(item: FeedItem): string | null { return photo(item.payload.event_image_url); }
+
+const tournamentFields = new Map<string, [label: string, update: string, legacyLabel: string]>([
+  ['start_date', ['Start date', 'Start date changed', 'Tournament starts']],
+  ['end_date', ['End date', 'End date changed', 'Tournament ends']],
+  ['venue', ['Venue', 'Venue changed', 'Venue']],
+  ['city', ['City', 'City changed', 'City']],
+  ['registration_closes_at', ['Entry deadline', 'Entry deadline changed', 'Entries close']],
+  ['early_bird_ends_at', ['Early bird deadline', 'Early bird deadline changed', 'Early bird ends']],
+  ['event_name', ['Tournament name', 'Tournament name changed', 'Tournament name']],
+]);
+const tournamentAnnouncements = new Map([
+  ['registration_open', 'Registration opened'],
+  ['registration_closing', 'Entries close soon'],
+  ['registration_closed', 'Registration closed'],
+  ['early_bird_ending', 'Early bird ends soon'],
+  ['draw', 'Draw published'],
+  ['schedule', 'Schedule published'],
+  ['results', 'Results published'],
+  ['cancelled', 'Tournament cancelled'],
+]);
+
+export function feedTournamentUpdate(item: FeedItem) {
+  if (item.kind !== 'tournament') return null;
+  const type = text(item.payload.update_type);
+  const changes = new Map<string, { field: string; label: string; update: string; before: string; after: string }>();
+  const rows = Array.isArray(item.payload.changes) ? item.payload.changes : [];
+  for (const row of rows) {
+    if (!object(row)) continue;
+    const field = text(row.field), names = tournamentFields.get(field);
+    if (!names) continue;
+    const [label, update] = names;
+    const before = text(row.before).trim(), after = text(row.after).trim();
+    if (after) changes.set(field, { field, label, update, before: before === after ? '' : before, after });
+  }
+  // Older detail posts may only carry the server's "Field: value" text.
+  if (!changes.size && (type === 'details' || !type)) {
+    for (const part of item.body.split(/ · (?=[^:·]+:)/)) {
+      const separator = part.indexOf(':');
+      if (separator < 0) continue;
+      const label = part.slice(0, separator).trim().toLowerCase(), after = part.slice(separator + 1).trim();
+      const match = [...tournamentFields].find(([, [name, , legacy]]) => name.toLowerCase() === label || legacy.toLowerCase() === label);
+      if (!match || !after) continue;
+      const [field, [name, update]] = match;
+      changes.set(field, { field, label: name, update, before: '', after });
+    }
+  }
+  const first = changes.values().next().value;
+  const label = changes.size > 1 ? 'Tournament details changed'
+    : first?.update ?? tournamentAnnouncements.get(type) ?? (type === 'details' ? 'Tournament details changed' : 'Tournament update');
+  return { label, changes: [...changes.values()] };
+}
+
 /** The RPC supplies the current deadline; historical notification copy is never a timer source. */
 export function feedDeadline(item: FeedItem): string | null {
   if (item.kind !== 'tournament') return null;

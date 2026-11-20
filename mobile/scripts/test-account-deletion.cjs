@@ -101,11 +101,12 @@ test('server Apple client secret is a signed, short-lived ES256 token', async ()
   }), /APPLE_TOKEN_EXCHANGE_FAILED/);
 });
 class AuthCancelled extends Error {}
-function clientHarness({ apple = false, canceled = false, wrongApple = false, serverError = null, draftError = false } = {}) {
+function clientHarness({ apple = false, canceled = false, wrongApple = false, serverError = null, draftError = false, relay = false, hasProfile = false, sessionUser = user } = {}) {
   const calls = [], exports = {};
   const supabase = {
     auth: {
-      getUser: async () => ({ data: { user: { ...user, identities: apple ? [{ provider: 'apple', identity_data: { sub: 'linked' } }] : [] } }, error: null }),
+      getUser: async () => ({ data: { user: { ...user, email: relay ? 'example@privaterelay.appleid.com' : user.email, identities: apple ? [{ provider: 'apple', identity_data: { sub: 'linked' } }] : [] } }, error: null }),
+      getSession: async () => ({ data: { session: { user: sessionUser, access_token: 'verified-token' } }, error: null }),
       signOut: async options => { calls.push(['signOut', options]); return { error: null }; },
     },
     functions: { invoke: async (name, args) => { calls.push(['invoke', name, args]); return { data: { deleted: !serverError }, error: serverError }; } },
@@ -113,6 +114,7 @@ function clientHarness({ apple = false, canceled = false, wrongApple = false, se
   const dependencies = {
     './analytics': { clearAccountAnalytics: async () => {} },
     './supabase': { supabase }, './auth': { AuthCancelled }, 'react-native': { Platform: { OS: 'ios' } },
+    './profile': { hasPlayerProfile: async () => hasProfile },
     './profile-draft-storage': { clearDraftText: async email => { calls.push(['draft', email]); if (draftError) throw new Error('storage unavailable'); } },
     './companion': { setCompanionAccount: async id => calls.push(['watch', id]) },
     '@react-native-google-signin/google-signin': { GoogleSignin: { signOut: async () => calls.push(['google']) } },
@@ -133,6 +135,27 @@ test('successful client deletion clears phone/Watch data and session only after 
   assert.deepEqual(h.calls.map(c => c[0]), ['draft', 'invoke', 'watch', 'google', 'signOut', 'memory', 'disk']);
   assert.equal(h.calls.find(c => c[0] === 'watch')[1], null);
   assert.equal(h.calls.find(c => c[0] === 'signOut')[1].scope, 'local');
+  assert.equal(h.calls.find(c => c[0] === 'invoke')[2].headers.Authorization, 'Bearer verified-token');
+});
+test('deletion opened from onboarding refuses to act on a different account', async () => {
+  const h = clientHarness({ apple: true });
+  await assert.rejects(h.deleteCurrentAccount('another-user'), /sign in to the account you want to delete/);
+  assert.deepEqual(h.calls, []);
+});
+test('onboarding recovery can only remove a relay account with no saved profile', async () => {
+  for (const options of [{ apple: false, relay: true }, { apple: true, relay: false }, { apple: true, relay: true, hasProfile: true }]) {
+    const h = clientHarness(options);
+    await assert.rejects(h.deleteCurrentAccount(user.id), /unfinished Apple sign-ins/);
+    assert.deepEqual(h.calls, []);
+  }
+  const h = clientHarness({ apple: true, relay: true });
+  await h.deleteCurrentAccount(user.id);
+  assert.equal(h.calls.find(c => c[0] === 'invoke')[2].body.appleAuthorizationCode, 'fresh-code');
+});
+test('account deletion aborts if the session changes during Apple confirmation', async () => {
+  const h = clientHarness({ apple: true, sessionUser: { id: 'another-user' } });
+  await assert.rejects(h.deleteCurrentAccount(), /sign in to the account you want to delete/);
+  assert.deepEqual(h.calls, [['apple']]);
 });
 test('server or draft failure keeps the signed-in account and Watch available for retry', async () => {
   for (const config of [{ serverError: new Error('offline') }, { draftError: true }]) {

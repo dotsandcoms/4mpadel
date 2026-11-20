@@ -3,6 +3,12 @@
     "name": "FourM Padel",
     "slug": "4m-padel",
     "version": "1.0.3",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3ed962c3-654a-4a9c-8586-3ee01cd6cb10"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "fourmpadel",
@@ -88,6 +94,7 @@
     },
     "plugins": [
       "./plugins/with-display-name",
+      "./plugins/with-optional-android-hardware",
       [
         "expo-build-properties",
         {
@@ -158,7 +165,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow 4M Padel to use your location to find nearby padel clubs.",
+          "locationWhenInUsePermission": "Allow 4M Padel to show your city, use an approximate area for local weather from Open-Meteo, and find nearby padel clubs.",
           "isIosBackgroundLocationEnabled": false,
           "isAndroidBackgroundLocationEnabled": false
         }

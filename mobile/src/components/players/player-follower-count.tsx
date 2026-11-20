@@ -2,10 +2,11 @@ import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
 import { fetchLocalFollowerCount } from '@/lib/player-hub';
 import { lightBrand as b } from '@/theme/tokens';
 
-export function PlayerFollowerCount({ playerId, playerName, refreshKey = 0, onPress, compact = false }: { playerId: string; playerName?: string; refreshKey?: number; onPress?: () => void; compact?: boolean }) {
+export function PlayerFollowerCount({ playerId, playerName, refreshKey = 0, onPress, compact = false, header = false }: { playerId: string; playerName?: string; refreshKey?: number; onPress?: () => void; compact?: boolean; header?: boolean }) {
   const [state, setState] = useState<{ id: string; count: number | null; error: boolean }>({ id: playerId, count: null, error: false });
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -22,6 +23,10 @@ export function PlayerFollowerCount({ playerId, playerName, refreshKey = 0, onPr
   const unavailable = state.id === playerId && state.error;
   const label = count === 1 ? 'follower' : 'followers';
   const accessibilityLabel = count !== null ? `${count} ${label}` : unavailable ? 'Follower count unavailable' : 'Loading follower count';
+  if (header && onPress) return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} accessibilityHint="View people following you" onPress={onPress} style={{ minHeight: 44, minWidth: 44, paddingHorizontal: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+    <SymbolView name={{ ios: 'heart', android: 'favorite_border', web: 'favorite_border' }} size={20} tintColor={b.premium} accessible={false} />
+    <Text accessibilityLiveRegion="polite" style={{ color: b.premium, fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{count?.toLocaleString('en-ZA') ?? (unavailable ? '—' : '…')}</Text>
+  </Pressable>;
   const content = <Text accessibilityLiveRegion="polite" accessibilityLabel={onPress ? undefined : accessibilityLabel} style={{ color: b.muted, fontSize: compact ? 12 : 13, lineHeight: 20 }}>
     {unavailable ? 'Followers unavailable' : <><Text style={{ color: b.premium, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{count === null ? '…' : count.toLocaleString('en-ZA')}</Text> {label}</>}
   </Text>;

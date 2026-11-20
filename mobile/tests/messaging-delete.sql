@@ -50,5 +50,23 @@ select pg_temp.login(2);
 select public.messaging_api('send',jsonb_build_object('conversationId',:'delete_group','body','Group message after deletion','clientId',gen_random_uuid()));
 select pg_temp.login(1);
 select pg_temp.expect(jsonb_array_length(public.messaging_api('read',jsonb_build_object('conversationId',:'delete_group'))->'messages')=1,'group new message returns without cleared invitation');
+
+-- Account erasure must only update groups containing the departing recipient.
+reset role;
+insert into messaging.conversations(kind)
+select kind from messaging.conversations where id=:'delete_group'::uuid
+returning id as unrelated_group \gset
+insert into messaging.groups(conversation_id,title,creator_id,source,client_id,recipients)
+values (:'unrelated_group','Unrelated group','00000000-0000-0000-0000-000000000001',
+  'player_group',gen_random_uuid(),array['00000000-0000-0000-0000-000000000003'::uuid])
+returning ctid::text as unrelated_group_row \gset
+
+select pg_temp.expect((select '00000000-0000-0000-0000-000000000002'::uuid = any(recipients)
+  from messaging.groups where conversation_id=:'delete_group'::uuid),'erasure fixture includes departing recipient');
+delete from messaging.accounts where user_id='00000000-0000-0000-0000-000000000002';
+select pg_temp.expect((select recipients=array['00000000-0000-0000-0000-000000000003'::uuid]
+  from messaging.groups where conversation_id=:'delete_group'::uuid),'erasure removes departing group recipient');
+select pg_temp.expect((select ctid::text=:'unrelated_group_row'
+  from messaging.groups where conversation_id=:'unrelated_group'::uuid),'erasure leaves unrelated group untouched');
 rollback to savepoint personal_delete;
 release savepoint personal_delete;

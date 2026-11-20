@@ -35,9 +35,6 @@ export function LicenseSummary({ bundle }: { bundle: LicenseBundle }) {
     <Text accessibilityRole="header" style={{ color: brand.premium, fontSize: 17, lineHeight: 23, fontWeight: '700' }}>
       {bundle.name}
     </Text>
-    <Text style={{ color: brand.muted, fontSize: 12, lineHeight: 18, marginTop: 2 }}>
-      {bundle.license_number ? `Licence no. ${bundle.license_number}` : 'Number allocated with your first licence'}
-    </Text>
 
     <View style={{ gap: 10, marginTop: 12, marginBottom: 8 }}>
       {current.length ? current.map(licence => <View key={licence.id} style={{ gap: 3 }}>

@@ -65,6 +65,7 @@ alter default privileges in schema public revoke all on tables from public,anon,
 \ir ../supabase/migrations/20261110095535_messaging_admin_inbox_scope_qualification.sql
 \ir ../supabase/migrations/20261110114014_messaging_group_event_attachments.sql
 \ir ../supabase/migrations/20261110100044_notification_read_state_and_unread_badges.sql
+\ir ../supabase/migrations/20261120094045_notification_drawer_read_state.sql
 -- Reproduce hosted legacy drift; the correction must close even broad policies/grants.
 grant select,insert,update,delete on public.push_outbox to anon,authenticated;
 create policy account_must_exist on public.push_outbox for all to authenticated using(true) with check(true);
@@ -78,6 +79,7 @@ alter table public.event_registrations add column full_name text,add column part
 \ir ../supabase/migrations/20261113101314_help_conversation_archive.sql
 \ir ../../supabase/migrations/20261116083323_messaging_admin_inbox_and_org_search.sql
 \ir ../../supabase/migrations/20261116090058_messaging_super_admin_org_outreach_and_event_cutoff.sql
+\ir ../../supabase/migrations/20261120073514_scope_messaging_account_erasure_to_affected_groups.sql
 
 create function pg_temp.expect(ok boolean,label text) returns void language plpgsql as $$begin if ok is distinct from true then raise exception 'FAIL: %',label; end if; end$$;
 create function pg_temp.reject(query text,pattern text) returns void language plpgsql as $$begin
