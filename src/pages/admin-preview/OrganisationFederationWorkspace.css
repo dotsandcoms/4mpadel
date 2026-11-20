@@ -9,3 +9,8 @@
 .of-decision-actions [aria-pressed="true"]{border-color:var(--ap-text);font-weight:700}
 .of-decision-feedback{display:grid;gap:8px;margin-top:12px}
 .of-decision-feedback textarea{min-height:85px;width:100%;border:1px solid var(--ap-border);border-radius:8px;padding:12px;background:var(--ap-surface)}
+.of-audit-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 0}
+.of-audit-controls label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.of-audit-controls select{min-height:44px;padding:8px;background:var(--ap-surface);color:var(--ap-text);border:1px solid var(--ap-border);border-radius:8px;font:inherit}
+.of-audit-dialog td{overflow-wrap:anywhere}
+.of-rejection-feedback{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0 0}

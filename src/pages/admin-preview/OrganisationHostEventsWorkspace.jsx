@@ -9,6 +9,7 @@ import WeeklyEventDraftsDialog from './WeeklyEventDraftsDialog.jsx';
 import { loadOrganisationHosts } from './organisationHostEvents.js';
 
 const sanctionStatus = event => {
+  if (event.sanction_status === 'rejected') return 'Sanction declined';
   if (!event.sanction_requested) return 'No sanction requested';
   const status = event.federation_sanction_status;
   return { approved: 'Federation approved', rejected: 'Federation declined', pending: 'Federation review pending' }[status] || 'Sanction requested';
@@ -54,11 +55,13 @@ export default function OrganisationHostEventsWorkspace({
       <tbody>{records.events.map(event => {
         const editable = event.is_manual && event.event_status !== 'cancelled';
         const url = publicEventUrl(event);
+        const declined = event.sanction_status === 'rejected' || (event.sanction_requested && event.federation_sanction_status === 'rejected');
+        const feedback = declined && event.rejection_notes?.trim();
         return <tr key={event.id}>
           <td><strong>{event.event_name}</strong><small>{event.is_quick_event ? 'Quick event' : event.is_weekly ? 'Weekly series' : 'Event'}</small></td>
           <td>{dateLabel(event.start_date)}<small>{event.venue || 'Venue not recorded'}</small></td>
           <td>{event.event_status === 'cancelled' ? 'Cancelled' : event.is_visible === false ? 'Hidden' : 'Visible'}</td>
-          <td>{sanctionStatus(event)}</td>
+          <td>{sanctionStatus(event)}{feedback && <p className="of-rejection-feedback"><strong>Rejection feedback</strong><br />{feedback}</p>}</td>
           <td><div className="of-decision-actions">
             {editable && <button className="ap-secondary" type="button" onClick={() => setEditor({ event })}>
               {event.is_weekly && event.series_id ? 'Edit weekly series' : event.is_quick_event ? 'Edit quick event' : 'Edit event'}

@@ -43,7 +43,7 @@ export async function verifyOrganisationHostBuilder({ client, organisationId, sc
 export async function loadOrganisationHosts({ client, organisationId, scopeId, actorId, signal }) {
   const access = await verifyOrganisationHostBuilder({ client, organisationId, scopeId, actorId, isCurrent: () => !signal.aborted });
   const events = await readAll(() => client.from('calendar')
-    .select('id,event_name,slug,start_date,end_date,venue,organisation_id,club_id,is_manual,is_quick_event,is_weekly,series_id,is_visible,event_status,sanction_status,sanction_requested,federation_sanction_status')
+    .select('id,event_name,slug,start_date,end_date,venue,organisation_id,club_id,is_manual,is_quick_event,is_weekly,series_id,is_visible,event_status,sanction_status,sanction_requested,federation_sanction_status,rejection_notes')
     .eq('organisation_id', organisationId).order('start_date', { ascending: false }).order('id'), signal);
   if (events.some(event => !sameId(event.organisation_id, organisationId))) throw new Error('Calendar returned an event belonging to a different organisation.');
   return { ...access, events };

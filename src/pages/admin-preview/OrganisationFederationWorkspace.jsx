@@ -1,7 +1,7 @@
 import {lazy,Suspense,useEffect,useState} from 'react';
 import SearchableDropdown from '../../components/SearchableDropdown';
 import RecordLoading from './RecordLoading';
-import {ENTITY_FIELDS,loadEntities,saveEntityProfile,entityPatch,entityEqual,loadEntityRelated} from './organisationFederationData';
+import {ENTITY_FIELDS,loadEntities,saveEntityProfile,entityPatch,entityEqual,loadEntityRelated,loadOrganisationRejectionFeedback} from './organisationFederationData';
 import {useEventOperation} from './useEventOperation';
 import FederationProfileFields from './FederationProfileFields';
 import OrganisationProfileFields from './OrganisationProfileFields.jsx';
@@ -17,6 +17,7 @@ import './OrganisationFederationWorkspace.css';
 import { canOpenOrganisationHostEvents } from './organisationHostEvents.js';
 
 const OrganisationHostEventsWorkspace = lazy(() => import('./OrganisationHostEventsWorkspace.jsx'));
+const OrganisationActivityLog = lazy(() => import('./OrganisationActivityLog.jsx'));
 
 const safeMedia=value=>{try{const url=new URL(value);return ['https:','http:'].includes(url.protocol)?url.href:undefined;}catch{return undefined;}};
 const labels={...organisationLabels,status:'Publishing status',verified:'Verified federation',is_national_governing_body:'National governing body',socials:'Social links',personnel:'Personnel',committees:'Committees',name:'Name',short_name:'Short name',slug:'Public page slug',about:'About',website_url:'Website',brand_color:'Brand colour',contact_email:'Contact email',contact_phone:'Contact phone',whatsapp_number:'WhatsApp number',logo_url:'Logo URL',cover_image_url:'Cover image URL',rankedin_events_org_id:'RankedIn events organisation ID',rankedin_rankings_org_id:'RankedIn rankings organisation ID'};
@@ -31,6 +32,7 @@ function Directory({kind,client,session,scopeId,setReload,onOpenPayouts}){
   useEffect(()=>{const controller=new AbortController();const timer=setTimeout(()=>{controller.abort();setError('Loading timed out. Reload records to try again.');},30000);loadEntities(client,kind,{userId:session?.user?.id,scopeId,signal:controller.signal}).then(value=>{if(!controller.signal.aborted)setData(value);}).catch(err=>{if(!controller.signal.aborted)setError(err.message);}).finally(()=>clearTimeout(timer));return()=>{clearTimeout(timer);controller.abort();};},[client,kind,session?.user?.id,scopeId]);
   const [canManageRecords,setCanManageRecords]=useState(false),[recordDialog,setRecordDialog]=useState(null);
   const [hostOrganisation,setHostOrganisation]=useState(null);
+  const [activityOpen,setActivityOpen]=useState(false);
   const userId=session?.user?.id;
   const platformOrganisations=kind==='organisations'&&scopeId==='all'&&data?.superAdmin===true;
   useEffect(()=>{
@@ -51,7 +53,7 @@ function Directory({kind,client,session,scopeId,setReload,onOpenPayouts}){
   </Suspense>;
   const title=kind==='organisations'?'Organisations':'Federations';
   const rows=(data?.rows||[]).filter(row=>(!status||row.status===status)&&[row.name,row.short_name,row.contact_email].some(value=>String(value||'').toLowerCase().includes(query.toLowerCase())));
-  return <div className="of-workspace"><header className="ap-page-heading"><div><p className="ap-kicker">Administration</p><h1>{title}</h1><p>Profiles and contact details from the existing {title.toLowerCase()} register.</p></div><div className="ap-heading-actions">{platformOrganisations&&canManageRecords&&<button type="button" className="ap-primary" disabled={busy} onClick={()=>openRecordAction('create',null)}>Create organisation</button>}<button className="ap-secondary" disabled={busy} onClick={()=>setReload(value=>value+1)}>Reload records</button></div></header>
+  return <div className="of-workspace"><header className="ap-page-heading"><div><p className="ap-kicker">Administration</p><h1>{title}</h1><p>Profiles and contact details from the existing {title.toLowerCase()} register.</p></div><div className="ap-heading-actions">{platformOrganisations&&canManageRecords&&<button type="button" className="ap-primary" disabled={busy} onClick={()=>openRecordAction('create',null)}>Create organisation</button>}{platformOrganisations&&<button type="button" className="ap-secondary" disabled={busy} onClick={()=>setActivityOpen(true)}>Activity log</button>}<button className="ap-secondary" disabled={busy} onClick={()=>setReload(value=>value+1)}>Reload records</button></div></header>
     {notice&&<p role="status" className="of-notice">{notice}</p>}
     {!data&&!error?<RecordLoading label={`Loading ${title.toLowerCase()}…`}/>:error?<p role="alert" className="of-notice">{error}</p>:<><div className="ap-filter-bar"><label className="of-search">Search {title.toLowerCase()}<input type="search" value={query} disabled={busy} onChange={e=>setQuery(e.target.value)} placeholder="Name or contact email…"/></label><label>Status<SearchableDropdown value={status} disabled={busy} onChange={e=>setStatus(e.target.value)}><option value="">All statuses</option>{[...new Set(data.rows.map(row=>row.status).filter(Boolean))].sort().map(value=><option key={value}>{value}</option>)}</SearchableDropdown></label></div>
     <section className="ap-section of-table"><table><thead><tr><th>Name</th><th>Contact</th><th>Status</th><th>Profile</th></tr></thead><tbody>{rows.map(row=><tr key={row.id}><td><div className="of-name">{row.logo_url&&<img src={safeMedia(row.logo_url)} referrerPolicy="no-referrer" width="44" height="44" alt="" loading="lazy"/>}<span><strong>{row.name}</strong><small>{row.short_name||row.slug||'No short name recorded'}</small></span></div></td><td>{row.contact_email||'No contact email'}<small>{row.contact_phone}</small></td><td><span className="ap-status">{row.status||'Not recorded'}</span></td><td><button className="ap-secondary" disabled={busy} onClick={()=>setSelected(row)}>View profile</button></td></tr>)}</tbody></table>{!rows.length&&<p className="of-notice">No records match these filters.</p>}</section><p>{rows.length} of {data.rows.length} records</p></>}
@@ -64,8 +66,28 @@ function Directory({kind,client,session,scopeId,setReload,onOpenPayouts}){
       scopeId={scopeId} {...recordDialog} onBusyChange={setBusy}
       onClose={({refresh})=>{setRecordDialog(null);if(refresh)setReload(value=>value+1);}}
       onSaved={result=>{if(result.action==='delete')setData(current=>({...current,rows:current.rows.filter(row=>row.id!==result.id)}));}}/>}
+    {platformOrganisations&&activityOpen&&<Suspense fallback={<RecordLoading label="Opening organisation activity…"/>}>
+      <OrganisationActivityLog client={client} session={session} scopeId={scopeId} onClose={()=>setActivityOpen(false)}/>
+    </Suspense>}
   </div>;
 }
+
+function OrganisationRejectionFeedback({ client, userId, scopeId, organisationId }) {
+  const [result, setResult] = useState(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    loadOrganisationRejectionFeedback(client, organisationId, { userId, scopeId, signal: controller.signal })
+      .then(feedback => { if (!controller.signal.aborted) setResult({ feedback }); })
+      .catch(error => { if (!controller.signal.aborted) setResult({ error: error.message }); });
+    return () => controller.abort();
+  }, [client, userId, scopeId, organisationId]);
+
+  if (result?.error) return <p role="alert">{result.error}</p>;
+  if (!result?.feedback) return null;
+  return <section className="of-notice"><h3>Application rejection feedback</h3>
+    <p className="of-rejection-feedback">{result.feedback}</p></section>;
+}
+
 function ProfileDialog({kind,client,session,scopeId,row,readOnly,onOpenPayouts,onOpenHost,onRecordAction,canManageLinks,onClose,onSaved,onBusyChange,onDecisionSaved}){
   const [related,setRelated]=useState(null),[relatedError,setRelatedError]=useState('');
   useEffect(()=>{const controller=new AbortController();const timer=setTimeout(()=>{controller.abort();setRelatedError('Linked records timed out. Close and reopen to retry.');},30000);loadEntityRelated(client,kind,row,{userId:session?.user?.id,scopeId,signal:controller.signal}).then(value=>{if(!controller.signal.aborted)setRelated(value);}).catch(err=>{if(!controller.signal.aborted)setRelatedError(err.message);}).finally(()=>clearTimeout(timer));return()=>{clearTimeout(timer);controller.abort();};},[client,kind,row,session?.user?.id,scopeId]);
@@ -98,6 +120,8 @@ function ProfileDialog({kind,client,session,scopeId,row,readOnly,onOpenPayouts,o
   return <dialog ref={bindDialog} className="ap-payment-dialog of-dialog" aria-labelledby="of-profile-title" onCancel={e=>{e.preventDefault();requestClose();}}><header><div><p>{kind==='organisations'?'Organisation':'Federation'} profile</p><h2 id="of-profile-title">{row.name}</h2></div><button type="button" disabled={busy||decisionBusy} onClick={requestClose} aria-label="Close profile">×</button></header>
     <form onSubmit={submit}>{readOnly&&<p className="of-notice">Read-only profile. Current profile-edit authority is required to save changes.</p>}{result?<p role="status">Profile changes saved.</p>:<><p>Status: {row.status||'Not recorded'}. {kind==='federations'?'Publishing status and verification can be edited below.':'Approval is unchanged by this editor.'} Membership is unchanged.</p>{review?<><h3>Review profile changes</h3><dl>{Object.entries({...entityPatch(kind,row,draft),...files}).map(([key,value])=><div key={key}><dt>{labels[key]||(sponsorFileIndex(key)!=null?`${draft.sponsors?.[sponsorFileIndex(key)]?.name||'Sponsor'} logo`:key)}</dt><dd className="of-review-pair"><div><small>Current</small><EntityProfileReviewValue field={sponsorFileIndex(key)!=null?'logo_url':key} value={sponsorFileIndex(key)!=null?previousSponsorLogo(row.sponsors,draft.sponsors?.[sponsorFileIndex(key)]?.name):row[key]}/></div><div><small>After saving</small>{files[key] ? <span>Upload {value.name}</span> : <EntityProfileReviewValue field={key} value={value}/>}</div></dd></div>)}</dl></>:<fieldset disabled={readOnly||busy||decisionBusy||decisionDone||!!error} className="of-fields">{kind==='organisations' ? <OrganisationProfileFields draft={draft} onChange={change} files={files} onFile={onFile} onRemoveSponsor={index=>setFiles(previous=>removeSponsorMedia(previous,index))} onValidation={setValidation} /> : <>{ENTITY_FIELDS[kind].filter(key=>!['status','verified','is_national_governing_body','socials','personnel','committees'].includes(key)).map(key=><label key={key}>{labels[key]}{key==='about'?<textarea rows="5" value={draft[key]||''} onChange={e=>change(key,e.target.value)}/>:<input name={key} required={key==='name'||key==='slug'||(kind==='organisations'&&key==='contact_email')} type={key.includes('email')?'email':key.endsWith('_url')?'url':'text'} value={draft[key]||''} onChange={e=>change(key,e.target.value)}/>} {['logo_url','cover_image_url'].includes(key)&&draft[key]&&<img src={safeMedia(draft[key])} referrerPolicy="no-referrer" width="160" height="90" alt={`${labels[key]} preview`}/>}</label>)}<FederationProfileFields draft={draft} onChange={change}/></>}</fieldset>}
     {(validation||error)&&<p role="alert">{validation||error}</p>}</>}
+    {kind==='organisations'&&canManageLinks&&row.status==='rejected'&&<OrganisationRejectionFeedback
+      client={client} userId={session?.user?.id} scopeId={scopeId} organisationId={row.id}/>}
     <details className="of-related"><summary>Linked records</summary>{relatedError?<p role="alert">{relatedError}</p>:!related?<p>Loading linked records…</p>:<>{kind==='federations'&&<><h3>Organisations ({related.organisations.length})</h3>{related.organisations.map(item=><p key={item.id}>{item.name} · {item.status}</p>)}</>}<h3>Events ({related.events.length})</h3>{related.events.map(item=><p key={item.id}>{item.event_name} · {item.start_date||'Date not recorded'} · {item.federation_sanction_status||item.sanction_status||'Status not recorded'}{item.pending_changes_status==='pending'?' · Amendment pending':''}</p>)}</>}</details>
     {!dirty&&!result&&!review&&!decisionDone&&<EntityDecisionPanel kind={kind} client={client} session={session} scopeId={scopeId} entity={row}
       profileBusy={busy} onBusyChange={changeDecisionBusy} onSaved={outcome=>{onDecisionSaved?.(outcome);if(kind==='organisations'&&outcome.action==='application')setDecisionDone(true);}}/>}

@@ -17,8 +17,10 @@ const fixture = String.raw`
   const event = { id:41,event_name:'Home tournament',organisation_id:'org-a',club_id:null,is_manual:true,is_quick_event:false,
     slug:'host-tournament',event_status:'active',is_visible:true,sanction_requested:true,federation_sanction_status:'pending',
     sanction_status:'approved',start_date:'2035-03-04',venue:'Fixture courts' };
-  const events = [event,{...event,id:42,event_name:'Other tenant event',organisation_id:'org-b'},
-    {...event,id:43,event_name:'Quick format',is_quick_event:true}];
+  const events = [event,{...event,id:42,event_name:'Other tenant event',organisation_id:'org-b',sanction_status:'rejected',rejection_notes:'Other tenant feedback'},
+    {...event,id:43,event_name:'Quick format',is_quick_event:true,rejection_notes:'Stale feedback'},
+    {...event,id:44,event_name:'Declined tournament',sanction_status:'rejected',rejection_notes:'Submit the venue confirmation.'},
+    {...event,id:46,event_name:'Federation declined tournament',federation_sanction_status:'rejected',rejection_notes:'Send the corrected draw format.'}];
   const weekly = {id:'weekly-draft',organisation_id:org.id, name:'Fixture social series', start_date:'2035-03-09', weeks:5,
     revision:1, fields:{event_name:'Fixture social series',organisation_id:org.id}};
   window.calls = [];
@@ -122,6 +124,10 @@ test('approved owner reaches the light host builders for the exact organisation 
       await click(owner,'Open host events');
       await owner.waitForFunction(()=>document.body.innerText.includes('Home tournament')&&document.body.innerText.includes('Federation review pending'));
       assert.equal(await owner.evaluate(()=>document.body.innerText.includes('Other tenant event')),false);
+      const hostEvents = await owner.evaluate(()=>document.body.innerText);
+      assert.match(hostEvents, /Sanction declined\s+Rejection feedback\s+Submit the venue confirmation\./);
+      assert.match(hostEvents, /Federation declined\s+Rejection feedback\s+Send the corrected draw format\./);
+      assert.doesNotMatch(hostEvents, /Other tenant feedback|Stale feedback/);
       await click(owner,'Weekly drafts');
       await click(owner,'Continue draft');
       await owner.waitForFunction(()=>document.body.innerText.includes('Continuing Fixture social series for 5 weeks'));

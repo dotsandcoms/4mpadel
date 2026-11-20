@@ -155,3 +155,16 @@ export async function loadEntityRelated(client,kind,row,context){
   const events=await readAll(()=>client.from('calendar').select('id,event_name,start_date,sanction_status,federation_sanction_status,pending_changes_status').eq(kind==='federations'?'federation_id':'organisation_id',row.id).order('start_date').order('id'),context.signal);
   check(context);return{organisations,events};
 }
+
+export async function loadOrganisationRejectionFeedback(client, organisationId, context) {
+  if (!organisationId || context.scopeId !== 'all') throw new Error('Use the platform Organisations workspace to view application feedback.');
+  const access = await verifyEntityAccess(client, 'organisations', context);
+  if (!access.superAdmin) throw new Error('Current platform super-admin access is required.');
+  let query = client.from('organisations').select('id,rejection_notes').eq('id', organisationId).eq('status', 'rejected');
+  if (context.signal) query = query.abortSignal(context.signal);
+  const { data, error } = await query.maybeSingle();
+  if (error || data?.id !== organisationId) throw new Error('Application feedback could not be loaded. Reopen this organisation profile.');
+  const current = await verifyEntityAccess(client, 'organisations', context);
+  if (!current.superAdmin) throw new Error('Current platform super-admin access is required.');
+  return data.rejection_notes?.trim() || '';
+}

@@ -9,6 +9,7 @@ const view=window.fixture.mode, actor={id:'fixture-account',email:'operator@exam
 const calls=window.fixture.calls;
 const federation={id:'our-fed',name:'Our federation',slug:'our-fed',status:'published'};
 const org={id:'our-org',name:'Fixture applicant',status:view.startsWith('organisation-profile')||view.startsWith('organisation-control')?'approved':'pending',contact_email:'applicant@example.invalid',created_by:7,federation_id:'our-fed'};
+if(view==='organisation-rejected-feedback')Object.assign(org,{status:'rejected',rejection_notes:'Provide the signed venue agreement.'});
 if(view==='organisation-profile-sponsor')org.sponsors=[
   {name:'Old partner',tier:'Official Partner',logo_url:''},
   {name:'Current partner',tier:'Official Partner',logo_url:''},
@@ -22,8 +23,14 @@ const data={albums:[{id:'album-a',title:'Fixture album',parent_album_id:null,org
  federation_members:[{user_email:actor.email,federation_id:federation.id,role:view==='federation-staff'?'staff':'owner'}],
  organisation_members:view.startsWith('organisation-profile')?[{user_email:actor.email,organisation_id:org.id,role:'owner'}]:
   view.startsWith('organisation-control')?[{id:'owner-member',user_email:'owner@example.invalid',organisation_id:org.id,role:'owner',player_id:7}]:[],
- players:[{id:7,name:'Existing Owner',email:'owner@example.invalid'},{id:8,name:'Group Teammate',email:'teammate@example.invalid'}],admin_sidebar_permissions:[],tournament_divisions:[]};
+ players:[{id:7,name:'Existing Owner',email:'owner@example.invalid'},{id:8,name:'Group Teammate',email:'teammate@example.invalid'}],admin_sidebar_permissions:[],tournament_divisions:[],
+ org_audit_log:[{id:'audit-organisation',action:'org.approved',entity_type:'organization',name:'Reviewed organisation'},
+   {id:'audit-member',action:'member.added',entity_type:'member',entity_id:'Approved member'},
+   ...Array.from({length:27},(_,index)=>({id:'audit-event-'+index, action:index?'event.updated':'division.updated',entity_type:index?'event':'division',
+     event_name:'Activity event '+index,created_at:'2026-11-01T12:00:00Z',actor_email:'operator@example.invalid',
+     details:{changes:{city:{from:'Old audit city',to:'New audit city'}}}}))]};
 window.fixture.data=data;
+if(view==='organisation-rejected-feedback')Object.assign(data.organisations[1],{status:'rejected',rejection_notes:'Feedback for a different organisation.'});
 export const client={
  auth:{async getUser(){return {data:{user:actor}}},async signInWithOtp(input){calls.push(['owner-invite',input]);return {data:{}}}},
  async rpc(name,args){calls.push(['rpc',name,args]);if(name==='admin_organisation_records'){
@@ -45,11 +52,11 @@ export const client={
    if(args.p_event_id!==11 || args.p_entity_id!=='our-fed' || args.p_kind!=='federations' || args.p_expected!==token) return {error:{message:'Incorrect approved review'}};
    Object.assign(amendment,{city:'New city',pending_changes:null,pending_changes_status:null});
    return {data:{event_id:11,status:'approved'}};
- }if(name==='is_super_admin')return {data:view.startsWith('organisation')&&!view.startsWith('organisation-profile')};if(name==='is_organisation_admin')return {data:!window.fixture.revoked};return {data:true}},
+ }if(name==='is_super_admin')return {data:view.startsWith('organisation')&&!view.startsWith('organisation-profile')&&!(['organisation-activity','organisation-rejected-feedback'].includes(view)&&window.fixture.revoked)};if(name==='is_organisation_admin')return {data:!window.fixture.revoked};return {data:true}},
  storage:{from(bucket){return {async upload(path,file,options){calls.push(['upload',bucket,path,file.type,options]);return {data:{path}}},getPublicUrl(path){return {data:{publicUrl:'https://fixture.invalid/'+path}}}}}},
  functions:{async invoke(name,args){calls.push(['function',name,args.body]);return {data:{messageId:'synthetic'}}}},
  from(table){
-    const predicates=[];let update,row,from=0,to=Infinity;
+    const predicates=[],matches=[];let update,row,fields,from=0,to=Infinity;
     function execute(single=false){
       if(row){
         calls.push(['upsert',table,row]);
@@ -61,9 +68,24 @@ export const client={
         calls.push(['update',table,selected.map(item=>item.id),update]);
         for(const item of selected)Object.assign(item,update);
       }
+      if(table==='org_audit_log'){
+        calls.push(['audit-read',fields,from,to]);
+        if(window.fixture.revokeDuringAuditRead)window.fixture.revoked=true;
+        if(fields==='id,details')return {data:structuredClone(selected[0]||null)};
+        return {data:structuredClone(selected.slice(from,to+1).map(({details,...record})=>record))};
+      }
+      if(view==='organisation-rejected-feedback'&&table==='organisations'){
+        calls.push(['organisation-projection',fields]);
+        if(fields==='id,rejection_notes') {
+          calls.push(['feedback-read',matches]);
+          return {data:structuredClone(selected[0]||null)};
+        }
+        return {data:structuredClone(single?selected.map(({rejection_notes,...record})=>record)[0]||null:
+          selected.slice(from,to+1).map(({rejection_notes,...record})=>record))};
+      }
       return {data:structuredClone(single?selected[0]||null:selected.slice(from,to+1))};
     }
-    return {select(){return this},eq(key,val){predicates.push(item=>typeof item[key]==='object'&&item[key]!==null?JSON.stringify(item[key])===val:String(item[key])===String(val));return this},
+    return {select(value){fields=value;return this},eq(key,val){matches.push([key,val]);predicates.push(item=>typeof item[key]==='object'&&item[key]!==null?JSON.stringify(item[key])===val:String(item[key])===String(val));return this},
       in(key,ids){predicates.push(item=>ids.includes(item[key]));return this},is(key,val){predicates.push(item=>(item[key]??null)===val);return this},ilike(){return this},
       or(){return this},not(){return this},limit(n){to=n-1;return this},order(){return this},range(start,end){from=start;to=end;return this},abortSignal(){return this},update(value){update=value;return this},upsert(value){row=value;return this},
       async maybeSingle(){return execute(true)},async single(){return execute(true)},then(resolve,reject){return Promise.resolve(execute()).then(resolve,reject)}
@@ -108,7 +130,7 @@ before(async()=>{
 });
 after(async()=>{await browser?.close()});
 
-async function withPage(mode,run){
+async function withPage(mode,run,openProfile=true){
     const page=await browser.newPage();
     page.setDefaultTimeout(6000);
     try{
@@ -120,7 +142,7 @@ async function withPage(mode,run){
           if (!crypto.randomUUID) crypto.randomUUID=()=> '10000000-0000-4000-8000-000000000001';
         },mode);
         await page.addScriptTag({content:bundle});
-        if(!mode.startsWith('calendar-amendment'))await click(page,'View profile');
+        if(openProfile&&!mode.startsWith('calendar-amendment'))await click(page,'View profile');
         await run(page);
     } catch(error) {
         error.message+='\nSynthetic screen: '+await page.evaluate(()=>document.body.innerText);
@@ -474,4 +496,77 @@ test('owner login invitation uses reviewed OTP recipient and never invokes a pas
         assert.deepEqual(await orgActions(page),[]);
         assert.equal((await calls(page)).some(([kind,name])=>kind==='function'&&name==='admin-set-password'),false);
     });
+});
+
+test('organisation activity verifies the platform role, filters, pages and loads only the expanded record details', async()=>{
+    await withPage('organisation-activity',async page=>{
+        assert.equal((await calls(page)).some(([name])=>name==='audit-read'),false);
+        await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent==='Activity log').focus());
+        await page.keyboard.press('Enter');
+        await text(page,'Reviewed organisation');
+        const auditReads=()=>calls(page).then(actions=>actions.filter(([name])=>name==='audit-read'));
+        const first=(await auditReads())[0];
+        assert.match(first[1], /details->>event_name/);
+        assert.doesNotMatch(first[1], /(^|,)details(,|$)/);
+        assert.deepEqual(first.slice(2),[0,25]);
+        await page.select('dialog[aria-label="Organisation activity log"] select','event');
+        await page.waitForFunction(()=>!document.body.innerText.includes('Reviewed organisation')&&document.body.innerText.includes('Activity event 0'));
+        assert.match(await page.evaluate(()=>document.body.innerText), /Division updated/);
+        assert.doesNotMatch(await page.evaluate(()=>document.body.innerText), /Approved member|Old audit city/);
+        await click(page,'Older');
+        await text(page,'Activity event 26');
+        assert.deepEqual((await auditReads()).at(-1).slice(2),[25,50]);
+        await click(page,'Newer');
+        await text(page,'Activity event 0');
+        await click(page,'View details');
+        await text(page,'New audit city');
+        const fields=await page.$$eval('#organisation-audit-audit-event-0 .of-review-pair > div',nodes=>nodes.map(node=>node.textContent));
+        assert.deepEqual(fields,['BeforeOld audit city','AfterNew audit city']);
+        assert.equal((await auditReads()).filter(([,fields])=>fields==='id,details').length,1);
+        await click(page,'Hide details');
+        assert.doesNotMatch(await page.evaluate(()=>document.body.innerText), /New audit city/);
+        await page.select('dialog[aria-label="Organisation activity log"] select','organisation');
+        await text(page,'Reviewed organisation');
+        await page.select('dialog[aria-label="Organisation activity log"] select','member');
+        await text(page,'Approved member');
+        const readsBeforeRefresh=(await auditReads()).length;
+        await click(page,'Refresh activity');
+        await page.waitForFunction(count=>window.fixture.calls.filter(([name])=>name==='audit-read').length>count,{},readsBeforeRefresh);
+        await text(page,'Approved member');
+        assert.deepEqual((await auditReads()).at(-1).slice(2),[0,25]);
+        await page.keyboard.press('Escape');
+        await page.waitForFunction(()=>!document.querySelector('dialog[open]'));
+        assert.equal(await page.evaluate(()=>document.activeElement.textContent),'Activity log');
+        await click(page,'Activity log');
+        await text(page,'Reviewed organisation');
+        await page.evaluate(()=>{window.fixture.revokeDuringAuditRead=true;});
+        await click(page,'Refresh activity');
+        await text(page,'A current module or membership permission is required.');
+        assert.doesNotMatch(await page.evaluate(()=>document.body.innerText), /Reviewed organisation/);
+    },false);
+    await withPage('organisation-profile-audit',async page=>{
+        await text(page,'Fixture applicant');
+        assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Activity log')),false);
+        assert.equal((await calls(page)).some(([name])=>name==='audit-read'),false);
+    },false);
+});
+
+test('organisation application feedback loads only inside the exact rejected profile with current platform access',async()=>{
+    await withPage('organisation-rejected-feedback',async page=>{
+        await text(page,'Fixture applicant');
+        assert.equal((await calls(page)).some(([name,fields])=>name==='organisation-projection'&&fields.includes('rejection_notes')),false);
+        await click(page,'View profile');
+        await text(page,'Provide the signed venue agreement.');
+        const reads=(await calls(page)).filter(([name])=>name==='feedback-read');
+        assert.deepEqual(reads,[['feedback-read',[['id','our-org'],['status','rejected']]]]);
+        assert.doesNotMatch(await page.evaluate(()=>document.body.innerText), /Feedback for a different organisation/);
+    },false);
+    await withPage('organisation-rejected-feedback',async page=>{
+        await text(page,'Fixture applicant');
+        await page.evaluate(()=>{window.fixture.revoked=true;});
+        await click(page,'View profile');
+        await text(page,'A current module or membership permission is required.');
+        assert.equal((await calls(page)).some(([name])=>name==='feedback-read'),false);
+        assert.doesNotMatch(await page.evaluate(()=>document.body.innerText), /Provide the signed venue agreement/);
+    },false);
 });
