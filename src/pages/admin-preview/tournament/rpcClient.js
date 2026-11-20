@@ -1,20 +1,49 @@
 // Exact current MAIN tm_* contracts, isolated from the legacy admin.
-export function createTournamentClient(supabase, { userId, scopeId = 'all', isCurrent = () => true } = {}) {
+const HOST_ACTIONS = new Set(['snapshot', 'confirm', 'save_draw', 'publish_draw']);
+const CONTEXT_CHANGED = 'Tournament context changed. No further changes were sent.';
+
+export function createTournamentClient(supabase, { userId, scopeId = 'all', hostEvent, isCurrent = () => true } = {}) {
+async function verifyActor() {
+    if (!isCurrent()) throw new Error(CONTEXT_CHANGED);
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+    if (authError || auth?.user?.id !== userId) throw new Error('Your signed-in account changed. Reload Tournament Manager before saving.');
+    if (!isCurrent()) throw new Error(CONTEXT_CHANGED);
+}
 
 async function tournamentRpc(name, args = {}) {
-    if (!['list_events', 'snapshot'].includes(name)) {
-        if (!isCurrent()) throw new Error('Tournament context changed. No further changes were sent.');
+    let operation = `tm_${name}`;
+    let payload = args;
+    if (hostEvent) {
+        if (!userId || !HOST_ACTIONS.has(name) || scopeId !== `org:${hostEvent.organisationId}`
+            || String(args.p_event) !== String(hostEvent.id)) {
+            throw new Error('Open the requested draw in its authorised organisation workspace.');
+        }
+        await verifyActor();
+        const { p_event, ...fields } = args;
+        operation = 'tm_host_draw_preparation';
+        payload = { p_organisation: hostEvent.organisationId, p_event, p_action: name, p_payload: fields };
+    } else if (!['list_events', 'snapshot'].includes(name)) {
+        if (!isCurrent()) throw new Error(CONTEXT_CHANGED);
         if (!userId || scopeId !== 'all') throw new Error('Open Tournament Manager in the all-workspaces scope with your signed-in account before saving.');
-        const { data: auth, error: authError } = await supabase.auth.getUser();
-        if (authError || auth?.user?.id !== userId) throw new Error('Your signed-in account changed. Reload Tournament Manager before saving.');
-        if (!isCurrent()) throw new Error('Tournament context changed. No further changes were sent.');
+        await verifyActor();
     }
-    const { data, error } = await supabase.rpc(`tm_${name}`, args);
+    const { data, error } = await supabase.rpc(operation, payload);
     if (error) {
         if (error.code === 'PGRST202' || error.code === '42883' || error.code === '42P01') throw new Error('Tournament Manager is unavailable on this connection. Ask an administrator to check the installed tm_* backend.');
         throw new Error(error.message);
     }
     if (data?.error) throw new Error(typeof data.error === 'string' ? data.error : data.error.message || 'Tournament request failed.');
+    if (hostEvent) {
+        if (!isCurrent()) throw new Error(CONTEXT_CHANGED);
+        const receivedEvent = name === 'snapshot' ? data?.event?.id : data?.eventId;
+        const matchesAction = name === 'snapshot' ? data?.hostDrawPreparation === true : data?.action === name;
+        if (data?.organisationId !== hostEvent.organisationId || String(receivedEvent) !== String(hostEvent.id) || !matchesAction
+            || (args.p_division && args.p_division !== data?.divisionId)
+            || (name === 'publish_draw' && args.p_draw !== data?.drawId)
+            || (name === 'save_draw' && !data?.drawId)) {
+            throw new Error('The host tournament response did not match the reviewed event and draw.');
+        }
+    }
     return data;
 }
 return {
@@ -25,8 +54,20 @@ return {
     load: eventId => tournamentRpc('snapshot', { p_event: eventId }),
     saveSettings: (data, settings, days) => tournamentRpc('save_settings', { p_event: data.event.id, p_expected: data.settingsRevision, p_settings: settings, p_days: days }),
     confirm: (data, division, kind, payload) => tournamentRpc('confirm', { p_event: data.event.id, p_division: division, p_kind: kind, p_payload: payload, p_expected: data.confirmations.find(c => c.division_id === division)?.revision || 0 }),
-    saveDraw: (data, division, draw) => tournamentRpc('save_draw', { p_event: data.event.id, p_division: division, p_expected: data.confirmations.find(c => c.division_id === division)?.revision || 0, p_draw: draw }),
-    publishDraw: (data, draw) => tournamentRpc('publish_draw', { p_event: data.event.id, p_draw: draw.id, p_expected: draw.updated_at }),
+    ...(hostEvent ? {
+        confirmFormatAndSeeds: (data, division, configuration, seeds) => tournamentRpc('confirm', {
+            p_event: data.event.id, p_division: division, p_kind: 'format_and_seeds',
+            p_payload: { configuration, seeds }, p_expected: data.confirmations.find(c => c.division_id === division)?.revision || 0,
+        }),
+    } : {}),
+    saveDraw: (data, division, draw) => tournamentRpc('save_draw', {
+        p_event: data.event.id, p_division: division, p_expected: data.confirmations.find(c => c.division_id === division)?.revision || 0, p_draw: draw,
+        ...(hostEvent ? { p_draw_token: data.draws.find(row => row.division_id === division && row.draw_kind === 'main')?._review_token || null } : {}),
+    }),
+    publishDraw: (data, draw) => tournamentRpc('publish_draw', {
+        p_event: data.event.id, p_draw: draw.id, p_expected: draw.updated_at,
+        ...(hostEvent ? { p_draw_token: draw._review_token } : {}),
+    }),
     saveSchedule: (data, plan) => tournamentRpc('save_schedule', { p_event: data.event.id, p_expected: data.schedule?.revision || 0, p_source: data.sourceFingerprint, p_assignments: plan.assignments, p_fixtures: plan.fixtures, p_settings: plan.settings }),
     publishSchedule: data => tournamentRpc('publish_schedule', { p_event: data.event.id, p_expected: data.schedule.revision }),
     result: (data, match, result) => tournamentRpc('record_result', { p_event: data.event.id, p_match: match.id, p_expected: match.updated_at, p_result: result }),

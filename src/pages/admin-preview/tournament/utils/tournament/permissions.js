@@ -18,7 +18,7 @@ export const WORKSPACES = [
 ];
 export const can = (capabilities, capability) => capabilities?.includes(capability) || false;
 export const visibleWorkspaces = capabilities => WORKSPACES.filter(([id, , capability]) =>
-    !capability || can(capabilities, capability) || (id === 'results' && can(capabilities, 'corrections')));
+    !capability || can(capabilities, capability) || (id === 'results' && can(capabilities, 'corrections')) || (id === 'players' && can(capabilities, 'host_players_review')));
 export const defaultWorkspace = capabilities => capabilities.length === 1 && capabilities[0] === 'results' ? 'results' : 'overview';
 
 export function eventTournamentWorkspaces(permissions, scopeId, event) {

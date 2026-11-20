@@ -4,7 +4,7 @@ import AdvancedEventDetailsDialog from './AdvancedEventDetailsDialog.jsx';
 import CreateEventDialog from './CreateEventDialog.jsx';
 
 // Calendar owns event setup; Tournament Manager owns its deployed tm_* workflow.
-export default function TournamentAdminWorkspace({ client, session, scopeId, refreshRevision, canBuildEvents }) {
+export default function TournamentAdminWorkspace({ client, session, scopeId, refreshRevision, canBuildEvents, hostEvent, returnHref }) {
   const [editor, setEditor] = useState(null);
   const [revision, setRevision] = useState(0);
   const close = result => {
@@ -13,7 +13,7 @@ export default function TournamentAdminWorkspace({ client, session, scopeId, ref
   };
   return <>
     <TournamentWorkspace client={client} session={session} scopeId={scopeId} refreshRevision={`${refreshRevision}:${revision}`}
-      canBuildEvents={canBuildEvents}
+      canBuildEvents={canBuildEvents} hostEvent={hostEvent} returnHref={returnHref}
       onCreateEvent={canBuildEvents ? () => setEditor({ mode: 'create' }) : undefined}
       onEditEvent={canBuildEvents ? event => setEditor({ mode: 'edit', event }) : undefined}/>
     {canBuildEvents && editor?.mode === 'create' && <CreateEventDialog client={client} session={session} scopeId={scopeId} onClose={close}/>}

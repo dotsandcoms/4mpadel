@@ -592,7 +592,7 @@ export function EventDemoModal({ action, event, divisions, onClose, onExport, on
 }
 
 export function LiveEventCommandCentre({ event, registrations, payments, divisions, activity, draws = [], refunds = [], go, financeRestricted = false, canReadEventStatement = false, canManagePayments = false, canOperateHostDraw = false, session, scopeId = 'all', client = supabase, canRehearse = false, onOpenMessages, onOpenHelp, onOpenTournament, tournamentWorkspaces = [], onOpenPayouts, onOpenFinance, initialTab, initialAction, initialRegistrationId, onRefresh }) {
-  const [tab, setTab] = useState(initialTab === 'statement' ? 'Income statement' : 'Overview');
+  const [tab, setTab] = useState(({ statement: 'Income statement', draws: 'Draws' })[initialTab] || 'Overview');
   const [action, setAction] = useState(null);
   const [paymentAction, setPaymentAction] = useState(null);
   const [moveAction, setMoveAction] = useState(null);
@@ -916,8 +916,12 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
       if (payload.event?.id) nextQuery.set('event', payload.event.id);
       else nextQuery.delete('event');
     }
-    if (target === 'tournaments' && payload.workspace) nextQuery.set('workspace', payload.workspace);
-    if (target === 'tournaments' && payload.division) nextQuery.set('division', payload.division);
+    if (target === 'event' && payload.hostDraw) {
+      nextQuery.set('action', 'host-draw');
+      nextQuery.set('tab', 'draws');
+    }
+    if ((target === 'tournaments' || payload.hostDraw) && payload.workspace) nextQuery.set('workspace', payload.workspace);
+    if ((target === 'tournaments' || payload.hostDraw) && payload.division) nextQuery.set('division', payload.division);
     if (target === 'calendar' && payload.create) nextQuery.set('create', payload.create);
     if (target === 'calendar' && payload.event?.id) nextQuery.set('calendarEvent', payload.event.id);
     const search = nextQuery.toString();
@@ -940,6 +944,11 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
     || context.event?.id || context.registration?.event_id;
   const activeEvent = data.events.find(item => String(item.id) === String(selectedEventId)) || data.events[0];
   const activeRegistration = selectedRegistration && String(selectedRegistration.event_id) === String(activeEvent?.id) ? selectedRegistration : null;
+  const canPrepareHostDraw = Boolean(session && !localFixture && focusEventId
+    && String(activeEvent?.id) === String(focusEventId) && activeEvent.is_manual && activeEvent.event_status !== 'cancelled'
+    && activeEvent.organisation_id && scope?.id === `org:${activeEvent.organisation_id}`
+    && permissions?.orgs?.some(org => String(org.id) === String(activeEvent.organisation_id) && ['owner', 'admin'].includes(org.member_role)));
+  const hostDrawReturn = focusEventId ? `/admin-preview/event?event=${encodeURIComponent(focusEventId)}&tab=draws` : '/admin-preview/events';
   const userName = effectiveSession.user.email?.split('@')[0]?.split(/[._-]/)[0]?.replace(/^./, (letter) => letter.toUpperCase()) || 'there';
   let content;
   if (!canSeeWorkspace) content = <section className="ap-section"><ShieldCheck size={28}/><h1>Workspace unavailable</h1><p>This account has no access to this workspace.</p><button className="ap-primary" onClick={() => go(firstPage)}>Open my workspace</button></section>;
@@ -985,21 +994,26 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
     canBulkSyncRankedin={Boolean(session) && !localFixture && permissions?.role === 'super_admin'} onRefresh={data.reload} />;
   else if (page === 'event' && focusEventId && data.loading) content = <section className="ap-section ap-live-loading"><LoaderCircle className="ap-spin" /><h2>Loading the live event</h2><p>Reading the event, registrations, payments, divisions and activity available to your admin account.</p></section>;
   else if (page === 'event' && focusEventId && data.error) content = <section className="ap-section ap-live-loading"><AlertCircle size={24} /><h2>The live event could not be loaded</h2><p>{data.error}</p><button className="ap-secondary" onClick={data.reload}>Try again</button></section>;
+  else if (page === 'event' && queryParams.get('action') === 'host-draw') content = canPrepareHostDraw
+    ? <TournamentAdminWorkspace client={supabase} session={session} scopeId={scope.id} refreshRevision={playerRefresh} returnHref={hostDrawReturn}
+      hostEvent={{ id: activeEvent.id, organisationId: activeEvent.organisation_id }} />
+    : <section className="ap-section"><ShieldCheck size={28} /><h2>Host draw preparation is unavailable</h2>
+      <p>Open a 4M event owned by your selected organisation.</p><Link className="ap-secondary" to={hostDrawReturn}>Back to Event Manager</Link></section>;
   else if (page === 'event' && focusEventId && !activeEvent.is_manual) content = <EventParticipantsWorkspace
     key={`${activeEvent.id}-${session?.user?.id}-${scope.id}`} event={activeEvent} go={go} session={session} scopeId={scope.id}
     initialView={queryParams.get('tab') === 'statement' ? 'dashboard' : 'table'} onRefresh={data.reload} />;
   else if (page === 'event' && focusEventId) content = <LiveEventCommandCentre key={`${scope.id}:${focusEventId}`} initialTab={queryParams.get('tab')} initialAction={queryParams.get('action')} initialRegistrationId={queryParams.get('registration')} session={session} scopeId={scope.id} event={activeEvent} registrations={data.registrations} payments={data.payments} divisions={data.divisions} activity={data.activity} draws={data.draws} refunds={data.refunds} go={go} financeRestricted={permissions?.role !== 'super_admin' || (localLivePreview && !session)} canManagePayments={Boolean(session) && !localFixture && permissions?.role === 'super_admin' && scope.id === 'all'}
     canReadEventStatement={Boolean(session) && !localFixture && (permissions?.role === 'super_admin'
       || (scope.id.startsWith('org:') && permissions?.orgs?.some(org => `org:${org.id}` === scope.id && ['owner', 'admin'].includes(org.member_role))))}
-    canOperateHostDraw={Boolean(session) && !localFixture && scope.id === `org:${activeEvent.organisation_id}`
-      && permissions?.orgs?.some(org => String(org.id) === String(activeEvent.organisation_id) && ['owner', 'admin'].includes(org.member_role))}
+    canOperateHostDraw={canPrepareHostDraw}
     canRehearse={permissions?.role === 'super_admin' && scope.id === 'all'}
     onOpenMessages={canOpen('messaging') ? () => go('messaging', { event: activeEvent }) : undefined}
     onOpenHelp={canOpen('help') ? () => go('help', { event: activeEvent }) : undefined}
     onOpenPayouts={canOpen('payouts') && activeEvent.organisation_id ? () => go('payouts', { event: activeEvent }) : undefined}
     onOpenFinance={canOpen('reports') ? () => go('reports') : undefined}
-    tournamentWorkspaces={session && !localFixture ? eventTournamentWorkspaces(permissions, scope.id, activeEvent) : []}
-    onOpenTournament={canOpen('tournaments') ? (division, workspace) => go('tournaments', { event: activeEvent, division: division?.id, workspace }) : undefined}
+    tournamentWorkspaces={canPrepareHostDraw ? ['draws'] : session && !localFixture ? eventTournamentWorkspaces(permissions, scope.id, activeEvent) : []}
+    onOpenTournament={canPrepareHostDraw ? (division, workspace) => go('event', { event: activeEvent, division: division?.id, workspace, hostDraw: true })
+      : canOpen('tournaments') ? (division, workspace) => go('tournaments', { event: activeEvent, division: division?.id, workspace }) : undefined}
     onRefresh={data.reload} />;
   else if (page === 'event' && !localFixture) content = <Navigate replace to={`/admin-preview/event?event=${encodeURIComponent(activeEvent.id)}`} />;
   else if (page === 'event') content = <EventCommandCentre event={activeEvent} registrations={data.registrations} go={go} />;

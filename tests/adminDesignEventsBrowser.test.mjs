@@ -68,6 +68,12 @@ before(async () => {
                 confirmations:[{division_id:generatorDivision.id, revision:7, players_confirmed_at:'checked', players_valid:true, format_confirmed_at:'checked', seeds_confirmed_at:'checked',
                     configuration:{format:'knockout',sets_to_win:1,seeded_team_count:2}, review:{excluded:[],exceptions:{},seeds:['entry-one','entry-two']}}],
             };
+            const hostTournament = {
+                ...structuredClone(generator), hostDrawPreparation:true, organisationId:'org-a',
+                capabilities:['host_players_review','seeds','draws'],
+                players:generator.registrations.flatMap(row => [row.email,row.partner_email].map(email=>({email,license_type:'full'}))),
+                confirmations:[],
+            };
             const pastLinked = { ...event, id:19, slug:'rankedin-past', is_manual:false, start_date:'2024-08-15', event_name:'Past Linked Cup', rankedin_id:'8901', rankedin_url:'https://www.rankedin.com/en/tournament/8901' };
             const failedLinked = { ...pastLinked, id:20, slug:'rankedin-failed', event_name:'Unavailable Cup', rankedin_id:'8902', rankedin_url:'https://www.rankedin.com/en/tournament/8902' };
             const manualLinked = { ...event, id:21, slug:'rankedin-manual', event_name:'Manual Linked Cup', rankedin_id:'8903', rankedin_url:'https://www.rankedin.com/en/tournament/8903' };
@@ -124,6 +130,46 @@ before(async () => {
                     if (name==='correct_manual_event_payment') return {data:{paymentId:receipt.id,method:args.p_method,recipient:args.p_recipient}};
                     if (name==='reopen_native_draw_for_corrections') { nativeDraw.status='draft'; return { data:null }; }
                     if (name==='account_is_active' || name==='is_super_admin') return { data:true };
+                    if (name==='tm_host_draw_preparation') {
+                        if (args.p_organisation!=='org-a' || String(args.p_event)!=='505') {
+                            return {error:{message:'No access to this host event'}};
+                        }
+                        const fields=args.p_payload;
+                        const receipt={organisationId:args.p_organisation,eventId:505,action:args.p_action,divisionId:fields.p_division};
+                        if (args.p_action==='snapshot') {
+                            if (window.hostInitialFailure) {
+                                window.hostInitialFailure=false;
+                                return {error:{message:'Draw snapshot temporarily unavailable'}};
+                            }
+                            return {data:structuredClone(hostTournament)};
+                        }
+                        if (args.p_action==='confirm') {
+                            const c=hostTournament.confirmations[0] || {division_id:fields.p_division,revision:0};
+                            if (c.revision!==fields.p_expected) return {error:{message:'Preparation changed elsewhere'}};
+                            if (fields.p_kind==='players') Object.assign(c,{players_confirmed_at:'checked',players_valid:true,review:fields.p_payload});
+                            if (fields.p_kind==='format_and_seeds') Object.assign(c,{format_confirmed_at:'checked',seeds_confirmed_at:'checked',
+                                configuration:fields.p_payload.configuration,review:{...c.review,seeds:fields.p_payload.seeds}});
+                            c.revision+=fields.p_kind==='format_and_seeds'?2:1;
+                            hostTournament.confirmations=[c];
+                            return {data:receipt};
+                        }
+                        if (args.p_action==='save_draw') {
+                            hostTournament.draws=[{id:'saved-host-draft',event_id:505,division_id:fields.p_division,format:fields.p_draw.format,
+                                status:'draft',draw_kind:'main',updated_at:'saved-at',_review_token:'host-token-v1'}];
+                            hostTournament.entries=fields.p_draw.entries.map(entry=>({...entry,draw_id:'saved-host-draft'}));
+                            hostTournament.matches=fields.p_draw.matches.map(match=>({...match,draw_id:'saved-host-draft'}));
+                            return {data:{...receipt,drawId:'saved-host-draft'}};
+                        }
+                        if (args.p_action==='publish_draw') {
+                            if (window.hostStale) {
+                                window.hostStale=false;
+                                hostTournament.draws[0]._review_token='host-token-v2';
+                                return {error:{message:'The saved draw changed. Reload and review the draft again'}};
+                            }
+                            hostTournament.draws[0].status='published';
+                            return {data:{...receipt,drawId:'saved-host-draft'}};
+                        }
+                    }
                     if (name==='tm_snapshot') {
                         if (args.p_event === '505') return { data: generator };
                         return args.p_event === '11' ? { data: tournament } : { error: { message:'No access to this tournament' } };
@@ -228,6 +274,24 @@ before(async () => {
                         tournamentWorkspaces={generator.capabilities} onOpenTournament={open} onDrawDetails={()=>{}} /> :
                     <TournamentWorkspace client={client} session={session} scopeId="all" />}</>;
             }
+            function HostGeneratorFixture() {
+                const { search } = useLocation();
+                const go = useNavigate();
+                const params = new URLSearchParams(search);
+                const hostDraw = params.get('action')==='host-draw';
+                const eventPath = '/admin-preview/event?event=505&tab=draws';
+                function open(division, workspace) {
+                    const next = new URLSearchParams({event:'505',tab:'draws',action:'host-draw',workspace});
+                    if (division?.id) next.set('division',division.id);
+                    go('/admin-preview/event?'+next);
+                }
+                return <><output data-query={search}/>{hostDraw ?
+                    <TournamentWorkspace client={client} session={session} scopeId="org:org-a" returnHref={eventPath}
+                        hostEvent={{id:505,organisationId:'org-a'}} /> :
+                    <EventDrawWorkspace event={generatorEvent} divisions={generator.divisions} draws={hostTournament.draws}
+                        registrationCount={d=>hostTournament.registrations.filter(r=>r.division_id===d.id).length}
+                        tournamentWorkspaces={['draws']} onOpenTournament={open} onDrawDetails={()=>{}} />}</>;
+            }
             function Fixture({ kind }) {
                 const [added,setAdded]=useState(null);
                 if (kind.startsWith('tournament-')) {
@@ -237,6 +301,7 @@ before(async () => {
                 }
                 if (kind.startsWith('payment-')) return <EventPaymentDialog action={{ type:'correct', registration:{...paid, _editablePayment:receipt} }} client={client} session={session}
                     event={event} divisions={[division]} scopeId={kind==='payment-tenant'?'org:org-a':'all'} onClose={result=>window.calls.push(['closed',result])}/>;
+                if (kind==='host-tournament-generator') return <MemoryRouter initialEntries={['/admin-preview/event?event=505&tab=draws']}><HostGeneratorFixture /></MemoryRouter>;
                 if (kind==='draw-generator') return <MemoryRouter initialEntries={['/admin-preview/event?event=505']}><GeneratorFixture /></MemoryRouter>;
                 if (kind.startsWith('public-draw-')) return <EventDrawWorkspace event={event} divisions={[division]}
                     draws={[kind==='public-draw-live'?nativeDraw:{...nativeDraw,status:'draft'},otherNativeDraw]}
@@ -922,5 +987,51 @@ test('automatic court planning consumes saved division hours and confirms the en
         assert.deepEqual(planned.map(item => [item.match_id,item.draw_id,item.expected_version]),
             [['court-a','draw-a','match-v1'],['court-b','draw-a','match-v1']]);
         assert.equal(planned[0].scheduled_start, '2035-01-21T08:00:00.000Z');
+    } finally { await page.close(); }
+});
+
+test('the organisation Draw generator reviews eligibility and seeds, saves privately, and reloads before a stale publication can be retried', async () => {
+    const page = await open('host-tournament-generator');
+    try {
+        await page.evaluate(() => { window.hostInitialFailure=true; });
+        await clickText(page, 'Draw generator');
+        await page.waitForFunction(() => document.querySelector('.tm-body [role=alert]')?.textContent.includes('Draw snapshot temporarily unavailable'), { polling:50 });
+        assert.equal(await page.$('input[aria-label="Search tournaments"]'), null);
+        await clickText(page, 'Try again');
+        await page.waitForSelector('.tm-tabs');
+        assert.deepEqual(await page.$$eval('.tm-tabs a', links => links.map(link => link.textContent)), ['Players', 'Divisions', 'Draws']);
+        await clickText(page, 'Review player list');
+        assert.equal(await page.evaluate(() => [...document.querySelectorAll('button')].some(button => /Add player \/ team|^Edit$/.test(button.textContent))), false);
+        await clickText(page, 'Confirm player list');
+        await page.waitForFunction(() => document.querySelector('.tm-body [role=status]')?.textContent.includes('Player list confirmed'));
+        await page.$eval('.tm-tabs a:nth-child(3)', link => link.click());
+        await clickText(page, 'Review format and seeds');
+        await clickText(page, 'Confirm seeds');
+        await page.waitForFunction(() => document.querySelector('.tm-body [role=status]')?.textContent.includes('Seed order'));
+        await page.$eval('.tm-tabs a:nth-child(3)', link => link.click());
+        await clickText(page, 'Generate draw preview');
+        await clickText(page, 'Save draft');
+        await page.waitForFunction(() => document.querySelector('.tm-body [role=status]')?.textContent.includes('Private draw saved'));
+        await page.$eval('input[type=checkbox]', input => input.click());
+        await page.evaluate(() => { window.hostStale=true; });
+        await clickText(page, 'Publish draw');
+        await page.waitForFunction(() => document.querySelector('.tm-body [role=alert]')?.textContent.includes('The saved draw changed'));
+        assert.equal(await page.$$eval('button', buttons => buttons.find(button => button.textContent === 'Publish draw')?.disabled), true);
+        await clickText(page, 'Refresh');
+        await page.waitForFunction(() => document.querySelector('.tm-body [role=status]')?.textContent.includes('Tournament refreshed'));
+        assert.equal(await page.$eval('input[type=checkbox]', input => input.checked), false);
+        await page.$eval('input[type=checkbox]', input => input.click());
+        await clickText(page, 'Publish draw');
+        await page.waitForFunction(() => document.querySelector('.tm-body [role=status]')?.textContent === 'Draw published');
+        const calls = await page.evaluate(() => window.calls);
+        assert.ok(calls.every(([method, args]) => method === 'tm_host_draw_preparation' && args.p_organisation === 'org-a' && String(args.p_event) === '505'));
+        const actions = calls.map(([, args]) => args);
+        assert.deepEqual(actions.filter(args => args.p_action === 'confirm').map(args => [args.p_payload.p_kind, args.p_payload.p_expected]),
+            [['players', 0], ['format_and_seeds', 1]]);
+        assert.deepEqual(actions.find(args => args.p_action === 'save_draw')?.p_payload.p_draw.entries.length, 2);
+        assert.deepEqual(actions.filter(args => args.p_action === 'publish_draw').map(args => args.p_payload.p_draw_token), ['host-token-v1', 'host-token-v2']);
+        await page.$eval('a.tm-back', link => link.click());
+        await page.waitForSelector('.ap-primary');
+        assert.match(await page.$eval('output', output => output.getAttribute('data-query')), /event=505&tab=draws$/);
     } finally { await page.close(); }
 });

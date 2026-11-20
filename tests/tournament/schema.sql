@@ -3,12 +3,19 @@ DO $$ BEGIN CREATE ROLE anon; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE ROLE authenticated; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE ROLE service_role BYPASSRLS; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 CREATE SCHEMA auth;
+CREATE SCHEMA private;
 CREATE TABLE auth.users(id uuid PRIMARY KEY,email text,raw_user_meta_data jsonb DEFAULT '{}');
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULLIF(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
 CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ SELECT jsonb_build_object('sub',auth.uid(),'email',(SELECT email FROM auth.users WHERE id=auth.uid())) $$;
-GRANT USAGE ON SCHEMA auth TO authenticated;
+CREATE FUNCTION auth.email() RETURNS text LANGUAGE sql STABLE AS $$ SELECT auth.jwt()->>'email' $$;
+CREATE FUNCTION account_is_active() RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT EXISTS(
+ SELECT 1 FROM auth.users WHERE id=auth.uid() AND COALESCE(raw_user_meta_data->>'inactive','false')='false'
+) $$;
+GRANT USAGE ON SCHEMA auth TO authenticated,anon;
 GRANT SELECT ON auth.users TO authenticated;
-CREATE TABLE calendar(id bigint PRIMARY KEY,event_name text,start_date date,end_date date,venue text,slug text,is_manual boolean DEFAULT true,organization_id uuid);
+CREATE TABLE calendar(id bigint PRIMARY KEY,event_name text,start_date date,end_date date,venue text,slug text,is_manual boolean DEFAULT true,organization_id uuid,organisation_id uuid,event_status text,is_visible boolean DEFAULT true);
+CREATE TABLE organisations(id uuid PRIMARY KEY,status text);
+CREATE TABLE organisation_members(organisation_id uuid REFERENCES organisations(id),user_email text,role text);
 CREATE TABLE tournament_divisions(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),event_id bigint REFERENCES calendar(id),name text,sort_order integer DEFAULT 0,is_active boolean DEFAULT true,entry_fee numeric DEFAULT 0);
 CREATE TABLE event_registrations(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),event_id bigint,division_id uuid REFERENCES tournament_divisions(id),division text,full_name text,email text,partner_name text,partner_email text,payment_status text,status text DEFAULT 'registered');
 CREATE TABLE players(id bigint PRIMARY KEY,name text,email text,license_type text,points numeric);
@@ -39,3 +46,6 @@ GRANT USAGE ON SCHEMA public TO authenticated;
 GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
 \ir ../../supabase/migrations/20260916090000_tournament_compatibility.sql
 \ir ../../supabase/migrations/20260916100000_tournament_manager.sql
+
+GRANT USAGE ON SCHEMA public TO anon;
+GRANT SELECT ON public.draws,public.draw_matches,public.draw_groups,public.draw_entries TO anon;

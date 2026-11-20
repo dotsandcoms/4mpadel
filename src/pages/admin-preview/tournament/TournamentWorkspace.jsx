@@ -21,20 +21,25 @@ export default function TournamentWorkspace(props) {
     const userId = props.session?.user?.id;
     const scopeId = props.scopeId || 'all';
     const eventId = params.get('event');
-    const context = useMemo(() => ({ active: true, generation: ++contextGeneration }), [raw, userId, scopeId, eventId, props.refreshRevision]);
+    const hostEventId = props.hostEvent?.id;
+    const hostOrganisationId = props.hostEvent?.organisationId;
+    const context = useMemo(() => ({ active: true, generation: ++contextGeneration }), [raw, userId, scopeId, eventId, hostEventId, hostOrganisationId, props.refreshRevision]);
     useLayoutEffect(() => { context.active = true; return () => { context.active = false; }; }, [context]);
     const client = useMemo(() => {
-        if (raw.rpc) return createTournamentClient(raw, { userId, scopeId, isCurrent: () => context.active });
+        if (raw.rpc) return createTournamentClient(raw, {
+            userId, scopeId, isCurrent: () => context.active,
+            hostEvent: hostEventId ? { id: hostEventId, organisationId: hostOrganisationId } : undefined,
+        });
         return Object.fromEntries(Object.entries(raw).map(([name, operation]) => [name, (...args) => {
             if (!['list', 'load'].includes(name) && !context.active) throw new Error('Tournament context changed. No further changes were sent.');
             return operation(...args);
         }]));
-    }, [raw, userId, scopeId, context]);
+    }, [raw, userId, scopeId, hostEventId, hostOrganisationId, context]);
     return <TournamentController key={context.generation} {...props} client={client} />;
 }
-function TournamentController({ client, demo = false, canBuildEvents = false, onCreateEvent, onEditEvent }) {
+function TournamentController({ client, demo = false, canBuildEvents = false, onCreateEvent, onEditEvent, hostEvent, returnHref }) {
     const [params, setParams] = useSearchParams();
-    const eventId = params.get('event');
+    const eventId = hostEvent?.id || params.get('event');
     const alive = useRef(true);
     const pending = useRef(false);
     const uncertain = useRef(false);
@@ -97,9 +102,10 @@ function TournamentController({ client, demo = false, canBuildEvents = false, on
     };
     const go = (workspace, division) => setParams(href(workspace, division).slice(1));
     const caps = data?.capabilities || [];
-    const tabs = visibleWorkspaces(caps);
-    const requested = params.get('workspace') || defaultWorkspace(caps);
-    const workspace = tabs.some(([id]) => id === requested) ? requested : defaultWorkspace(caps);
+    const tabs = hostEvent ? visibleWorkspaces(caps).filter(([id]) => ['players', 'divisions', 'draws'].includes(id)) : visibleWorkspaces(caps);
+    const fallback = hostEvent ? 'draws' : defaultWorkspace(caps);
+    const requested = params.get('workspace') || fallback;
+    const workspace = tabs.some(([id]) => id === requested) ? requested : fallback;
     const selectedDivision = data ? tournamentDivisionForLink(data.divisions, params.get('division')) : undefined;
     const workflow = data ? tournamentWorkflow(data) : null;
     useEffect(() => {
@@ -113,9 +119,11 @@ function TournamentController({ client, demo = false, canBuildEvents = false, on
         {demo && <div className="tm-demo">Local demo · synthetic tournament data · changes stay in this browser</div>}
         {!demo && import.meta.env.DEV && <div className="tm-demo">Local app · connected to your shared tournament records · saved changes affect the existing system</div>}
         {!data || !eventId ? <>
-            <header className="tm-header"><div className="tm-between"><div><p className="eyebrow">4M Padel / Operations</p><h1>Tournament Manager</h1><p className="muted" style={{ margin: '10px 0 24px' }}>Prepare the field. Plan the courts. Run the tournament.</p></div><Trophy size={32} color="#d7ff00" /></div></header>
+            <header className="tm-header"><div className="tm-between"><div><p className="eyebrow">4M Padel / Operations</p><h1>{hostEvent ? 'Draw preparation' : 'Tournament Manager'}</h1>{!hostEvent && <p className="muted" style={{ margin: '10px 0 24px' }}>Prepare the field. Plan the courts. Run the tournament.</p>}</div><Trophy size={32} color="#d7ff00" /></div></header>
             <main className="tm-body tm-stack">
+                {hostEvent && <Link className="tm-back" to={returnHref}>Back to event draws</Link>}
                 {error && <div role="alert" className="tm-notice">{error}</div>}
+                {hostEvent ? (loading && <p role="status">Loading this event’s draw…</p>) : <>
                 {canBuildEvents && onCreateEvent && <button className="tm-button primary" onClick={onCreateEvent}>Create tournament</button>}
                 <input aria-label="Search tournaments" className="tm-input tm-search" placeholder="Search tournament or venue…" value={search} onChange={e => setSearch(e.target.value)} />
                 {loading ? <p role="status">Loading tournaments…</p> : <div className="tm-grid">{events.filter(e => (e.event_name + ' ' + e.venue).toLowerCase().includes(search.toLowerCase())).map(event =>
@@ -123,13 +131,14 @@ function TournamentController({ client, demo = false, canBuildEvents = false, on
                         <span className="tm-event-icon"><Trophy size={24} /></span><div style={{ flex: 1 }}><h2>{event.event_name}</h2><p className="muted">{event.start_date} · {event.venue || 'Venue to be confirmed'}</p></div><ArrowRight size={19} />
                     </Link>)}</div>}
                 {!loading && !events.length && !error && <div className="tm-empty"><h2>No tournaments assigned</h2><p>A tournament administrator can give you access to an existing native event.</p></div>}
-                {error && <button className="tm-button" onClick={refresh}>Try again</button>}
+                </>}
+                {error && <button className="tm-button" onClick={refresh} disabled={busy}>Try again</button>}
             </main>
         </> : <>
             <header className="tm-header">
-                <div className="tm-header-top"><Link className="tm-back" to={href(null, null, null)}><ArrowLeft size={13} style={{ display: 'inline', marginRight: 5 }} />All tournaments</Link><span className={'tm-status ' + (workflow.ready ? 'done' : '')}>{workflow.phase}</span></div>
+                <div className="tm-header-top"><Link className="tm-back" to={hostEvent ? returnHref : href(null, null, null)}><ArrowLeft size={13} style={{ display: 'inline', marginRight: 5 }} />{hostEvent ? 'Back to event draws' : 'All tournaments'}</Link><span className={'tm-status ' + (workflow.ready ? 'done' : '')}>{workflow.phase}</span></div>
                 <div className="tm-between tm-event-heading"><div className="tm-event-identity"><span className="tm-event-art">{data.event.custom_image_url ? <img src={data.event.custom_image_url} alt="" /> : <Trophy size={24} />}</span><div><h1>{data.event.event_name}</h1><div className="tm-meta"><span><CalendarDays size={13} style={{ display: 'inline' }} /> {data.event.start_date} — {data.event.end_date}</span><span><MapPin size={13} style={{ display: 'inline' }} /> {data.event.venue || 'Venue to be confirmed'}</span></div></div></div><button className="tm-button quiet" disabled={busy} onClick={refresh}><RefreshCw size={14} />Refresh</button></div>
-                <div className="tm-phases" aria-label="Tournament phase">{PHASES.map((phase, i) => <div key={phase} className={'tm-phase ' + (workflow.phase === phase ? 'current' : '')} aria-current={workflow.phase === phase ? 'step' : undefined}><span>{i + 1}</span>{phase}</div>)}</div>
+                {!hostEvent && <div className="tm-phases" aria-label="Tournament phase">{PHASES.map((phase, i) => <div key={phase} className={'tm-phase ' + (workflow.phase === phase ? 'current' : '')} aria-current={workflow.phase === phase ? 'step' : undefined}><span>{i + 1}</span>{phase}</div>)}</div>}
             </header>
             <nav className="tm-tabs" aria-label="Tournament workspaces">{tabs.map(([id, label]) => <Link key={id} to={href(id)} aria-current={workspace === id ? 'page' : undefined}>{label}</Link>)}</nav>
             <main className="tm-body tm-stack">
