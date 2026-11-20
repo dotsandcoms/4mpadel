@@ -34,6 +34,10 @@ const fixture = `
         if (name === 'is_super_admin') return result(!window.clubTenant && !window.clubRevoked);
         if (name === 'account_is_active') return result(true);
         if (name === 'can_manage_club') return result(args.p_club_id === 'source' && !window.clubRevoked);
+        if (name === 'review_club_google_unlink' && args.p_action === 'review-conflict') return result({
+          club_id:'source', match_id:'fixture-google', decision:'conflict', place_id:'fixture-place', status:'review', token:'reviewed-link',
+          source:clubs[0], target:clubs[1], patch:{google_place_id:null}, before:{google_place_id:'fixture-place'},
+        });
         if (name !== 'manage_reviewed_club') return result([]);
         window.clubCalls.push(args);
         const source = clubs.find(row=>row.id===args.p_source), target = clubs.find(row=>row.id===args.p_target);
@@ -48,7 +52,9 @@ const fixture = `
     },
     from(table) {
       let filters = {}, inFilters = {}, start = 0, end, patch, projection;
-      const source = () => table==='clubs'?clubs:window.clubClaimFixture
+      const source = () => table==='clubs'?clubs:table==='club_google_matches'&&window.clubGoogleConflict
+        ? [{id:'fixture-google',club_id:'source',clubs:clubs[0],review_status:'pending',match_status:'conflict',google_place_id:'fixture-place'}]
+        : window.clubClaimFixture
         ? (table==='club_members'?clubMembers:table==='club_claim_invites'?clubInvites:[]) : [];
       const data = () => source().filter(row=>Object.entries(filters).every(([key,value])=>(row[key]??null)===value)
         && Object.entries(inFilters).every(([key,values])=>values.includes(row[key]))).slice(start,end);
@@ -91,10 +97,7 @@ before(async () => {
     plugins: [{ name: 'fixture-connector', setup(build) {
       build.onResolve({ filter: /\/(supabaseClient|googleMaps)(?:\.js)?$/ }, args => ({ path: args.path.includes('googleMaps') ? 'maps' : 'client', namespace: 'fixture' }));
       build.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ contents: args.path === 'maps'
-        ? `export const attachPlacesAutocomplete = async () => ({ destroy() {} });
-           export const loadGoogleMaps = async () => null;
-           export async function searchPlacesText() { throw new Error('No Places request in the club lifecycle fixture'); }
-           export async function getPlaceDetails() { throw new Error('No Places request in the club lifecycle fixture'); }`
+        ? 'export const attachPlacesAutocomplete = async () => ({ destroy() {} }); export const loadGoogleMaps = async () => null;'
         : 'export const supabase = null; export const isSupabaseConfigured = () => false;' }));
     } }],
   });
@@ -182,6 +185,22 @@ test('club directory requires a typed confirmation and refreshes after an exact 
   await page.waitForSelector('dialog.fo-ledger-drawer[open]', { hidden:true });
   await page.waitForSelector('[aria-label="View club details for Destination club"]');
   assert.equal(await page.$('[aria-label="View club details for Source club"]'), null);
+});
+
+test('Google conflict opens the existing merge review with the exact destination and no write', async t => {
+  const page = await openDirectory(t, { clubGoogleConflict: true });
+  await click(page, 'Google Sync');
+  await click(page, 'Review Source club');
+  await click(page, 'Review conflicting Google listing');
+  await click(page, 'Review merging Source club into Destination club');
+  await page.waitForSelector(review + ' input[autocomplete=off]');
+  assert.match(await page.$eval(review, node => node.innerText), /Destination club/);
+  assert.equal(await page.$eval(review + ' button[type=submit]', node => node.disabled), true);
+  assert.deepEqual(await page.evaluate(() => window.clubCalls.map(call => [call.p_action, call.p_source, call.p_target])),
+    [['review-merge', 'source', 'target']]);
+  await click(page, 'Cancel', review);
+  await page.waitForSelector(review, { hidden: true });
+  assert.equal(await page.$('dialog.fo-ledger-drawer[open]') !== null, true);
 });
 
 test('deletion shows dependencies, cancels without a write and denies a revoked operator', async t => {

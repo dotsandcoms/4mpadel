@@ -34,7 +34,11 @@ export async function reviewClubGoogleMatch({ client, scopeId, userId, row, deci
   const { data, error } = await request;
   signal?.throwIfAborted();
   if (['PGRST202', '42883'].includes(error?.code)) throw new Error('Reviewed Google match changes require the updated database service.');
-  if (error) throw new Error(error.message || 'The Google match action could not be confirmed.');
+  if (error) {
+    const issue = new Error(error.message || 'The Google match action could not be confirmed.');
+    issue.code = error.code;
+    throw issue;
+  }
   if (data?.club_id !== row.club_id || data?.match_id !== row.id || data.decision !== decision || (!review && !data.token)) {
     throw new Error('The Google match confirmation did not match the selected club.');
   }

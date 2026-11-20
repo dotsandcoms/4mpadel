@@ -77,7 +77,7 @@ BEGIN
       proposed_metadata := jsonb_build_object('google_maps_url',pasted_url);
     END IF;
     IF place_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.clubs WHERE google_place_id = place_id AND id <> p_club_id) THEN
-      RAISE EXCEPTION 'This Google listing is linked to a different club. Resolve the conflict before applying.';
+      RAISE EXCEPTION 'This Google listing is linked to a different club. Resolve the conflict before applying.' USING ERRCODE = '23505';
     END IF;
     FOR key, value IN SELECT * FROM jsonb_each(proposed_fill) LOOP
       IF key IN ('address','city','province','country','lat','lng','website_url','contact_phone','opening_hours','cover_image_url','gallery')

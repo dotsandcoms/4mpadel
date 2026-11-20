@@ -1,4 +1,3 @@
-import { getPlaceDetails, searchPlacesText } from '../../utils/googleMaps';
 import { verifyPlatformClubAction } from './liveClubOperations.js';
 
 const placeIdPattern = /^[A-Za-z0-9_-]{1,255}$/;
@@ -17,18 +16,23 @@ export function googleMapsReviewLink(value) {
   }
 }
 
-const current = async ({ client, scopeId, userId, signal }) => {
+async function requestPlaces({ client, scopeId, userId, signal }, body) {
+  const current = () => !signal?.aborted;
   signal?.throwIfAborted();
-  await verifyPlatformClubAction(client, scopeId, userId, () => !signal?.aborted);
-};
+  await verifyPlatformClubAction(client, scopeId, userId, current);
+  const { data, error } = await client.functions.invoke('scan-club-google-reviewed', { body, signal });
+  signal?.throwIfAborted();
+  await verifyPlatformClubAction(client, scopeId, userId, current);
+  if (error || data?.place_version !== 1) throw new Error('Google Places is unavailable. Try again or paste a Google Maps link.');
+  return data;
+}
 
 export async function findClubGooglePlaces(context, value) {
   const query = value.trim();
   if (query.length < 2 || query.length > 160) throw new Error('Enter 2 to 160 characters to search Google Places.');
-  await current(context);
-  const found = await searchPlacesText(query);
-  await current(context);
-  const valid = found.filter(place => placeIdPattern.test(place?.place_id || '') && typeof place.name === 'string');
+  const { results } = await requestPlaces(context, { action: 'search', query });
+  if (!Array.isArray(results)) throw new Error('Google Places did not return a valid results list. Try again.');
+  const valid = results.filter(place => placeIdPattern.test(place?.place_id || '') && typeof place.name === 'string');
   return [...new Map(valid.map(place => [place.place_id, { id:place.place_id, name:place.name, address:place.formatted_address || '' }])).values()].slice(0,12);
 }
 
@@ -47,21 +51,17 @@ function openingHours(periods) {
 
 export async function selectClubGooglePlace(context, placeId) {
   if (!placeIdPattern.test(placeId || '')) throw new Error('Choose a Google Places result.');
-  await current(context);
-  const details = await getPlaceDetails(placeId);
-  await current(context);
+  const { place: details } = await requestPlaces(context, { action: 'details', place_id: placeId });
   if (details?.place_id !== placeId || !details.name?.trim()) throw new Error('Google returned a different listing. Search again.');
   const addressPart = type => details.address_components?.find(component => component.types?.includes(type))?.long_name;
-  const coordinates = details.geometry?.location;
-  const latitude = typeof coordinates?.lat === 'function' ? coordinates.lat() : coordinates?.lat;
-  const longitude = typeof coordinates?.lng === 'function' ? coordinates.lng() : coordinates?.lng;
+  const { lat, lng } = details.geometry?.location || {};
   const fields = Object.fromEntries(Object.entries({
     address: details.formatted_address,
     city: addressPart('locality') || addressPart('sublocality') || addressPart('postal_town'),
     province: addressPart('administrative_area_level_1'),
     country: addressPart('country'),
-    lat: latitude,
-    lng: longitude,
+    lat,
+    lng,
     website_url: details.website,
     contact_phone: details.international_phone_number,
     opening_hours: openingHours(details.opening_hours?.periods),

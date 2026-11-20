@@ -100,7 +100,9 @@ export default function ClubsWorkspace({ session, permissions, scopeId, client =
     } catch (error) { if (token.active) setExportStatus(error.message); }
     finally { if (token.active) setExporting(false); }
   };
-  const openRelatedClub = club => setSelected({ club: all.find(row => String(row.id) === String(club.id)) || club, context });
+  const openRelatedClub = (club, { mergeTarget } = {}) => setSelected({
+    club: all.find(row => String(row.id) === String(club.id)) || club, context, mergeTarget,
+  });
   const updateClub = record => setState(previous => ({ ...previous, rows: previous.rows?.map(row => String(row.id) === String(record.id) ? { ...row, ...record } : row) }));
   return <section className="fo-root clubs-root">
     <header className="fo-heading"><div><p className="ap-kicker">Network / Clubs</p><h1>Club directory</h1><p>Find clubs and review their recorded status.</p></div><div className="fo-report-actions">{platform && <button className="ap-primary" disabled={loading} onClick={() => setCreating(context)}>Create club</button>}<button className="ap-secondary" disabled={loading || exporting || !rows.length} onClick={exportRows}>{exporting ? 'Preparing Excel…' : 'Export Excel'}</button><button className="ap-secondary" disabled={loading} onClick={() => setReload(n => n + 1)}>Refresh clubs</button></div></header>
@@ -110,7 +112,7 @@ export default function ClubsWorkspace({ session, permissions, scopeId, client =
     {loading ? <section className="ap-section"><RecordLoading label="Loading club records…" count={state.context === context ? state.count : undefined} detail="Reading accessible clubs and their directory details. The directory will appear when loading is complete."/></section> : state.error ? <section className="ap-section clubs-notice" role="alert"><h2>Clubs could not be loaded</h2><p>{state.error}</p><button className="ap-secondary" onClick={() => setReload(n => n + 1)}>Try again</button></section> : <>
       {platform && view === 'groups' ? <ClubGroupsView key={context} client={client} session={session} scopeId={scopeId} onOpenClub={openRelatedClub}/>
         : platform && view === 'claims' ? <ClubClaimsQueue key={context} client={client} session={session} scopeId={scopeId} onOpenClub={openRelatedClub} onClubUpdated={updateClub}/>
-        : platform && view === 'google-sync' ? <ClubGoogleSyncWorkspace key={context} client={client} session={session} scopeId={scopeId}/>
+        : platform && view === 'google-sync' ? <ClubGoogleSyncWorkspace key={context} client={client} session={session} scopeId={scopeId} onOpenClub={openRelatedClub}/>
         : <><div className="fo-cards clubs-cards">{[['Clubs', summary.total], ['Verified', summary.verified], ['Pending / in review', summary.inReview], ['SAPA registered', summary.sapaRegistered]].map(([label, count]) => <article className="fo-card" key={label}><h2>{label}</h2><strong>{count}</strong></article>)}</div>
       <section className="ap-section fo-breakdown">
         <div className="fo-ledger-filters"><label className="fo-search"><input aria-label="Search clubs" placeholder="Search club, location or ID…" value={filters.query} onChange={e => update('query', e.target.value)}/></label>
@@ -137,7 +139,7 @@ export default function ClubsWorkspace({ session, permissions, scopeId, client =
         <nav className="fo-pagination" aria-label="Club pages"><span>{rows.length ? (current - 1) * 10 + 1 : 0}–{Math.min(current * 10, rows.length)} of {rows.length}</span><button className="ap-secondary" disabled={current === 1} onClick={() => setPage(current - 1)}>Previous</button><span>Page {current} of {pages}</span><button className="ap-secondary" disabled={current === pages} onClick={() => setPage(current + 1)}>Next</button></nav>
       </section></>}
       {selected?.context === context && <ClubDetails key={selected.club.id} club={selected.club} client={client} session={session} permissions={permissions} scopeId={scopeId}
-        clubDirectory={all} onClose={() => { setSelected(null); if (platform) refreshClaims(value => value + 1); }} onUpdated={updateClub} onLifecycleCompleted={() => {
+        clubDirectory={all} initialMergeTarget={selected.mergeTarget} onClose={() => { setSelected(null); if (platform) refreshClaims(value => value + 1); }} onUpdated={updateClub} onLifecycleCompleted={() => {
           setSelected(null); setReload(value => value + 1);
         }}/>}
       {platform && creating === context && <CreateClubDialog key={context} client={client} scopeId={scopeId} session={session} onClose={() => setCreating(null)} onComplete={record => {

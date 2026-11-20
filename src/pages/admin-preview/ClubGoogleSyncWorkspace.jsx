@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import RecordLoading from './RecordLoading.jsx';
 import SearchableDropdown from '../../components/SearchableDropdown';
 import ClubGoogleManualMatch from './ClubGoogleManualMatch.jsx';
+import ClubGoogleScan from './ClubGoogleScan.jsx';
+import ClubGoogleUnlinkReview from './ClubGoogleUnlinkReview.jsx';
 import { googleMapsReviewLink } from './clubGoogleManual.js';
 import { isGoogleLinked, loadClubGoogleMatches, matchLabels, reviewClubGoogleMatch } from './clubGoogleSync.js';
 
@@ -14,7 +16,7 @@ const labels = {
 const perPage = 12;
 const fieldValue = value => value && typeof value === 'object' ? JSON.stringify(value) : String(value ?? 'Not recorded');
 
-export default function ClubGoogleSyncWorkspace({ client, session, scopeId }) {
+export default function ClubGoogleSyncWorkspace({ client, session, scopeId, onOpenClub }) {
   const userId = session?.user?.id;
   const [list, setList] = useState({ loading: true });
   const [revision, reload] = useState(0);
@@ -33,10 +35,13 @@ export default function ClubGoogleSyncWorkspace({ client, session, scopeId }) {
     return () => controller.abort();
   }, [client, scopeId, userId, revision]);
 
-  const refresh = () => {
-    setSelected(null);
+  const reloadMatches = () => {
     setList({ loading: true });
     reload(value => value + 1);
+  };
+  const refresh = () => {
+    setSelected(null);
+    reloadMatches();
   };
   const proceed = async (decision, review, candidate) => {
     if (actionRequest.current || !selected?.row) return;
@@ -53,7 +58,10 @@ export default function ClubGoogleSyncWorkspace({ client, session, scopeId }) {
         refresh();
       }
     } catch (error) {
-      if (!controller.signal.aborted) setSelected(previous => ({ ...previous, review: null, error: error.message }));
+      if (!controller.signal.aborted) setSelected(previous => ({
+        ...previous, review: null, error: error.message,
+        ...(error.code === '23505' ? { manual: false, conflicting: true, candidate } : {}),
+      }));
     } finally {
       if (actionRequest.current === controller) actionRequest.current = null;
       if (!controller.signal.aborted) setBusy(false);
@@ -64,12 +72,17 @@ export default function ClubGoogleSyncWorkspace({ client, session, scopeId }) {
     : !isGoogleLinked(row.clubs) && row.review_status === 'pending' && (filter === 'pending' || row.match_status === filter));
   const pages = Math.max(1, Math.ceil(rows.length / perPage));
   const current = Math.min(page, pages);
+  const selectedLinked = isGoogleLinked(selected?.row.clubs);
+  const pending = !selectedLinked && selected?.row.review_status === 'pending';
+  const conflicting = pending && !selected.resolved && (selected.conflicting || selected.row.match_status === 'conflict');
+  const changingMatch = busy || Boolean(selected?.unlink);
   return <section className="ap-section clubs-management" aria-label="Google Sync">
-    <div className="ap-section-heading"><div><h2>Google Sync</h2><p>Review the Google listings already recorded for clubs.</p></div>
-      <button className="ap-secondary" type="button" disabled={busy || list.loading} onClick={refresh}>Reload matches</button></div>
+    <div className="ap-section-heading"><div><h2>Google Sync</h2><p>Find and review Google listings for clubs.</p></div>
+      <button className="ap-secondary" type="button" disabled={changingMatch || list.loading} onClick={refresh}>Reload matches</button></div>
+    <ClubGoogleScan client={client} scopeId={scopeId} userId={userId} disabled={changingMatch || list.loading} onScanned={reloadMatches} />
     {feedback && <p role="status">{feedback}</p>}
     {list.loading ? <RecordLoading label="Loading Google matches…"/> : list.error ? <p role="alert">{list.error}</p> : <>
-      <label className="fo-status-filter">Match status<SearchableDropdown disabled={busy} value={filter}
+      <label className="fo-status-filter">Match status<SearchableDropdown disabled={changingMatch} value={filter}
         onChange={event => { setFilter(event.target.value); setPage(1); setSelected(null); }}>
         <option value="pending">All pending</option>{Object.entries(matchLabels).map(([id,label]) => <option value={id} key={id}>{label}</option>)}
         <option value="applied">Applied</option>
@@ -79,12 +92,22 @@ export default function ClubGoogleSyncWorkspace({ client, session, scopeId }) {
           <tr key={row.id}><td>{row.clubs.name}<small>{row.clubs.city}</small></td><td>{row.google_name || 'No recorded listing'}<small>{row.google_address}</small></td>
             <td>{isGoogleLinked(row.clubs) ? 'Applied' : matchLabels[row.match_status] || row.match_status}
               {row.conflict_note && <small>{row.conflict_note}</small>}</td>
-            <td><button className="ap-secondary" type="button" disabled={busy} onClick={() => setSelected({row})}>Review {row.clubs.name}</button></td></tr>)}</tbody></table></div>
+            <td><button className="ap-secondary" type="button" disabled={changingMatch} onClick={() => setSelected({row})}>Review {row.clubs.name}</button></td></tr>)}</tbody></table></div>
       {!rows.length && <p role="status">No matches in this view.</p>}
-      {pages > 1 && <nav className="fo-pagination" aria-label="Google match pages"><button className="ap-secondary" disabled={busy || current <= 1} onClick={() => setPage(current-1)}>Previous</button>
-        <span>Page {current} of {pages}</span><button className="ap-secondary" disabled={busy || current >= pages} onClick={() => setPage(current+1)}>Next</button></nav>}
+      {pages > 1 && <nav className="fo-pagination" aria-label="Google match pages"><button className="ap-secondary" disabled={changingMatch || current <= 1} onClick={() => setPage(current-1)}>Previous</button>
+        <span>Page {current} of {pages}</span><button className="ap-secondary" disabled={changingMatch || current >= pages} onClick={() => setPage(current+1)}>Next</button></nav>}
     </>}
-    {selected && <section className="ap-section" aria-label="Google match review">
+    {selected?.unlink && <ClubGoogleUnlinkReview client={client} scopeId={scopeId} userId={userId} row={selected.row}
+      decision={selected.unlink} placeId={selected.candidate?.place_id} onOpenClub={onOpenClub}
+      onClose={() => setSelected(previous => ({ ...previous, unlink: null }))}
+      onUnlinked={result => {
+        setFeedback(`Google listing unlinked from ${result.target.name}.`);
+        if (selected.unlink === 'conflict') {
+          setSelected({ row: selected.row, candidate: selected.candidate, resolved: true });
+          reloadMatches();
+        } else refresh();
+      }} />}
+    {selected && !selected.unlink && <section className="ap-section" aria-label="Google match review">
       <h3>{selected.row.clubs.name}</h3>
       <p>{selected.row.google_name || 'No Google listing recorded'}{selected.row.google_address ? ` · ${selected.row.google_address}` : ''}</p>
       {googleMapsReviewLink(selected.row.clubs.google_maps_url) && <a href={selected.row.clubs.google_maps_url} target="_blank" rel="noreferrer">Open Google Maps</a>}
@@ -101,13 +124,19 @@ export default function ClubGoogleSyncWorkspace({ client, session, scopeId }) {
         </div>)}</dl> : <p>The match leaves the pending queue. The club profile stays as recorded.</p>}
       </>}
       <div className="fo-report-actions"><button className="ap-secondary" disabled={busy} onClick={() => setSelected(null)}>Close review</button>
-        {!isGoogleLinked(selected.row.clubs) && selected.row.review_status === 'pending' && (selected.review
+        {onOpenClub && <button className="ap-secondary" type="button" disabled={busy} onClick={() => onOpenClub(selected.row.clubs)}>Open club profile</button>}
+        {selectedLinked && <button className="ap-secondary" type="button" disabled={busy} onClick={() => setSelected(previous => ({ ...previous, unlink: 'delist' }))}>Delist Google listing</button>}
+        {pending && (selected.review
           ? <button className="ap-primary" disabled={busy} onClick={() => proceed(selected.review.decision, selected.review, selected.candidate)}>
             {selected.candidate?.kind === 'link' ? 'Confirm Google Maps link' : selected.review.decision === 'apply' ? 'Confirm Google match' : 'Confirm dismissal'}</button>
           : !selected.manual && <>
+            {conflicting && <button className="ap-secondary" type="button" disabled={busy}
+              onClick={() => setSelected(previous => ({ ...previous, unlink: 'conflict' }))}>Review conflicting Google listing</button>}
             <button className="ap-secondary" disabled={busy} onClick={() => setSelected({ row: selected.row, manual: true })}>Find Google match</button>
             <button className="ap-secondary" disabled={busy} onClick={() => proceed('dismiss')}>Review dismissal</button>
-            {selected.row.google_place_id && <button className="ap-primary" disabled={busy} onClick={() => proceed('apply')}>Review field changes</button>}
+            {selected.candidate?.kind === 'place' ? <button className="ap-primary" disabled={busy}
+              onClick={() => proceed('apply', null, selected.candidate)}>Review selected listing</button>
+              : selected.row.google_place_id && <button className="ap-primary" disabled={busy} onClick={() => proceed('apply')}>Review field changes</button>}
           </>)}
       </div>
     </section>}

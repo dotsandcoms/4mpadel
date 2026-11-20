@@ -13,9 +13,9 @@ function Impact({ source, target }) {
   </table>;
 }
 
-export default function ClubLifecycleDialog({ kind, club, directory, client, session, scopeId, onClose, onComplete, onBusyChange }) {
+export default function ClubLifecycleDialog({ kind, club, directory, initialTarget, client, session, scopeId, onClose, onComplete, onBusyChange }) {
   const title = useId();
-  const [query, setQuery] = useState(''), [target, setTarget] = useState(null);
+  const [query, setQuery] = useState(''), [target, setTarget] = useState(initialTarget || null);
   const [response, setResponse] = useState(null), [reload, setReload] = useState(0), [confirmation, setConfirmation] = useState('');
   const userId = session?.user?.id;
   const { bindDialog, busy, error, result, close, run } = useEventOperation({

@@ -17,11 +17,11 @@ import { liveClubDecisionApi, liveClubMemberApi, liveClubMemberAddApi, liveClubI
 function Fields({ rows }) {
   return <dl className="clubs-fields">{rows.map(([label, value]) => <React.Fragment key={label}><dt>{label}</dt><dd>{recordedText(value)}</dd></React.Fragment>)}</dl>;
 }
-export default function ClubDetails({ club, client, session, permissions, scopeId, onClose, onUpdated, clubDirectory = [], onLifecycleCompleted }) {
+export default function ClubDetails({ club, client, session, permissions, scopeId, onClose, onUpdated, clubDirectory = [], initialMergeTarget, onLifecycleCompleted }) {
   const dialogRef = useRef(null), heading = useRef(null), titleId = useId();
   const [state, setState] = useState({ loading: true }), [reload, setReload] = useState(0);
   const [editing, setEditing] = useState(false);
-  const [lifecycle, setLifecycle] = useState(null);
+  const [lifecycle, setLifecycle] = useState(() => initialMergeTarget ? { kind: 'merge', target: initialMergeTarget } : null);
   const [applicationDecided, setApplicationDecided] = useState(false);
   const busyRef = useRef(false), [saving, setSaving] = useState(false);
   const contextRef = useRef(''); contextRef.current = `${club.id}:${session?.user?.id}:${scopeId}`;
@@ -99,10 +99,10 @@ export default function ClubDetails({ club, client, session, permissions, scopeI
         </fieldset>}
         <section><h3>Record information</h3><Fields rows={[['Created', data.created_at], ['Last updated', data.updated_at]]}/></section>
         {platform && onLifecycleCompleted && <section><h3>Club record actions</h3><div className="fo-report-actions">
-          <button className="ap-secondary" type="button" disabled={saving} onClick={() => setLifecycle('merge')}>Merge duplicate club</button>
-          <button className="ap-danger-button" type="button" disabled={saving} onClick={() => setLifecycle('delete')}>Delete club</button>
+          <button className="ap-secondary" type="button" disabled={saving} onClick={() => setLifecycle({ kind: 'merge' })}>Merge duplicate club</button>
+          <button className="ap-danger-button" type="button" disabled={saving} onClick={() => setLifecycle({ kind: 'delete' })}>Delete club</button>
         </div></section>}
-        {platform && lifecycle && <ClubLifecycleDialog key={lifecycle} kind={lifecycle} club={{ ...club, ...data }} directory={clubDirectory}
+        {platform && lifecycle && <ClubLifecycleDialog key={lifecycle.kind} kind={lifecycle.kind} initialTarget={lifecycle.target} club={{ ...club, ...data }} directory={clubDirectory}
           client={client} session={session} scopeId={scopeId} onBusyChange={decisionBusy} onClose={() => setLifecycle(null)} onComplete={onLifecycleCompleted}/>}
       </>}
     </div>
