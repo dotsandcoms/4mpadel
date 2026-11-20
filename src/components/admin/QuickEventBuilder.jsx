@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../supabaseClient';
+import { FOURM_PUBLIC_ORIGIN } from '../../constants/site.js';
+import { uploadToGallery } from '../../utils/eventMedia.js';
 import { useClubs } from '../../hooks/useClubs';
 import { attachPlacesAutocomplete } from '../../utils/googleMaps';
 import { generateAccessCode } from '../../utils/eventAccessCode';
@@ -89,8 +91,9 @@ const blankForm = {
     contact_details: '', organiser_phone: '', organiser_email: '', other_info: '',
 };
 
-const QuickEventBuilder = ({ isOpen, onClose: closeRequested, onSaved, organisation = null, editingEvent = null, beforeSave, theme, renderEditor }) => {
+const QuickEventBuilder = ({ isOpen, onClose: closeRequested, onSaved, organisation = null, organisationClubs, editingEvent = null, beforeSave, theme, renderEditor }) => {
     const previewTheme = theme === 'preview';
+    const organisationBound = previewTheme && Boolean(organisation?.id);
     const mutationLock = useRef(false);
     const failedWrite = useRef(false);
     const [saveError, setSaveError] = useState('');
@@ -113,7 +116,8 @@ const QuickEventBuilder = ({ isOpen, onClose: closeRequested, onSaved, organisat
     const organiserSearchRef = useRef(null);
     const clubSearchRef = useRef(null);
     const endDateTouchedRef = useRef(false);
-    const { clubs, loadingClubs } = useClubs();
+    const { clubs: publicClubs, loadingClubs } = useClubs(!organisationBound);
+    const clubs = organisationBound ? organisationClubs || [] : publicClubs;
 
     const isEditing = !!editingEvent?.id;
     const STEPS = ['Event details', 'Event setup', 'Media & prizes', 'Additional info', isEditing ? 'Review & save' : 'Review & create'];
@@ -524,9 +528,13 @@ const QuickEventBuilder = ({ isOpen, onClose: closeRequested, onSaved, organisat
         setUploading(type);
         try {
             if ((previewTheme || renderEditor) && typeof beforeSave !== 'function') throw new Error('Event editor access could not be verified.');
-            const authorised = await beforeSave?.({ operation: 'upload', event: editingEvent, form });
+            const authorised = await beforeSave?.({ operation: 'upload', asset: type, event: editingEvent, form });
             if (authorised === false) throw new Error('The upload was not authorised.');
-            const url = await uploadImage(file, type === 'poster' ? 'quick-event-posters' : 'quick-event-sponsors', authorised?.verifyContinuing);
+            const url = organisationBound && type === 'poster'
+                ? await uploadToGallery(file, 'cover', authorised?.verifyContinuing, {
+                    bucket: 'event-covers', folder: editingEvent?.id ? `events/${editingEvent.id}` : `drafts/${organisation.id}`,
+                })
+                : await uploadImage(file, type === 'poster' ? 'quick-event-posters' : 'quick-event-sponsors', authorised?.verifyContinuing);
             if (type === 'poster') update('custom_image_url', url);
             else update('sponsor_logos', [url]);
             toast.success(type === 'poster' ? 'Event poster uploaded' : 'Sponsor logo uploaded');
@@ -584,7 +592,7 @@ const QuickEventBuilder = ({ isOpen, onClose: closeRequested, onSaved, organisat
                 is_manual: true, is_quick_event: true, is_weekly: false, sapa_status: 'None',
                 tournament_tag: 'Social', registration_access: editingEvent?.registration_access || 'public',
                 is_visible: isEditing ? editingEvent.is_visible !== false : false,
-                ...(!isEditing ? { sanction_status: isOrgEvent ? 'pending' : 'approved' } : {}),
+                ...(!isEditing ? { sanction_status: isOrgEvent && !organisationBound ? 'pending' : 'approved' } : {}),
             };
 
             if ((previewTheme || renderEditor) && typeof beforeSave !== 'function') throw new Error('Event editor access could not be verified.');
@@ -594,8 +602,15 @@ const QuickEventBuilder = ({ isOpen, onClose: closeRequested, onSaved, organisat
             await checkpoint();
             mutationAttempted = true;
             if (isEditing) {
-                const { error } = await supabase.from('calendar').update(payload).eq('id', eventId);
-                if (error) throw error;
+                const update = supabase.from('calendar').update(payload).eq('id', eventId);
+                if (organisationBound) {
+                    const scoped = update.eq('organisation_id', organisation.id).eq('is_manual', true);
+                    const { data, error } = await (editingEvent.club_id == null ? scoped.is('club_id', null) : scoped.eq('club_id', editingEvent.club_id)).select('id').single();
+                    if (error || String(data?.id) !== String(eventId)) throw error || new Error('Could not verify the quick event update.');
+                } else {
+                    const { error } = await update;
+                    if (error) throw error;
+                }
             } else {
                 const { data, error } = await supabase.from('calendar').insert([payload]).select('id').single();
                 if (error) throw error;
@@ -620,7 +635,8 @@ const QuickEventBuilder = ({ isOpen, onClose: closeRequested, onSaved, organisat
             }
             if (divisionId) {
                 await checkpoint();
-                const { error } = await supabase.from('tournament_divisions').update(division).eq('id', divisionId);
+                const query = supabase.from('tournament_divisions').update(division).eq('id', divisionId);
+                const { error } = await (organisationBound ? query.eq('event_id', eventId) : query);
                 if (error) throw error;
             } else {
                 await checkpoint();
@@ -654,7 +670,7 @@ const QuickEventBuilder = ({ isOpen, onClose: closeRequested, onSaved, organisat
             setSavedDetails({
                 eventId,
                 eventName: form.event_name,
-                shareUrl: `${window.location.origin}/calendar/${slug}`,
+                shareUrl: `${previewTheme ? FOURM_PUBLIC_ORIGIN : window.location.origin}/calendar/${encodeURIComponent(slug)}`,
                 accessCode: form.require_access_code && form.access_code ? form.access_code.trim() : null,
                 wasEditing: isEditing,
             });

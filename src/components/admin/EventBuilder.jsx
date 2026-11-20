@@ -742,8 +742,9 @@ const ageFromDivisionName = (name) => {
     return '';
 };
 
-const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisation = null, renderEditor, beforeSave, theme, reviewedWeeklySeries }) => {
+const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisation = null, organisationClubs, renderEditor, beforeSave, theme, reviewedWeeklySeries }) => {
     const previewTheme = theme === 'preview';
+    const organisationBound = previewTheme && Boolean(organisation?.id);
     const guardedEditor = Boolean(renderEditor || previewTheme);
     const previewWriteFailed = useRef(false);
     const previewRoot = useRef(null);
@@ -835,7 +836,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const [showPreview, setShowPreview] = useState(false);
     const [syncingRankedin, setSyncingRankedin] = useState(false);
 
-    const { clubs } = useClubs();
+    const { clubs: publicClubs } = useClubs(!organisationBound);
+    const clubs = organisationBound ? organisationClubs || [] : publicClubs;
     const [venueOpen, setVenueOpen] = useState(false);
     const [venueQuery, setVenueQuery] = useState('');
     const [orgSuggestions, setOrgSuggestions] = useState([]);
@@ -2379,7 +2381,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const persistDivisions = async (eventId, checkpoint = async () => {}) => {
         if (removedDivisionIds.length) {
             await checkpoint();
-            const { error } = await supabase.from('tournament_divisions').delete().in('id', removedDivisionIds);
+            const query = supabase.from('tournament_divisions').delete().in('id', removedDivisionIds);
+            const { error } = await (organisationBound ? query.eq('event_id', eventId) : query);
             if (error) throw error;
         }
         const rows = divisions.filter((d) => d.name.trim());
@@ -2388,7 +2391,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             const record = { event_id: eventId, ...divisionRecord(d, i) };
             if (d.id) {
                 await checkpoint();
-                const { error } = await supabase.from('tournament_divisions').update(record).eq('id', d.id);
+                const query = supabase.from('tournament_divisions').update(record).eq('id', d.id);
+                const { error } = await (organisationBound ? query.eq('event_id', eventId) : query);
                 if (error) throw error;
             } else {
                 await checkpoint();
@@ -2415,6 +2419,19 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         setRemovedDivisionIds([]);
     };
 
+    const updateCalendarEvent = async (event, payload) => {
+        const update = supabase.from('calendar').update(payload).eq('id', event.id);
+        if (!organisationBound) {
+            const { error } = await update;
+            if (error) throw error;
+            return;
+        }
+        const scoped = update.eq('organisation_id', organisation.id).eq('is_manual', true);
+        const query = event.club_id == null ? scoped.is('club_id', null) : scoped.eq('club_id', event.club_id);
+        const { data, error } = await query.select('id').single();
+        if (error || String(data?.id) !== String(event.id)) throw error || new Error('Could not verify the event update.');
+    };
+
     /**
      * Apply a weekly edit to every occurrence in the series.
      * Shared fields copy from the edited form; dates/reg windows stay week-offset
@@ -2427,8 +2444,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!seriesId) {
             await persistAccessCode(editedEvent.id, undefined, checkpoint);
             await checkpoint();
-            const { error } = await supabase.from('calendar').update(payload).eq('id', editedEvent.id);
-            if (error) throw error;
+            await updateCalendarEvent(editedEvent, payload);
             return 1;
         }
 
@@ -2449,8 +2465,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!siblings.length) {
             await persistAccessCode(editedEvent.id, undefined, checkpoint);
             await checkpoint();
-            const { error } = await supabase.from('calendar').update(payload).eq('id', editedEvent.id);
-            if (error) throw error;
+            await updateCalendarEvent(editedEvent, payload);
             return 1;
         }
 
@@ -2595,8 +2610,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 }
                 await persistAccessCode(eventId, undefined, checkpoint);
                 await checkpoint();
-                const { error } = await supabase.from('calendar').update(payload).eq('id', activeEvent.id);
-                if (error) throw error;
+                await updateCalendarEvent(activeEvent, payload);
                 await persistDivisions(eventId, checkpoint);
             } else if (form.is_weekly && mode === 'publish') {
                 const weeklyDates = buildWeeklyDates(form.start_date, form.weekly_count);

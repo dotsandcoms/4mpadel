@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react';
+import {lazy,Suspense,useEffect,useState} from 'react';
 import SearchableDropdown from '../../components/SearchableDropdown';
 import RecordLoading from './RecordLoading';
 import {ENTITY_FIELDS,loadEntities,saveEntityProfile,entityPatch,entityEqual,loadEntityRelated} from './organisationFederationData';
@@ -14,6 +14,9 @@ import EntityProfileReviewValue from './EntityProfileReviewValue';
 import EntityDecisionPanel from './EntityDecisionPanel';
 import './EventPaymentDialog.css';
 import './OrganisationFederationWorkspace.css';
+import { canOpenOrganisationHostEvents } from './organisationHostEvents.js';
+
+const OrganisationHostEventsWorkspace = lazy(() => import('./OrganisationHostEventsWorkspace.jsx'));
 
 const safeMedia=value=>{try{const url=new URL(value);return ['https:','http:'].includes(url.protocol)?url.href:undefined;}catch{return undefined;}};
 const labels={...organisationLabels,status:'Publishing status',verified:'Verified federation',is_national_governing_body:'National governing body',socials:'Social links',personnel:'Personnel',committees:'Committees',name:'Name',short_name:'Short name',slug:'Public page slug',about:'About',website_url:'Website',brand_color:'Brand colour',contact_email:'Contact email',contact_phone:'Contact phone',whatsapp_number:'WhatsApp number',logo_url:'Logo URL',cover_image_url:'Cover image URL',rankedin_events_org_id:'RankedIn events organisation ID',rankedin_rankings_org_id:'RankedIn rankings organisation ID'};
@@ -27,6 +30,7 @@ function Directory({kind,client,session,scopeId,setReload,onOpenPayouts}){
   const [data,setData]=useState(null),[error,setError]=useState(''),[query,setQuery]=useState(''),[status,setStatus]=useState(''),[selected,setSelected]=useState(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
   useEffect(()=>{const controller=new AbortController();const timer=setTimeout(()=>{controller.abort();setError('Loading timed out. Reload records to try again.');},30000);loadEntities(client,kind,{userId:session?.user?.id,scopeId,signal:controller.signal}).then(value=>{if(!controller.signal.aborted)setData(value);}).catch(err=>{if(!controller.signal.aborted)setError(err.message);}).finally(()=>clearTimeout(timer));return()=>{clearTimeout(timer);controller.abort();};},[client,kind,session?.user?.id,scopeId]);
   const [canManageRecords,setCanManageRecords]=useState(false),[recordDialog,setRecordDialog]=useState(null);
+  const [hostOrganisation,setHostOrganisation]=useState(null);
   const userId=session?.user?.id;
   const platformOrganisations=kind==='organisations'&&scopeId==='all'&&data?.superAdmin===true;
   useEffect(()=>{
@@ -38,6 +42,13 @@ function Directory({kind,client,session,scopeId,setReload,onOpenPayouts}){
     return ()=>controller.abort();
   },[client,platformOrganisations,scopeId,userId]);
   const openRecordAction=(mode,organisation)=>{setSelected(null);setRecordDialog({mode,organisation});};
+  const canOpenHost = organisation => kind === 'organisations' && canOpenOrganisationHostEvents(organisation, {
+    scopeId, userId, superAdmin:data?.superAdmin, editableIds:data?.editableIds,
+  });
+  const openHost = () => { setHostOrganisation(selected); setSelected(null); };
+  if (hostOrganisation && canOpenHost(hostOrganisation)) return <Suspense fallback={<RecordLoading label="Loading host events…"/>}>
+    <OrganisationHostEventsWorkspace client={client} session={session} scopeId={scopeId} organisation={hostOrganisation} onBack={() => setHostOrganisation(null)}/>
+  </Suspense>;
   const title=kind==='organisations'?'Organisations':'Federations';
   const rows=(data?.rows||[]).filter(row=>(!status||row.status===status)&&[row.name,row.short_name,row.contact_email].some(value=>String(value||'').toLowerCase().includes(query.toLowerCase())));
   return <div className="of-workspace"><header className="ap-page-heading"><div><p className="ap-kicker">Administration</p><h1>{title}</h1><p>Profiles and contact details from the existing {title.toLowerCase()} register.</p></div><div className="ap-heading-actions">{platformOrganisations&&canManageRecords&&<button type="button" className="ap-primary" disabled={busy} onClick={()=>openRecordAction('create',null)}>Create organisation</button>}<button className="ap-secondary" disabled={busy} onClick={()=>setReload(value=>value+1)}>Reload records</button></div></header>
@@ -45,7 +56,7 @@ function Directory({kind,client,session,scopeId,setReload,onOpenPayouts}){
     {!data&&!error?<RecordLoading label={`Loading ${title.toLowerCase()}…`}/>:error?<p role="alert" className="of-notice">{error}</p>:<><div className="ap-filter-bar"><label className="of-search">Search {title.toLowerCase()}<input type="search" value={query} disabled={busy} onChange={e=>setQuery(e.target.value)} placeholder="Name or contact email…"/></label><label>Status<SearchableDropdown value={status} disabled={busy} onChange={e=>setStatus(e.target.value)}><option value="">All statuses</option>{[...new Set(data.rows.map(row=>row.status).filter(Boolean))].sort().map(value=><option key={value}>{value}</option>)}</SearchableDropdown></label></div>
     <section className="ap-section of-table"><table><thead><tr><th>Name</th><th>Contact</th><th>Status</th><th>Profile</th></tr></thead><tbody>{rows.map(row=><tr key={row.id}><td><div className="of-name">{row.logo_url&&<img src={safeMedia(row.logo_url)} referrerPolicy="no-referrer" width="44" height="44" alt="" loading="lazy"/>}<span><strong>{row.name}</strong><small>{row.short_name||row.slug||'No short name recorded'}</small></span></div></td><td>{row.contact_email||'No contact email'}<small>{row.contact_phone}</small></td><td><span className="ap-status">{row.status||'Not recorded'}</span></td><td><button className="ap-secondary" disabled={busy} onClick={()=>setSelected(row)}>View profile</button></td></tr>)}</tbody></table>{!rows.length&&<p className="of-notice">No records match these filters.</p>}</section><p>{rows.length} of {data.rows.length} records</p></>}
 
-    {selected&&<ProfileDialog key={selected.id} {...{kind,client,session,scopeId}} row={selected} canManageLinks={platformOrganisations} onRecordAction={platformOrganisations&&canManageRecords ? mode=>openRecordAction(mode,selected) : undefined} onOpenPayouts={onOpenPayouts} readOnly={!data.superAdmin&&(!data.editableIds.includes(String(selected.id))||selected.status!=='approved')} onBusyChange={setBusy} onClose={({refresh})=>{setSelected(null);if(refresh)setReload(value=>value+1);}} onSaved={saved=>{setData(current=>({...current,rows:current.rows.map(row=>row.id===saved.id?saved:row)}));setNotice('Profile saved.');}} onDecisionSaved={result=>{
+    {selected&&<ProfileDialog key={selected.id} {...{kind,client,session,scopeId}} row={selected} canManageLinks={platformOrganisations} onRecordAction={platformOrganisations&&canManageRecords ? mode=>openRecordAction(mode,selected) : undefined} onOpenPayouts={onOpenPayouts} onOpenHost={canOpenHost(selected) ? openHost : undefined} readOnly={!data.superAdmin&&(!data.editableIds.includes(String(selected.id))||selected.status!=='approved')} onBusyChange={setBusy} onClose={({refresh})=>{setSelected(null);if(refresh)setReload(value=>value+1);}} onSaved={saved=>{setData(current=>({...current,rows:current.rows.map(row=>row.id===saved.id?saved:row)}));setNotice('Profile saved.');}} onDecisionSaved={result=>{
       setNotice(result.message);
       if(kind==='organisations'&&result.action==='application')setData(current=>({...current,rows:current.rows.map(row=>String(row.id)===String(result.targetId)?{...row,status:result.status}:row)}));
     }}/>}
@@ -55,7 +66,7 @@ function Directory({kind,client,session,scopeId,setReload,onOpenPayouts}){
       onSaved={result=>{if(result.action==='delete')setData(current=>({...current,rows:current.rows.filter(row=>row.id!==result.id)}));}}/>}
   </div>;
 }
-function ProfileDialog({kind,client,session,scopeId,row,readOnly,onOpenPayouts,onRecordAction,canManageLinks,onClose,onSaved,onBusyChange,onDecisionSaved}){
+function ProfileDialog({kind,client,session,scopeId,row,readOnly,onOpenPayouts,onOpenHost,onRecordAction,canManageLinks,onClose,onSaved,onBusyChange,onDecisionSaved}){
   const [related,setRelated]=useState(null),[relatedError,setRelatedError]=useState('');
   useEffect(()=>{const controller=new AbortController();const timer=setTimeout(()=>{controller.abort();setRelatedError('Linked records timed out. Close and reopen to retry.');},30000);loadEntityRelated(client,kind,row,{userId:session?.user?.id,scopeId,signal:controller.signal}).then(value=>{if(!controller.signal.aborted)setRelated(value);}).catch(err=>{if(!controller.signal.aborted)setRelatedError(err.message);}).finally(()=>clearTimeout(timer));return()=>{clearTimeout(timer);controller.abort();};},[client,kind,row,session?.user?.id,scopeId]);
   const [draft,setDraft]=useState({...row}),[files,setFiles]=useState({}),[review,setReview]=useState(false),[validation,setValidation]=useState('');
@@ -90,6 +101,7 @@ function ProfileDialog({kind,client,session,scopeId,row,readOnly,onOpenPayouts,o
     <details className="of-related"><summary>Linked records</summary>{relatedError?<p role="alert">{relatedError}</p>:!related?<p>Loading linked records…</p>:<>{kind==='federations'&&<><h3>Organisations ({related.organisations.length})</h3>{related.organisations.map(item=><p key={item.id}>{item.name} · {item.status}</p>)}</>}<h3>Events ({related.events.length})</h3>{related.events.map(item=><p key={item.id}>{item.event_name} · {item.start_date||'Date not recorded'} · {item.federation_sanction_status||item.sanction_status||'Status not recorded'}{item.pending_changes_status==='pending'?' · Amendment pending':''}</p>)}</>}</details>
     {!dirty&&!result&&!review&&!decisionDone&&<EntityDecisionPanel kind={kind} client={client} session={session} scopeId={scopeId} entity={row}
       profileBusy={busy} onBusyChange={changeDecisionBusy} onSaved={outcome=>{onDecisionSaved?.(outcome);if(kind==='organisations'&&outcome.action==='application')setDecisionDone(true);}}/>}
+    {onOpenHost&&!dirty&&!busy&&!decisionBusy&&<button className="ap-secondary" type="button" onClick={onOpenHost}>Open host events</button>}
     {kind==='organisations'&&row.status==='approved'&&onOpenPayouts&&!dirty&&!busy&&!decisionBusy&&
         <button className="ap-secondary" type="button" onClick={()=>onOpenPayouts(row)}>Banking and payouts</button>}
     {kind==='organisations'&&canManageLinks&&!dirty&&!result&&!review&&!decisionDone&&<OrganisationRelationships client={client} organisation={row} session={session}
