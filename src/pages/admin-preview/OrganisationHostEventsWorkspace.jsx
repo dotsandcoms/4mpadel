@@ -5,6 +5,7 @@ import { dateLabel } from './playersData.js';
 import { publicEventUrl } from './calendarData.js';
 import RecordLoading from './RecordLoading.jsx';
 import OrganisationHostEventEditor from './OrganisationHostEventEditor.jsx';
+import OrganisationSanctionRevocationDialog from './OrganisationSanctionRevocationDialog.jsx';
 import WeeklyEventDraftsDialog from './WeeklyEventDraftsDialog.jsx';
 import { loadOrganisationHosts } from './organisationHostEvents.js';
 
@@ -67,12 +68,16 @@ export default function OrganisationHostEventsWorkspace({
               {event.is_weekly && event.series_id ? 'Edit weekly series' : event.is_quick_event ? 'Edit quick event' : 'Edit event'}
             </button>}
             {event.sanction_status === 'approved' && <Link className="ap-secondary" to={`/admin-preview/event?event=${event.id}`}>Manage event</Link>}
+            {event.sanction_status === 'approved' && records.platform === true && scopeId === 'all' &&
+              <button className="ap-secondary" type="button" onClick={() => setEditor({ sanction: event })}>Revoke sanction</button>}
             {url && <a className="ap-secondary" href={url} target="_blank" rel="noreferrer">Public event</a>}
           </div></td>
         </tr>;
       })}</tbody>
     </table>{!records.events.length && <p className="of-notice">This organisation has no events.</p>}</section>}
-    {editor?.draftList ? <WeeklyEventDraftsDialog key={`${actorId}:${scopeId}:${organisationId}`} client={client} host={organisationId}
+    {editor?.sanction ? <OrganisationSanctionRevocationDialog client={client} session={session} scopeId={scopeId}
+      organisationId={organisationId} event={editor.sanction} onClose={close}/>
+      : editor?.draftList ? <WeeklyEventDraftsDialog key={`${actorId}:${scopeId}:${organisationId}`} client={client} host={organisationId}
       onOpen={weeklyDraft => setEditor({ weeklyDraft })} onClose={close}/>
       : editor && <Editor client={client} session={session} scopeId={scopeId} organisationId={organisationId} {...editor} onClose={close}/>}
   </div>;
