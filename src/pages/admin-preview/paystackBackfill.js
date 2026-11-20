@@ -4,10 +4,11 @@ const reviewKinds = ['entry','licence','unallocated'];
 export const canReviewGatewayBackfill = (session, permissions, scopeId, row) =>
     Boolean(session?.user?.id && permissions?.role === 'super_admin' && scopeId === 'all'
         && row?.environment === 'live' && row.status === 'success'
-        && row.link?.state === 'unmatched' && typeof row.reference === 'string' && referencePattern.test(row.reference));
+        && (row.link?.state === 'unmatched' || (row.link?.state === 'matched' && row.link.unallocated))
+        && typeof row.reference === 'string' && referencePattern.test(row.reference));
 
 async function send(client, session, permissions, scopeId, row, input, signal) {
-    if (!canReviewGatewayBackfill(session, permissions, scopeId, row)) throw new Error('Select a successful unmatched live receipt in platform Finance.');
+    if (!canReviewGatewayBackfill(session, permissions, scopeId, row)) throw new Error('Select a successful missing or unallocated live receipt in platform Finance.');
     signal?.throwIfAborted();
     const auth = await client.auth.getUser();
     signal?.throwIfAborted();
@@ -29,6 +30,7 @@ export async function reviewGatewayBackfill(client, session, permissions, scopeI
     const result = await send(client,session,permissions,scopeId,row,{ action:'review' },signal);
     if (result.state !== 'review') return result;
     if (result.reference !== row.reference || result.amountMinor !== row.amountMinor
+        || (row.link?.unallocated && result.kind === 'unallocated')
         || !reviewKinds.includes(result.kind) || typeof result.token !== 'string' || !/^[\da-f]{64}$/.test(result.token)) {
         throw new Error('Paystack receipt details changed. Refresh the gateway before reviewing.');
     }

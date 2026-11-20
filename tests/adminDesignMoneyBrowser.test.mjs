@@ -48,6 +48,8 @@ const gatewayMissing = fb.mode === 'gateway-missing';
 const gatewayBulk = fb.mode === 'gateway-bulk' || gatewayMissing;
 const gatewayTypes = fb.mode === 'gateway-types';
 const gatewayNames = fb.mode === 'gateway-names';
+const gatewayAllocation = fb.mode === 'gateway-allocation';
+const allocationReference = 'EVREG-FIXTURE-ALLOCATION';
 const payerProfile = {id:8,name:'Named fixture payer',email:'payer+name@example.invalid'};
 const gatewayAliases = {'metadata->>client_reference':'client_reference','metadata->>paystack_ref':'paystack_reference',
     'metadata->>parent_reference':'parent_reference','metadata->original_trx->>id':'original_gateway_reference'};
@@ -61,6 +63,8 @@ const failed = {...pay,id:'failed-own',reference:'assigned-entry-failed',status:
 const otherPayment = {...pay,id:'other-pay',event_id:15,player_id:6,reference:'outside-scope-reference',players:otherPlayer,calendar:other};
 const tables = { calendar:[event,other], players:[player], payments:[pay], payment_refunds:[], license_seasons:[season],
     commerce_config:[{id:'default',temp_license_price:120,temp_license_enabled:true}], organisations:[{id:'our-org',name:'Our organisation',status:'approved'}] };
+if (gatewayAllocation) tables.payments.push({...pay,id:'existing-unallocated',reference:'123456789',event_id:null,calendar:null,
+    payment_type:'other',checkout_source:'admin_paystack_backfill',client_reference:allocationReference,verified_gateway_amount_minor:'60000'});
 if (ledgerScopeTest) {
     tables.calendar[1] = {...other,finance_managed:false};
     tables.players.push(otherPlayer);
@@ -185,6 +189,7 @@ export const supabase = {
         if(name.startsWith('paystack-transactions?'))return {data:{mode:'live',transactions:[
             {id:pay.reference,user:player.email,amount:'R 600.00',status:'Success',rawDate:pay.created_at,is_test:false},
             {id:'unmatched-reference',user:player.email,amount:'R 45.00',status:'Success',rawDate:pay.created_at,is_test:false},
+            ...(gatewayAllocation ? [{id:allocationReference,user:player.email,amount:'R 600.00',status:'Success',rawDate:pay.created_at,is_test:false}] : []),
             ...(gatewayTypes ? typedGatewayRows : []),
             ...(gatewayBulk ? [...Array.from({length:12}, (_,index)=>({id:'bulk-'+String(index+1).padStart(2,'0'),user:player.email,
                 amount:'R 45.00',status:'Success',rawDate:pay.created_at,is_test:false})),
@@ -206,6 +211,15 @@ export const supabase = {
         if(name==='admin-paystack-backfill') {
             const ordered = /^bulk-[0-9]+$/.test(args.body.reference) ? Number(args.body.reference.slice(5)) : null;
             const token = ordered == null ? 'a'.repeat(64) : ordered.toString(16).padStart(64,'0');
+            if(gatewayAllocation && args.body.reference===allocationReference) {
+                const receipt = tables.payments.find(row=>row.id==='existing-unallocated');
+                if(receipt.payment_type!=='other')return {data:{state:'already_recorded'}};
+                if(args.body.action==='review')return {data:{state:'review',token,kind:'entry',reference:allocationReference,
+                    amountMinor:60000,payer:player.email,eventId:14,entries:1,licences:0}};
+                if(args.body.token!==token || !args.body.reason)return {data:{state:'changed'}};
+                Object.assign(receipt,{reference:allocationReference,event_id:14,calendar:event,payment_type:'event_entry_fee'});
+                return {data:{state:'recorded',kind:'entry',message:'The existing receipt was allocated in the 4M ledger.'}};
+            }
             if(args.body.action==='review') {
                 if(retrievalFailures.delete(args.body.reference))return {error:new Error('Fixture verification temporarily unavailable')};
                 if(tables.payments.some(row=>row.id==='backfilled-'+args.body.reference))return {data:{state:'already_recorded'}};
@@ -499,8 +513,36 @@ test('the original gateway confirms reviewed unmatched funds and links the recor
         const after=(await calls(page)).filter(([name])=>name==='admin-paystack-backfill');
         assert.deepEqual(after[1],['admin-paystack-backfill',{action:'record',token:'a'.repeat(64),reason:'Reviewed source receipt',scopeId:'all',reference:'unmatched-reference'}]);
         await click(page,'Close and refresh gateway');
-        await includesText(page,'Exact 4M gateway alias match');
+        await includesText(page,'Recorded as unallocated');
         assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].some(node=>node.textContent==='Review missing receipt')),false);
+    });
+});
+
+test('Paystack allocation reviews the existing receipt and leaves it out of missing-receipt batches',async()=>{
+    await withPage('gateway-allocation',platform,'all',async page=>{
+        const panel = 'section[aria-label="Review Paystack receipt allocation"]';
+        const receiptCalls = async () => (await calls(page)).filter(([name])=>name==='admin-paystack-backfill').map(([,args])=>args);
+        await click(page,'Paystack gateway');
+        await includesText(page,'Recorded as unallocated');
+        await input(page,'input[aria-label="Search gateway transactions"]','EVREG-FIXTURE-ALLOCATION');
+        await click(page,'Review all missing receipts');
+        await includesText(page,'There are no unmatched successful receipts in these results.');
+        assert.deepEqual(await receiptCalls(),[]);
+        await click(page,'Review allocation');
+        await includesText(page,'1 existing entry will be marked paid');
+        await click(page,'Cancel receipt review');
+        assert.deepEqual((await receiptCalls()).map(row=>row.action),['review']);
+        await click(page,'Review allocation');
+        await includesText(page,'1 existing entry will be marked paid');
+        assert.equal(await page.$$eval(`${panel} button`,buttons=>buttons.find(button=>button.textContent==='Confirm receipt allocation').disabled),true);
+        await input(page,`${panel} textarea`,'Verified the original saved registration');
+        await click(page,'Confirm receipt allocation');
+        await includesText(page,'The existing receipt was allocated in the 4M ledger.');
+        assert.deepEqual((await receiptCalls()).slice(2),[{action:'record',token:'a'.repeat(64),reason:'Verified the original saved registration',
+            scopeId:'all',reference:'EVREG-FIXTURE-ALLOCATION'}]);
+        await click(page,'Close and refresh gateway');
+        await includesText(page,'Our fixture event');
+        assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Review allocation')),false);
     });
 });
 

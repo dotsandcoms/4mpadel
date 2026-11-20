@@ -29,7 +29,7 @@ export async function selectMissingGatewayReceipts(client, session, permissions,
     if (linked.some(row => row.link?.state === 'unavailable')) {
       throw new Error('4M ledger matches could not be checked for every result. Try the lookup again.');
     }
-    receipts.push(...linked.filter(row => canReviewGatewayBackfill(session, permissions, scopeId, row)));
+    receipts.push(...linked.filter(row => row.link?.state === 'unmatched' && canReviewGatewayBackfill(session, permissions, scopeId, row)));
   }
   return receipts;
 }

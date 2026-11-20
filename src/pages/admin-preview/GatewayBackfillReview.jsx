@@ -11,7 +11,10 @@ const outcomeText = result => result.message || ({
     deferred: 'Left for later review.',
 })[result.state] || 'Receipt is unavailable.';
 const reviewText = row => {
-    if (row.kind === 'entry') return `Event #${row.eventId}. ${row.entries} existing entries will be marked paid${row.licences ? ` with ${row.licences} licence payments` : ''}.`;
+    if (row.kind === 'entry') {
+        const entries = row.entries === 1 ? '1 existing entry' : `${row.entries} existing entries`;
+        return `Event #${row.eventId}. ${entries} will be marked paid${row.licences ? ` with ${row.licences} licence payments` : ''}.`;
+    }
     if (row.kind === 'licence') {
         const label = row.licenceType === 'full' ? `${row.licenceYear} full licence` : `temporary licence for event #${row.eventId}`;
         return `Record the saved ${label} purchase. Current licence issuance rules apply.`;
@@ -30,6 +33,8 @@ export default function GatewayBackfillReview({ client, session, permissions, sc
     const [reason, setReason] = useState(''), [confirmed, setConfirmed] = useState(false);
     const [recordingAttempted, setRecordingAttempted] = useState(false);
     const batchCount = Math.ceil(selection.current.length / batchSize);
+    const allocation = selection.current.length === 1 && selection.current[0].link?.unallocated;
+    const heading = allocation ? 'Review Paystack receipt allocation' : 'Review missing Paystack receipts';
     const results = loaded?.batch === batch && loaded.retry === retry ? loaded.results : null;
 
     useEffect(() => {
@@ -117,8 +122,9 @@ export default function GatewayBackfillReview({ client, session, permissions, sc
         </li>;
     })}</ul>;
 
-    return <section className="ap-section" style={{ padding:18 }} aria-label="Review missing Paystack receipts">
-        <h2>{confirmed ? 'Receipt recording results' : 'Review missing Paystack receipts'}</h2>
+    return <section className="ap-section" style={{ padding:18 }} aria-label={heading}>
+        <h2>{confirmed ? (allocation ? 'Receipt allocation results' : 'Receipt recording results') : heading}</h2>
+        {allocation && !confirmed && <p>Allocate the existing receipt when it matches a saved entry or licence checkout.</p>}
         {bulk && <p role="status">{selection.current.length} missing receipts in the filtered results. Batch {batch + 1} of {batchCount}.</p>}
         {!results ? <p role="status">Verifying receipts with Paystack…</p> : <>
             {bulk && ready.length > 0 && <>
@@ -131,13 +137,13 @@ export default function GatewayBackfillReview({ client, session, permissions, sc
                 <p role="status">{selectedReady.length} of {ready.length} ready receipts selected.</p>
             </>}
             {renderedResults(results,bulk)}
-            {ready.length > 0 && <label className="lw-field"><span>Reason for recording these receipts</span>
+            {ready.length > 0 && <label className="lw-field"><span>{allocation ? 'Reason for allocating this receipt' : 'Reason for recording these receipts'}</span>
                 <textarea rows={3} maxLength={500} disabled={busy} value={reason} onChange={event => setReason(event.target.value)}/></label>}
         </>}
         {history.length > 0 && <details><summary>Earlier batch results ({history.length} receipts)</summary>{renderedResults(history)}</details>}
         <div className="fo-report-actions">
             {!!ready.length && <button type="button" className="ap-primary" disabled={busy || !selectedReady.length || !reason.trim()} onClick={record}>
-                {busy ? 'Recording receipts…' : 'Confirm receipt recording'}</button>}
+                {allocation ? (busy ? 'Allocating receipt…' : 'Confirm receipt allocation') : (busy ? 'Recording receipts…' : 'Confirm receipt recording')}</button>}
             {canContinue && <button type="button" className="ap-secondary" disabled={busy} onClick={nextBatch}>Review next batch</button>}
             {canRetry && <button type="button" className="ap-secondary" disabled={busy} onClick={retryBatch}>
                 {confirmed ? 'Recheck receipt results' : 'Retry batch verification'}</button>}

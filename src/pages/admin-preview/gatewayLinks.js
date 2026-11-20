@@ -134,6 +134,7 @@ export async function loadGatewayLinks(client, session, permissions, scopeId, tr
       const gatewayMinor = Number(payment?.verified_gateway_amount_minor);
       const displayAmount = recovered && Number.isSafeInteger(gatewayMinor) && gatewayMinor > 0 ? gatewayMinor/100 : payment?.amount;
       return { ...row, link: payment ? { state: 'matched', paymentId: payment.id, recovered,
+        unallocated: recovered && payment.payment_type === 'other' && payment.event_id == null && gatewayMinor === row.amountMinor,
         gatewayAlias: payment.reference !== row.reference,
         savedEventCheckout: payment.payment_type === 'event_entry_fee' && payment.checkout_source === 'manual_event'
           && Number.isSafeInteger(eventId) && eventId > 0,
@@ -147,5 +148,5 @@ export async function loadGatewayLinks(client, session, permissions, scopeId, tr
   }
 }
 
-export const gatewayLinkLabel = link => link?.gatewayAlias ? 'Exact 4M gateway alias match' : ({ matched: 'Exact 4M reference match', ambiguous: 'Multiple 4M records — review needed',
+export const gatewayLinkLabel = link => link?.unallocated ? 'Recorded as unallocated' : link?.gatewayAlias ? 'Exact 4M gateway alias match' : ({ matched: 'Exact 4M reference match', ambiguous: 'Multiple 4M records — review needed',
   unmatched: 'No matching payment in 4M', unavailable: '4M details could not be loaded' }[link?.state] || '4M details not checked');

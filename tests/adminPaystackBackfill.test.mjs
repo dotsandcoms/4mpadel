@@ -101,13 +101,18 @@ test('unknown price-only metadata and cross-event covers are never treated as ve
     assert.equal('amount' in known.covers[0],false);
     assert.equal('secret' in known,false);
 });
-test('only unmatched successful live receipts are offered for platform backfill',()=>{
+test('platform recovery offers missing and audited unallocated successful live receipts',()=>{
     const session={user:{id:actor}}, admin={role:'super_admin'};
     const row={reference,environment:'live',status:'success',link:{state:'unmatched'}};
     assert.equal(canReviewGatewayBackfill(session,admin,'all',row),true);
     for(const status of ['ambiguous','unavailable','matched']){
         assert.equal(canReviewGatewayBackfill(session,admin,'all',{...row,link:{state:status}}),false);
     }
+    const unallocated = {...row,link:{state:'matched',unallocated:true}};
+    assert.equal(canReviewGatewayBackfill(session,admin,'all',unallocated),true);
+    assert.equal(canReviewGatewayBackfill(session,{role:'org_admin'},'all',unallocated),false);
+    assert.equal(canReviewGatewayBackfill(session,admin,'org:foreign',unallocated),false);
+    assert.equal(canReviewGatewayBackfill(session,admin,'all',{...unallocated,status:'failed'}),false);
     assert.equal(canReviewGatewayBackfill(session,admin,'all',{...row,environment:'test'}),false);
     assert.equal(canReviewGatewayBackfill(session,admin,'org:foreign',row),false);
     assert.equal(canReviewGatewayBackfill(session,{role:'admin'},'all',row),false);

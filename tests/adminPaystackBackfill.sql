@@ -53,7 +53,8 @@ alter table public.annual_licenses add column id uuid default gen_random_uuid();
 alter table public.annual_licenses add column source text;
 alter table public.annual_licenses add column payment_id uuid;
 alter table public.annual_licenses add unique(player_id,season_year);
-create table public.payment_refunds(id uuid primary key default gen_random_uuid(),paystack_reference text,status text,event_registration_id uuid);
+create table public.payment_refunds(id uuid primary key default gen_random_uuid(),paystack_reference text,status text,event_registration_id uuid,
+    payment_id uuid references public.payments(id));
 \ir ../supabase/migrations/20261119111834_admin_paystack_receipt_backfill.sql
 
 select pg_temp.expect(not has_function_privilege('authenticated','public.admin_paystack_receipt_backfill(uuid,jsonb,jsonb,text)','EXECUTE'),'ordinary callers cannot invoke the writer');
@@ -131,4 +132,61 @@ insert into public.payment_refunds(paystack_reference,status) values('REFUNDED-B
 select pg_temp.expect((select pg_temp.admin_backfill(evidence || '{"gateway_reference":"REFUNDED-BACKFILL","provider_id":"29010"}')->>'state'='held'
     from demo_charges where key='unallocated'),'local refund reserves block backfill');
 select pg_temp.expect((select count(*)=4 from private.admin_paystack_backfill_audit),'existing split and refund never add an audit or new payment');
-select 'Admin Paystack backfill DB: covered checkout, licence, bundle, unallocated, changed and replay verified';
+
+-- Record an older receipt before its exact registered entry is available.
+update public.event_registrations set status='withdrawn' where id='80000000-0000-0000-0000-000000000251';
+insert into demo_charges select 'allocate-entry',evidence || jsonb_build_object('provider_id','29011','gateway_reference','EVREG-BACKFILL-ALLOCATE',
+    'event_id',251,'covers','[{"type":"entry","email":"backfill-entry@example.test","event_id":251,"division":"Backfill","registration_id":"80000000-0000-0000-0000-000000000251"}]'::jsonb)
+    from demo_charges where key='entry';
+insert into demo_plans select key,evidence,pg_temp.admin_backfill(evidence) from demo_charges where key='allocate-entry';
+select pg_temp.expect((select result->'plan'->>'kind'='unallocated' from demo_plans where key='allocate-entry'),'pre-release import has no exact registration');
+select pg_temp.expect((select pg_temp.admin_backfill(evidence,result->'plan','Original unallocated receipt')->>'state'='recorded'
+    from demo_plans where key='allocate-entry'),'the original deployed handler can record the unallocated receipt');
+create temporary table first_receipt as select id,created_at from public.payments where reference='29011';
+
+\ir ../supabase/migrations/20261120121000_allocate_reviewed_paystack_receipts.sql
+select pg_temp.expect(not has_table_privilege('service_role','private.admin_paystack_backfill_allocations','INSERT'),'allocation audit requires the reviewed controller');
+select pg_temp.expect(not has_function_privilege('authenticated','public.admin_paystack_receipt_backfill(uuid,jsonb,jsonb,text)','EXECUTE'),'allocation preserves server-only transport');
+select pg_temp.expect((select pg_temp.admin_backfill(evidence)->>'state'='held' from demo_charges where key='unallocated'),'receipts with no evidence stay unallocated');
+update public.event_registrations set status='registered' where id='80000000-0000-0000-0000-000000000251';
+update demo_plans set result=pg_temp.admin_backfill(evidence) where key='allocate-entry';
+select pg_temp.expect((select result->'plan'->>'kind'='entry' and result->'plan'->>'existing_payment_id'=(select id::text from first_receipt)
+    from demo_plans where key='allocate-entry'),'the reviewed registration is tied to the original ledger identity');
+select pg_temp.expect((select payment_type='other' and event_id is null from public.payments where id=(select id from first_receipt))
+    and not exists(select 1 from private.admin_paystack_backfill_allocations),'opening a review cannot allocate funds');
+select pg_temp.expect((select pg_temp.admin_backfill(evidence,(result->'plan') - 'existing_payment_id','Stale approval')->>'state'='changed'
+    from demo_plans where key='allocate-entry'),'a review without the exact original identity cannot commit the allocation');
+insert into public.payment_refunds(payment_id,status) select id,'pending' from first_receipt;
+select pg_temp.expect((select pg_temp.admin_backfill(evidence,result->'plan','Blocked by local refund')->>'state'='held'
+    from demo_plans where key='allocate-entry'),'a refund tied to the ledger row independently blocks the reviewed allocation');
+delete from public.payment_refunds where payment_id=(select id from first_receipt);
+select pg_temp.expect((select pg_temp.admin_backfill(evidence,result->'plan','Allocate verified event receipt')->>'state'='recorded'
+    from demo_plans where key='allocate-entry'),'exact event allocation applies once');
+select pg_temp.expect((select p.reference='EVREG-BACKFILL-ALLOCATE' and p.payment_type='event_entry_fee' and p.amount=100
+    and p.event_id=251 and p.created_at=f.created_at and p.metadata->>'provider_id'='29011' from public.payments p join first_receipt f using(id))
+    and not exists(select 1 from public.payments where reference='29011'),'receipts keep the ledger ID, original date, verified amount and provider ID');
+select pg_temp.expect((select payment_status='paid' from public.event_registrations where id='80000000-0000-0000-0000-000000000251'),
+    'only the linked existing entry is settled');
+select pg_temp.expect((select initial.action='unallocated' and allocation.action='entry' and initial.amount_minor=10000
+    from private.admin_paystack_backfill_audit initial join private.admin_paystack_backfill_allocations allocation using(provider_id)
+    where provider_id='29011'),'initial recording and allocation keep separate immutable reasons and actor records');
+select pg_temp.expect((select pg_temp.admin_backfill(evidence,result->'plan','Network retry')->>'kind'='entry'
+    from demo_plans where key='allocate-entry'),'a repeat confirmation returns the known allocation');
+
+insert into auth.users(id,email) values('00000000-0000-0000-0000-000000000152','allocated-licence@example.test');
+insert into public.players(id,name,email,approved) values(152,'Allocated annual licence','allocated-licence@example.test',true);
+insert into demo_charges select 'allocate-licence',evidence || jsonb_build_object('provider_id','29012','gateway_reference','ALLOCATE-SAVED-LICENCE',
+    'payer_email','allocated-licence@example.test') from demo_charges where key='unallocated';
+insert into demo_plans select key,evidence,pg_temp.admin_backfill(evidence) from demo_charges where key='allocate-licence';
+select pg_temp.expect((select pg_temp.admin_backfill(evidence,result->'plan','Original annual receipt')->>'state'='recorded'
+    from demo_plans where key='allocate-licence'),'unmatched standalone cash can still be recorded on the new version');
+insert into public.native_license_checkouts(reference,user_id,player_id,amount,license_type,license_year,created_at)
+    select 'ALLOCATE-SAVED-LICENCE',id,152,650,'full',extract(year from current_date)::integer,now()-interval '1 day'
+    from auth.users where email='allocated-licence@example.test';
+update demo_plans set result=pg_temp.admin_backfill(evidence) where key='allocate-licence';
+select pg_temp.expect((select pg_temp.admin_backfill(evidence,result->'plan','Allocate verified annual licence')->>'kind'='licence'
+    from demo_plans where key='allocate-licence'),'allocation reuses the saved annual checkout');
+select pg_temp.expect(exists(select 1 from public.payments p join public.annual_licenses l on l.payment_id=p.id
+    where p.reference='29012' and p.payment_type='membership' and p.amount=650 and l.player_id=152),
+    'the existing issuer activates a saved annual purchase using the same receipt');
+select 'Admin Paystack backfill DB: exact checkout allocation, licence issuance, refund holds and replay verified';

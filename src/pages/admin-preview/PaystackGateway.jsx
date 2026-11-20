@@ -293,7 +293,7 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
           <td>{(row.amountMinor / 100).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {row.currency}</td>
           {!staging && mode === 'live' && <td>{canConfirmGatewayCheckout(row) ? <button className="fo-type-link" disabled={action?.busy || backfillBusy || bulkLookup?.busy || Boolean(backfillReview)} onClick={() => { setBackfill(null); setReview([row]); }}>Verify checkout</button>
             : canReviewGatewayBackfill(actor, grant, scopeId, row) ? <button className="fo-type-link" disabled={action?.busy || backfillBusy || bulkLookup?.busy || Boolean(backfillReview)}
-              onClick={() => openBackfill([row])}>Review missing receipt</button> : <small>—</small>}</td>}
+              onClick={() => openBackfill([row])}>{row.link.unallocated ? 'Review allocation' : 'Review missing receipt'}</button> : <small>—</small>}</td>}
         </tr>)}</tbody></table></div>
       {!data.transactions.length && <p>No gateway transactions match these filters.</p>}
       <nav className="fo-pagination" aria-label="Gateway pages"><span>Page {activePage} of {pageCount}</span>
