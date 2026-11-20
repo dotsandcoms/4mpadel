@@ -15,8 +15,11 @@ import {
     isLedgerSplitPayment,
     paymentCoversRefundEntry,
     paymentUsesVerifiedEntryTransfer,
-    resolveCanManageEvent,
-    resolveIsAdmin,
+    canManageRefundEvent,
+    verifyRefundActor,
+    ownsRefundRegistration,
+    refundEventId,
+    literalRefundEmail,
     resolvePaystackGatewayReference,
     resolveRefundableItems,
     roundRands,
@@ -466,7 +469,7 @@ async function processRegistration(
         await supabaseAdmin
             .from('event_registrations')
             .update({ refund_amount: refundedTotal })
-            .eq('id', reg.id);
+            .eq('id', reg.id).eq('event_id', ctx.eventId);
     }
 
     if (aggregateStatus === 'processing' && !anyPaystack && refundedTotal > 0) {
@@ -503,10 +506,33 @@ function divisionClosed(div: Record<string, unknown>, event: Record<string, unkn
  * fee (requires a verified Paystack top-up of the difference). Solo move:
  * the partner is unlinked and stays in the original division.
  */
+async function findLinkedRefundPartner(client: SupabaseClient, entry: RegistrationRow, allowReverse = false) {
+    const expectedEmail = normEmail(entry.partner_email);
+    const sourceEmail = normEmail(entry.email);
+    if (!sourceEmail || (!expectedEmail && !allowReverse)) return null;
+    const byEmail = Boolean(expectedEmail);
+    const { data, error } = await client.from('event_registrations').select('*').eq('event_id', entry.event_id)
+        .ilike(byEmail ? 'email' : 'partner_email', literalRefundEmail(byEmail ? expectedEmail : sourceEmail))
+        .neq('status', 'withdrawn');
+    if (error) throw error;
+    const matches = ((data || []) as RegistrationRow[]).filter(candidate => {
+        const sameDivision = entry.division_id && candidate.division_id
+            ? entry.division_id === candidate.division_id : Boolean(entry.division && entry.division === candidate.division);
+        const originalOwner = normEmail(entry.registered_by);
+        const partnerOwner = normEmail(candidate.registered_by);
+        const reciprocal = normEmail(candidate.partner_email) === sourceEmail;
+        return candidate.id !== entry.id && sameDivision && (byEmail
+            ? normEmail(candidate.email) === expectedEmail && (reciprocal || partnerOwner === sourceEmail
+                || originalOwner === expectedEmail || Boolean(originalOwner && partnerOwner === originalOwner))
+            : reciprocal);
+    });
+    return matches.length === 1 ? matches[0] : null;
+}
+
 async function handleSwitchDivision(
     supabaseAdmin: SupabaseClient,
     opts: {
-        registrationId?: string;
+        registration: RegistrationRow;
         targetDivisionId?: string;
         topUpReference?: string;
         moveTeam?: boolean;
@@ -515,21 +541,10 @@ async function handleSwitchDivision(
         json: (status: number, body: unknown) => Response;
     },
 ): Promise<Response> {
-    const { registrationId, targetDivisionId, topUpReference, moveTeam = false, callerEmail, isAdmin, json } = opts;
-    if (!registrationId || !targetDivisionId) {
-        return json(400, { error: 'registration_id and target_division_id are required' });
-    }
-
-    const { data: reg } = await supabaseAdmin
-        .from('event_registrations')
-        .select('*')
-        .eq('id', registrationId)
-        .maybeSingle();
-    if (!reg) return json(404, { error: 'Registration not found' });
+    const { registration: reg, targetDivisionId, topUpReference, moveTeam = false, callerEmail, isAdmin, json } = opts;
+    if (!targetDivisionId) return json(400, { error: 'target_division_id is required' });
     if (reg.status === 'withdrawn') return json(400, { error: 'Registration already withdrawn' });
-
-    const isOwnerOrSelf = normEmail(reg.registered_by) === callerEmail || normEmail(reg.email) === callerEmail;
-    if (!isAdmin && !isOwnerOrSelf) return json(403, { error: 'Not authorized for this registration' });
+    if (!isAdmin && !ownsRefundRegistration(reg, callerEmail)) return json(403, { error: 'Not authorized for this registration' });
 
     const eventId = reg.event_id;
     const [{ data: event }, { data: divisions }] = await Promise.all([
@@ -569,25 +584,8 @@ async function handleSwitchDivision(
     // and mark paid entries pending when the new division costs more. This
     // avoids charging one team member's card for another player's difference.
     if (moveTeam) {
-        const { data: sourceRows } = await supabaseAdmin
-            .from('event_registrations')
-            .select('*')
-            .eq('event_id', eventId)
-            .eq('division', reg.division)
-            .neq('status', 'withdrawn');
-        const partnerReg = (sourceRows || []).find((row) =>
-            row.id !== reg.id
-            && (
-                (reg.partner_email && normEmail(row.email) === normEmail(reg.partner_email))
-                || normEmail(row.partner_email) === normEmail(reg.email)
-            )
-        );
-        if (!partnerReg) return json(404, { error: 'Team mate registration not found' });
-        const pairIsLinked = normEmail(partnerReg.partner_email) === normEmail(reg.email)
-            || normEmail(partnerReg.registered_by) === normEmail(reg.email)
-            || normEmail(reg.registered_by) === normEmail(partnerReg.email);
-        if (!pairIsLinked) return json(400, { error: 'The selected registrations are not a linked team' });
-
+        const partnerReg = await findLinkedRefundPartner(supabaseAdmin, reg, true);
+        if (!partnerReg) return json(400, { error: 'The selected registrations are not a linked team' });
         const moving = [reg as RegistrationRow, partnerReg as RegistrationRow];
         for (const player of moving) {
             const { data: targetRows } = await supabaseAdmin
@@ -681,9 +679,18 @@ async function handleSwitchDivision(
     // ---- Higher fee: verify the top-up payment before moving ----
     if (delta > 0 && reg.payment_status === 'paid') {
         if (!topUpReference) return json(402, { error: 'top_up_required', delta, message: 'A top-up payment is required for this division.' });
-        const { data: topPay } = await supabaseAdmin.from('payments').select('*').eq('reference', topUpReference).maybeSingle();
-        if (!topPay || Number(topPay.event_id) !== Number(eventId)) return json(404, { error: 'Top-up payment not found' });
-        if (parseMeta(topPay.metadata).source !== 'division_switch') return json(400, { error: 'Invalid top-up payment' });
+        const { data: topPay, error: topUpError } = await supabaseAdmin.from('payments').select('*')
+            .eq('reference', topUpReference).eq('event_id', eventId).maybeSingle();
+        if (topUpError) throw topUpError;
+        if (!topPay) return json(404, { error: 'Top-up payment not found' });
+        const metadata = parseMeta(topPay.metadata);
+        const matchingSource = metadata.from_division_id ? metadata.from_division_id === currentDiv?.id : metadata.from_division === reg.division;
+        if (metadata.source !== 'division_switch' || metadata.registration_id !== reg.id
+            || metadata.target_division_id !== targetDiv.id || !matchingSource
+            || normEmail(metadata.registrant_email || metadata.email) !== normEmail(reg.email)
+            || !['pending', 'processing', 'success'].includes(topPay.status)) {
+            return json(400, { error: 'The saved top-up belongs to a different registration or division.' });
+        }
 
         if (topPay.status !== 'success') {
             const { secrets, configError } = resolvePaystackVerifySecrets(topPay);
@@ -691,7 +698,7 @@ async function handleSwitchDivision(
             const verification = await verifyPaystackReference(topUpReference, secrets);
             if (!verification.ok) return json(200, { switched: false, retry: true, error: 'Top-up not verified', status: verification.status });
             assertPaystackPayment(topPay, verification.data);
-            await supabaseAdmin.from('payments').update({ status: 'success' }).eq('id', topPay.id);
+            await supabaseAdmin.from('payments').update({ status: 'success' }).eq('id', topPay.id).eq('event_id', eventId);
         }
         if (Number(topPay.amount) + 0.01 < delta) return json(400, { error: 'Top-up amount is less than the fee difference' });
         chargedRands = Number(topPay.amount);
@@ -807,7 +814,7 @@ serve(async (req: Request) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
 
-    let divisionFailureContext: { client: SupabaseClient; id: string } | null = null;
+    let divisionFailureContext: { client: SupabaseClient; id: string; eventId: number } | null = null;
     try {
         const authHeader = req.headers.get('Authorization');
         if (!authHeader) return json(401, { error: 'Unauthorized' });
@@ -847,7 +854,6 @@ serve(async (req: Request) => {
         const retryAction = action === 'retry_failed' || review;
         const servicesOwnRetry = retryAction && !!serviceKey && bearer === serviceKey;
         let callerEmail = 'service-role';
-        let isAdmin = false;
         let supabaseUser: SupabaseClient | undefined;
         if (!servicesOwnRetry) {
             supabaseUser = createClient(supabaseUrl, anonKey, {
@@ -856,7 +862,6 @@ serve(async (req: Request) => {
             const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
             if (userError || !user?.email) return json(401, { error: 'Unauthorized' });
             callerEmail = normEmail(user.email);
-            if (!retryAction) isAdmin = await resolveIsAdmin(supabaseAdmin, user.email);
         }
         if (retryAction) {
             if (!await canReviewEventRefund({ bearer, serviceKey, actor: supabaseUser, email: callerEmail })) {
@@ -868,19 +873,25 @@ serve(async (req: Request) => {
             });
         }
 
-        // ----- Load the target registration(s) -----
+        if (!supabaseUser) return json(401, { error: 'Unauthorized' });
+        const actor = await verifyRefundActor(supabaseUser, callerEmail);
+        if (!actor) return json(403, { error: 'An active account is required.' });
+
+        // Resolve scope from the selected event or saved registration before any
+        // privileged operation. A sidebar record cannot authorize money movement.
         let targets: RegistrationRow[] = [];
-        let eventId: string | number | undefined;
+        let eventId: number;
+        let isAdmin = false;
+        let targetRegistration: RegistrationRow | null = null;
+        const requestedEventId = refundEventId(event_id);
+        if (event_id != null && requestedEventId === null) return json(400, { error: 'Choose a valid event.' });
 
         let cancelledDivision: { id: string; name: string } | null = null;
         if (action === 'cancel_event' || action === 'cancel_division') {
-            if (!event_id) return json(400, { error: 'event_id required for cancel_event' });
-            eventId = event_id;
-            if (!isAdmin) {
-                const canManage = await resolveCanManageEvent(supabaseAdmin, callerEmail, eventId);
-                if (!canManage) return json(403, { error: 'You do not have permission to cancel this event' });
-                isAdmin = true;
-            }
+            if (requestedEventId === null) return json(400, { error: 'event_id required for cancellation' });
+            eventId = requestedEventId;
+            isAdmin = await canManageRefundEvent(supabaseUser, actor, eventId);
+            if (!isAdmin) return json(403, { error: 'Current event management access is required.' });
             if (action === 'cancel_division') {
                 if (!division_id) return json(400, { error: 'division_id required' });
                 // Claim once before refunding: concurrent clicks cannot issue duplicate refunds.
@@ -899,7 +910,7 @@ serve(async (req: Request) => {
                 if (claimError) throw claimError;
                 if (!claimed) return json(409, { error: 'Division cancellation is already underway' });
                 cancelledDivision = claimed;
-                divisionFailureContext = { client: supabaseAdmin, id: claimed.id };
+                divisionFailureContext = { client: supabaseAdmin, id: claimed.id, eventId };
             }
             const { data, error: registrationsError } = await supabaseAdmin
                 .from('event_registrations')
@@ -909,72 +920,53 @@ serve(async (req: Request) => {
             if (registrationsError) throw registrationsError;
             targets = (cancelledDivision ? (data || []).filter((reg) => belongsToDivision(reg, cancelledDivision)) : (data || [])) as RegistrationRow[];
         } else if (action === 'withdraw_all') {
-            if (!event_id) return json(400, { error: 'event_id required for withdraw_all' });
-            eventId = event_id;
-            const { data } = await supabaseAdmin
-                .from('event_registrations')
-                .select('*')
-                .eq('event_id', event_id)
-                .neq('status', 'withdrawn');
-            // The caller's own active registrations (rows they own or are the player on).
-            targets = (data || []).filter(
-                (r) => normEmail(r.registered_by) === callerEmail || normEmail(r.email) === callerEmail,
-            ) as RegistrationRow[];
+            if (requestedEventId === null) return json(400, { error: 'event_id required for withdraw_all' });
+            eventId = requestedEventId;
+            isAdmin = await canManageRefundEvent(supabaseUser, actor, eventId);
+            const { data, error } = await supabaseAdmin.from('event_registrations')
+                .select('*').eq('event_id', eventId).neq('status', 'withdrawn');
+            if (error) throw error;
+            targets = ((data || []) as RegistrationRow[]).filter(reg => ownsRefundRegistration(reg, actor.email));
         } else {
             if (!registration_id) return json(400, { error: 'registration_id required' });
-            const { data: reg } = await supabaseAdmin
-                .from('event_registrations')
-                .select('*')
-                .eq('id', registration_id)
-                .maybeSingle();
-            if (!reg) return json(404, { error: 'Registration not found' });
-            eventId = reg.event_id;
-
+            const { data, error } = await supabaseAdmin.from('event_registrations')
+                .select('*').eq('id', registration_id).maybeSingle();
+            if (error) throw error;
+            const reg = data as RegistrationRow | null;
+            const storedEventId = refundEventId(reg?.event_id);
+            if (!reg || storedEventId === null || (requestedEventId !== null && requestedEventId !== storedEventId)) {
+                return json(404, { error: 'Registration not found in this event' });
+            }
+            eventId = storedEventId;
+            targetRegistration = reg;
+            isAdmin = await canManageRefundEvent(supabaseUser, actor, eventId);
             if (action === 'remove_partner') {
-                // Caller must own the booking; the target is the partner's active row.
-                if (!isAdmin && normEmail(reg.registered_by) !== callerEmail) {
-                    return json(403, { error: 'Only the booking owner can remove a partner' });
+                if (!isAdmin && normEmail(reg.registered_by) !== actor.email) {
+                    return json(403, { error: 'Only the booking owner or event manager can remove a partner' });
                 }
-                if (!reg.partner_email) return json(400, { error: 'No partner on this registration' });
-                const { data: partnerReg } = await supabaseAdmin
-                    .from('event_registrations')
-                    .select('*')
-                    .eq('event_id', reg.event_id)
-                    .eq('division', reg.division)
-                    .ilike('email', reg.partner_email)
-                    .neq('status', 'withdrawn')
-                    .maybeSingle();
-                if (!partnerReg) return json(404, { error: 'Partner registration not found' });
-                targets = [partnerReg as RegistrationRow];
+                const partner = await findLinkedRefundPartner(supabaseAdmin, reg);
+                if (!partner) return json(404, { error: 'Linked partner registration not found in this division' });
+                targets = [partner];
+            } else if (action === 'admin_remove') {
+                if (!isAdmin) return json(403, { error: 'Current event management access is required.' });
+                targets = [reg];
             } else {
-                targets = [reg as RegistrationRow];
+                if (!isAdmin && !ownsRefundRegistration(reg, actor.email)) {
+                    return json(403, { error: 'Not authorized for this registration' });
+                }
+                targets = [reg];
             }
         }
 
-        // Org owners/admins managing their own event (not in admin_sidebar_permissions)
-        // need admin_remove + cash/no-refund flags for ManualEventRegistrations.
-        if (action === 'admin_remove' && !isAdmin) {
-            const canManage = await resolveCanManageEvent(supabaseAdmin, callerEmail, eventId);
-            if (!canManage) return json(403, { error: 'Admin only' });
-            isAdmin = true;
-        }
+        const skipPaystack = skip_paystack === true && isAdmin && action === 'admin_remove';
+        const noRefund = no_refund === true && isAdmin && action === 'admin_remove';
 
-        // skip_paystack and no_refund are admin / event-manager only. [CORRECTION 4]
-        const skipPaystack = !!skip_paystack && isAdmin && action === 'admin_remove';
-        const noRefund = !!no_refund && isAdmin && action === 'admin_remove';
-
-        // ===== Division switch (move the entry instead of refunding) =====
-        if (action === 'switch_division') {
-            // Org managers may move any entry on their event; players still use
-            // the existing owner/self path inside handleSwitchDivision.
-            if (!isAdmin) {
-                isAdmin = await resolveCanManageEvent(supabaseAdmin, callerEmail, eventId);
-            }
+        if (action === 'switch_division' && targetRegistration) {
             return await handleSwitchDivision(supabaseAdmin, {
-                registrationId: registration_id,
+                registration: targetRegistration,
                 targetDivisionId: target_division_id,
                 topUpReference: top_up_reference,
-                moveTeam: move_team,
+                moveTeam: move_team === true,
                 callerEmail,
                 isAdmin,
                 json,
@@ -1072,14 +1064,7 @@ serve(async (req: Request) => {
             if ((action === 'withdraw' || action === 'withdraw_all')
                 && normEmail(reg.registered_by) === callerEmail
                 && reg.partner_email) {
-                const { data: partnerReg } = await supabaseAdmin
-                    .from('event_registrations')
-                    .select('*')
-                    .eq('event_id', reg.event_id)
-                    .eq('division', reg.division)
-                    .ilike('email', reg.partner_email)
-                    .neq('status', 'withdrawn')
-                    .maybeSingle();
+                const partnerReg = await findLinkedRefundPartner(supabaseAdmin, reg);
                 if (partnerReg) {
                     await transferBookingOwnership(supabaseAdmin, reg, partnerReg as RegistrationRow);
                 }
@@ -1163,7 +1148,7 @@ serve(async (req: Request) => {
         if (cancelledDivision) {
             const refundStatus = cancellationRefundStatus(results);
             const { error } = await supabaseAdmin.from('tournament_divisions')
-                .update({ cancellation_refund_status: refundStatus }).eq('id', cancelledDivision.id);
+                .update({ cancellation_refund_status: refundStatus }).eq('id', cancelledDivision.id).eq('event_id', eventId);
             if (error) throw error;
             return json(200, { processed: true, cancelled: true, division_id: cancelledDivision.id,
                 refund_status: refundStatus, registrations_processed: results.length,
@@ -1207,7 +1192,7 @@ serve(async (req: Request) => {
     } catch (error) {
         if (divisionFailureContext) {
             await divisionFailureContext.client.from('tournament_divisions')
-                .update({ cancellation_refund_status: 'needs_attention' }).eq('id', divisionFailureContext.id);
+                .update({ cancellation_refund_status: 'needs_attention' }).eq('id', divisionFailureContext.id).eq('event_id', divisionFailureContext.eventId);
         }
         console.error('paystack-refund error:', error);
         return json(500, { error: (error as Error).message });

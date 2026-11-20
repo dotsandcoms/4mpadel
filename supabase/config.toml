@@ -33,7 +33,8 @@ entrypoint = "./functions/confirm-manual-payment/index.ts"
 
 [functions.paystack-refund]
 enabled = true
-verify_jwt = true
+# Match the hosted gateway and verify current account and event access in the handler.
+verify_jwt = false
 entrypoint = "./functions/paystack-refund/index.ts"
 
 [functions.send-email]
