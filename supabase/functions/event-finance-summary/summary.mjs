@@ -42,9 +42,44 @@ function getPaymentMetadataLayers(metadata = {}) {
   const inner = normalizePaymentMetadata(top.original_trx?.metadata);
   return { top, inner };
 }
+var verifiedEntryTransfer = /* @__PURE__ */ Symbol("verified entry transfer");
 function paymentEntryCoversFor(metadata = {}) {
   const { top, inner } = getPaymentMetadataLayers(metadata);
-  return [...top.covers || [], ...inner.covers || []];
+  const topCovers = Array.isArray(top.covers) ? top.covers : [];
+  const innerCovers = Array.isArray(inner.covers) ? inner.covers : [];
+  const transfers = Array.isArray(top.verified_entry_transfers) ? top.verified_entry_transfers : [];
+  if (!transfers.length) return [...topCovers, ...innerCovers];
+  const byPosition = new Map(transfers.map((transfer) => [transfer.cover_position, transfer]));
+  const originals = [];
+  let entryPosition = 0;
+  const projected = topCovers.map((cover) => {
+    if (cover?.type !== "entry") return cover;
+    const transfer = byPosition.get(++entryPosition);
+    if (!transfer?.registration_id || !transfer.event_id || !norm(transfer.email) || cover.division_id && String(cover.division_id) !== String(transfer.division_id) || !cover.division_id && cover.division !== transfer.division) return cover;
+    originals.push(cover);
+    return {
+      ...cover,
+      email: transfer.email,
+      registration_id: transfer.registration_id,
+      division: transfer.division,
+      division_id: transfer.division_id,
+      [verifiedEntryTransfer]: { ...transfer, originalEmail: cover.email }
+    };
+  });
+  const stillOriginal = (cover) => !originals.some((original) => cover?.type === "entry" && norm(cover.email) === norm(original.email) && (cover.division_id && original.division_id ? cover.division_id === original.division_id : cover.division === original.division) && (!cover.registration_id || !original.registration_id || cover.registration_id === original.registration_id));
+  return [...projected, ...innerCovers.filter(stillOriginal)];
+}
+function verifiedCoverMatches(cover, reg) {
+  const transfer = cover?.[verifiedEntryTransfer];
+  return Boolean(transfer && reg?.id && reg.event_id != null && norm(reg.email) === norm(transfer.email) && String(reg.id) === String(transfer.registration_id) && String(reg.event_id) === String(transfer.event_id) && (transfer.division_id ? String(reg.division_id) === String(transfer.division_id) : (reg.division || reg.class_name) === transfer.division));
+}
+function hasVerifiedEntryTransfer(payment, reg) {
+  return paymentEntryCoversFor(payment?.metadata).some((cover) => verifiedCoverMatches(cover, reg));
+}
+function directlyMatchesRegistration(meta, reg) {
+  if (meta.registration_id !== reg.id) return false;
+  const transfers = Array.isArray(meta.verified_entry_transfers) ? meta.verified_entry_transfers : [];
+  return !transfers.some((transfer) => transfer.registration_id === reg.id) || paymentEntryCoversFor(meta).some((cover) => verifiedCoverMatches(cover, reg));
 }
 function paymentEmailsFor(metadata = {}) {
   const { top, inner } = getPaymentMetadataLayers(metadata);
@@ -75,6 +110,7 @@ var paymentRegistrationRows = (meta = {}) => {
 };
 function entryCoverMatchesRegistration(cover, reg, meta = {}) {
   if (!cover || cover.type !== "entry" || !reg) return false;
+  if (cover[verifiedEntryTransfer]) return verifiedCoverMatches(cover, reg);
   const email = norm(reg.email);
   const division = reg.division || reg.class_name;
   if (!email) return false;
@@ -94,7 +130,7 @@ function paymentMatchesRegistration(payment, reg) {
   const email = norm(reg.email);
   const division = reg.division || reg.class_name;
   if (!email) return false;
-  if (meta.registration_id === reg.id) return true;
+  if (directlyMatchesRegistration(meta, reg)) return true;
   if ((meta.source === "manual_event_admin" || meta.source === "admin_add_player") && norm(meta.email) === email && (!meta.division || !division || meta.division === division)) {
     return true;
   }
@@ -115,9 +151,10 @@ function paymentHasEntryCoverForRegistration(payment, reg, opts = {}) {
   const email = norm(reg.email);
   const division = reg.division || reg.class_name;
   if (!email) return false;
-  if (meta.registration_id === reg.id) return true;
+  if (directlyMatchesRegistration(meta, reg)) return true;
   return paymentEntryCoversFor(meta).some((cover) => {
     if (cover.type !== "entry") return false;
+    if (cover[verifiedEntryTransfer]) return verifiedCoverMatches(cover, reg);
     if (requireDivision) {
       if (!division) return false;
       return entryCoverMatchesRegistration(cover, reg, meta) && cover.division === division;
@@ -146,8 +183,11 @@ function getRegistrationEntryFeePaid(payment, reg, fallbackFee = 0) {
   if (isLicensePaymentRow(paymentWithMeta)) return fallback;
   const email = norm(reg.email);
   const division = reg.division || reg.class_name || "";
-  const fullName = String(reg.full_name || "").trim().toLowerCase();
   const entryCovers = paymentEntryCoversFor(meta).filter((cover) => cover.type === "entry");
+  const transferred = entryCovers.find((cover) => verifiedCoverMatches(cover, reg))?.[verifiedEntryTransfer];
+  const snapshot = transferred && paymentRegistrationRows(meta).find((row) => norm(row.email) === norm(transferred.originalEmail) && row.division === transferred.division);
+  const fullName = norm(snapshot?.full_name || reg.full_name);
+  const pricedDivision = transferred?.division || division;
   const paymentAmount = Number(payment.amount || 0);
   if (Array.isArray(meta.line_items) && meta.line_items.length > 0) {
     const entryItems = meta.line_items.filter((item) => !isLicenseLineItem(item));
@@ -158,24 +198,24 @@ function getRegistrationEntryFeePaid(payment, reg, fallbackFee = 0) {
       if (!(fullName === namePart || fullName.startsWith(namePart) || namePart.startsWith(fullName))) {
         return false;
       }
-      return !division || label.includes(division);
+      return !pricedDivision || label.includes(pricedDivision);
     });
     if (nameMatch?.amount != null) return Number(nameMatch.amount) || 0;
     if (entryItems.length === 1 && entryItems[0].amount != null) {
-      const coversSelf = meta.registration_id === reg.id || entryCovers.some((c) => norm(c.email) === email);
+      const coversSelf = directlyMatchesRegistration(meta, reg) || entryCovers.some((c) => c[verifiedEntryTransfer] ? verifiedCoverMatches(c, reg) : norm(c.email) === email);
       if (coversSelf || entryCovers.length <= 1) {
         return Number(entryItems[0].amount) || 0;
       }
     }
     if (entryItems.length > 1 && email) {
-      const coverIndex = entryCovers.findIndex((c) => norm(c.email) === email && (!division || !c.division || c.division === division));
+      const coverIndex = entryCovers.findIndex((c) => c[verifiedEntryTransfer] ? verifiedCoverMatches(c, reg) : norm(c.email) === email && (!division || !c.division || c.division === division));
       if (coverIndex >= 0 && entryItems[coverIndex]?.amount != null) {
         return Number(entryItems[coverIndex].amount) || 0;
       }
     }
   }
-  if (division && meta.division_entry_fees) {
-    const snapped = meta.division_entry_fees[division];
+  if (pricedDivision && meta.division_entry_fees) {
+    const snapped = meta.division_entry_fees[pricedDivision];
     if (snapped != null && snapped !== "") return Number(snapped) || 0;
   }
   if (paymentAmount > 0) {
@@ -201,6 +241,7 @@ function findPaystackEntryViaLicenseSplit(payments, reg) {
       return parent;
     }
     const meta = normalizePaymentMetadata(parent.metadata);
+    if (Array.isArray(meta.verified_entry_transfers) && meta.verified_entry_transfers.length) continue;
     const named = paymentRegistrationRows(meta).some(
       (row) => norm(row?.email) === email || namesMatch(row?.full_name, reg.full_name)
     );
@@ -335,10 +376,14 @@ function findFinancePayment(payments, reg, refunds = []) {
   }
   const candidates = (payments || []).filter((p) => {
     const meta = normalizePaymentMetadata(p.metadata);
-    return p.status === "success" && !isLicensePaymentRow(p) && (!meta.registration_id || meta.registration_id === reg.id) && !(Number(meta.unallocated_credit_amount) > 0 && Number(meta.unallocated_credit_amount) >= Number(p.amount)) && !fullyRefundedForAnotherRegistration(p, reg, refunds);
+    return p.status === "success" && !isLicensePaymentRow(p) && (!meta.registration_id || meta.registration_id === reg.id || hasVerifiedEntryTransfer(p, reg)) && !(Number(meta.unallocated_credit_amount) > 0 && Number(meta.unallocated_credit_amount) >= Number(p.amount)) && !fullyRefundedForAnotherRegistration(p, reg, refunds);
   });
   const latest = (rows) => [...rows].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0] || null;
-  const direct = latest(candidates.filter((p) => normalizePaymentMetadata(p.metadata).registration_id === reg.id));
+  const direct = latest(candidates.filter((p) => {
+    const meta = normalizePaymentMetadata(p.metadata);
+    const hasAliasForRegistration = Array.isArray(meta.verified_entry_transfers) && meta.verified_entry_transfers.some((transfer) => transfer.registration_id === reg.id);
+    return hasVerifiedEntryTransfer(p, reg) || meta.registration_id === reg.id && !hasAliasForRegistration;
+  }));
   if (direct) return direct;
   const strict = latest(candidates.filter((p) => paymentStrictlyCoversRegistration(p, reg)));
   if (strict) return strict;
@@ -557,7 +602,7 @@ function calculateEventSettlement({ event = {}, registrations = [], divisions = 
     const onlyEntryForEmail = invoices.filter((i) => norm2(i.registration.email) === norm2(reg.email)).length === 1;
     const matches = receiptRows.filter((r) => r.claims.some((p) => {
       const registrationId = normalizePaymentMetadata(p.metadata).registration_id;
-      if (registrationId && registrationId !== reg.id) return false;
+      if (registrationId && registrationId !== reg.id && !hasVerifiedEntryTransfer(p, reg)) return false;
       return paymentMatchesRegistration(p, reg) || onlyEntryForEmail && paymentHasEntryCoverForRegistration(p, reg, { requireDivision: false });
     })).sort((a, b) => {
       const direct = (receipt) => Number(receipt.claims.some((p) => normalizePaymentMetadata(p.metadata).registration_id === reg.id));
