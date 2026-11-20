@@ -88,7 +88,7 @@ export default function SignInScreen() {
   const [passwordTouched, setPasswordTouched] = useState(false);
   const [confirmTouched, setConfirmTouched] = useState(false);
   const [attempted, setAttempted] = useState(false);
-  const [emailOpen, setEmailOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(intent === 'existing-profile');
   const [appleReady, setAppleReady] = useState(false);
   const [toast, setToast] = useState<{ id: number; message: string; kind: ToastKind } | null>(
     null
@@ -104,6 +104,13 @@ export default function SignInScreen() {
   useEffect(() => {
     isAppleAvailable().then(setAppleReady);
   }, []);
+
+  useEffect(() => {
+    if (intent === 'existing-profile') {
+      setMode('signin');
+      setEmailOpen(true);
+    }
+  }, [intent]);
 
   /**
    * One handler for all three providers. A cancelled sheet is a normal user

@@ -54,7 +54,7 @@ import {
   SA_REGIONS,
 } from '@/lib/registration';
 import { supabase } from '@/lib/supabase';
-import { birthDateError, playtomicDetailsError, type PlaytomicExtraction } from '@/lib/profile-details';
+import { birthDateError, formatBirthDateInput, playtomicDetailsError, type PlaytomicExtraction } from '@/lib/profile-details';
 import { PlaytomicProofField } from '@/components/playtomic-proof-field';
 import { FieldColors, profileColors as brand } from '@/components/field-colors';
 
@@ -62,6 +62,7 @@ type Errors = Partial<Record<string, string>>;
 
 const CONTROL_H = 52;
 const CONTROL_R = 14;
+const APPLE_RELAY_DUPLICATE_ERROR = 'Use your existing 4M Padel sign-in or contact support for help setting up your profile.';
 
 function filled(value: string) {
   return value.trim().length > 0;
@@ -200,7 +201,7 @@ export default function CompleteProfileScreen() {
         setFirstName((v) => v || saved?.firstName || names.firstName);
         setLastName((v) => v || saved?.lastName || names.lastName);
         if (saved) {
-          setDateOfBirth((v) => v || saved.dateOfBirth || '');
+          setDateOfBirth((v) => v || formatBirthDateInput(saved.dateOfBirth ?? ''));
           setPlaytomicLevel((v) => v || saved.playtomicLevel || '');
           setPlaytomicProofPath((v) => v || saved.playtomicProofPath || '');
           setPlaytomicNoProfile(saved.playtomicNoProfile === true);
@@ -352,9 +353,11 @@ export default function CompleteProfileScreen() {
     if (busy || savingStep || proofSaving) return;
     setBusy(true);
     try {
+      await saveProfileDraft(draft());
       await signOut();
+      router.replace({ pathname: '/(auth)/sign-in', params: { intent: 'existing-profile' } });
     } catch {
-      flash('Unable to sign out. Please try again.');
+      flash('Unable to switch accounts. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -381,13 +384,15 @@ export default function CompleteProfileScreen() {
     } catch (e: any) {
       const msg = e?.message ?? 'Unable to save your profile. Try again.';
       setFormError(msg);
-      flash(msg);
+      if (!appleRelay || msg !== APPLE_RELAY_DUPLICATE_ERROR) flash(msg);
     } finally {
       setBusy(false);
     }
   }
 
   const saving = savingStep || busy || proofSaving;
+  const appleRelay = email.toLowerCase().endsWith('@privaterelay.appleid.com');
+  const appleProfileConflict = appleRelay && formError === APPLE_RELAY_DUPLICATE_ERROR;
   const ctaMuted = step === 2 && !accepted;
   const ctaLabel = saving
     ? 'Saving details…'
@@ -463,7 +468,7 @@ export default function CompleteProfileScreen() {
           keyboardDismissMode="interactive"
           automaticallyAdjustKeyboardInsets
           contentContainerStyle={{ paddingHorizontal: 28, paddingBottom: 16 }}>
-          {email.toLowerCase().endsWith('@privaterelay.appleid.com') && (
+          {appleRelay && !appleProfileConflict && (
             <Pressable
               accessibilityRole="button"
               accessibilityHint="Sign out and return to sign in"
@@ -529,7 +534,7 @@ export default function CompleteProfileScreen() {
                     />
                   </View>
                 </View>
-                <LiquidField label="Date of birth (required, YYYY-MM-DD)" value={dateOfBirth} placeholder="YYYY-MM-DD" error={errors.dateOfBirth} invalid={!!errors.dateOfBirth} valid={!!dateOfBirth && !birthDateError(dateOfBirth)} onChangeText={value => { setDateOfBirth(value); clearError('dateOfBirth'); }} autoComplete="birthdate-full" autoCapitalize="none" maxLength={10} />
+                <LiquidField label="Date of birth (required, YYYY-MM-DD)" value={dateOfBirth} placeholder="YYYY-MM-DD" error={errors.dateOfBirth} invalid={!!errors.dateOfBirth} valid={!!dateOfBirth && !birthDateError(dateOfBirth)} onChangeText={value => { setDateOfBirth(formatBirthDateInput(value)); clearError('dateOfBirth'); }} autoComplete="birthdate-full" keyboardType="number-pad" />
                 <LiquidField
                   ref={idRef}
                   label="ID / passport (optional)"
@@ -796,7 +801,7 @@ export default function CompleteProfileScreen() {
             )}
           </StepSlide>
 
-          {formError ? (
+          {formError && !appleProfileConflict ? (
             <Text accessibilityRole="alert" className="mt-3 text-[14px] leading-5 text-court-danger">
               {formError}
             </Text>
@@ -804,6 +809,25 @@ export default function CompleteProfileScreen() {
         </ScrollView>
 
         <View className="px-7" style={{ paddingTop: 8, paddingBottom: insets.bottom + 16 }}>
+          {appleProfileConflict ? (
+            <View className="mb-3 rounded-xl border border-court-edge px-4 py-3">
+              <Text accessibilityRole="alert" className="text-[14px] leading-5 text-court-ink">
+                A profile already uses this name. Use your usual sign-in to open it.
+              </Text>
+              <Pressable accessibilityRole="button" disabled={saving} onPress={useExistingAccount} className="min-h-11 justify-center">
+                <Text style={{ color: brand.accent, fontWeight: '700' }}>Use existing sign-in</Text>
+              </Pressable>
+              {signupUserId && Platform.OS === 'ios' ? (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={saving}
+                  onPress={() => router.push({ pathname: '/delete-account', params: { accountId: signupUserId } })}
+                  className="min-h-11 justify-center">
+                  <Text className="text-court-muted">Remove this unfinished Apple sign-in so you can link Apple to an existing profile</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
           <PressableScale
             disabled={saving || ctaMuted}
             onPress={step === 1 ? goNext : finish}

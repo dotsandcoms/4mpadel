@@ -19,8 +19,8 @@ const optionalFields = ['ID / passport', 'Mobile number', 'Gender', 'Nationality
 const optionalKeys = ['p_id_number', 'p_contact', 'p_gender', 'p_nationality', 'p_region'];
 
 // Exercise the screen's actual controls and profile payload without creating live accounts.
-async function screen({ os = 'ios', saved = null, edit = false, playerOverrides = {}, birthDate = '2000-02-29' } = {}) {
-  const hooks = [], effects = [], paths = [], requests = [], updates = [], drafts = [];
+async function screen({ os = 'ios', saved = null, edit = false, playerOverrides = {}, birthDate = '2000-02-29', email = 'player@example.com', profileSaveError = null } = {}) {
+  const hooks = [], effects = [], paths = [], requests = [], updates = [], drafts = [], authActions = [];
   let cursor = 0;
   const react = {
     useState(initial) {
@@ -39,8 +39,12 @@ async function screen({ os = 'ios', saved = null, edit = false, playerOverrides 
     },
   };
   const supabase = {
-    auth: { getUser: async () => ({ data: { user: { email: 'player@example.com', user_metadata: {} } } }) },
-    rpc: async (name, payload) => { requests.push([name, payload]); return { error: null, data: name === 'get_player_profile_details' ? (birthDate ? { date_of_birth: birthDate, playtomic_level: 3.25,playtomic_proof_path:'1/a.jpg' } : null) : ['save_player_profile_details_v3', 'save_player_profile_details_v4'].includes(name) ? payload.p_details : 42 }; },
+    auth: { getUser: async () => ({ data: { user: { id: 'onboarding-account', email, user_metadata: {} } } }) },
+    rpc: async (name, payload) => {
+      requests.push([name, payload]);
+      if (name === 'create_player_profile_with_details_v3' && profileSaveError) return { error: profileSaveError };
+      return { error: null, data: name === 'get_player_profile_details' ? (birthDate ? { date_of_birth: birthDate, playtomic_level: 3.25,playtomic_proof_path:'1/a.jpg' } : null) : ['save_player_profile_details_v3', 'save_player_profile_details_v4'].includes(name) ? payload.p_details : 42 };
+    },
   };
   const profileDetails = load('src/lib/profile-details.ts', { './supabase': { supabase } });
   const profile = load('src/lib/profile.ts', {
@@ -62,7 +66,7 @@ async function screen({ os = 'ios', saved = null, edit = false, playerOverrides 
     'react-native': { Platform: { OS: os } },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
     'expo-router': {
-      useRouter: () => ({ replace: path => paths.push(path), canGoBack: () => true, back: () => paths.push('back') }),
+      useRouter: () => ({ push: path => paths.push(path), replace: path => paths.push(path), canGoBack: () => true, back: () => paths.push('back') }),
       useFocusEffect: fn => react.useEffect(fn),
     },
     '@/components/field-colors': { FieldColors: { Provider: 'Provider' }, profileColors: {} },
@@ -72,6 +76,7 @@ async function screen({ os = 'ios', saved = null, edit = false, playerOverrides 
     '@/lib/player-preferences': preferences,
     '@/lib/sponsors': sponsors,
     '@/lib/supabase': { supabase },
+    '@/lib/auth': { signOut: async () => authActions.push('signed out') },
     '@/lib/analytics': { trackEvent: async () => {} },
     '@/lib/profile-details': profileDetails,
     '@/lib/home-feed-cache': { homeFeedCache: { invalidate() {} } },
@@ -106,7 +111,9 @@ async function screen({ os = 'ios', saved = null, edit = false, playerOverrides 
     (props.onChangeText ?? props.onChange)(value);
   }
   async function press(label) {
-    const node = find(render(), props => props.accessibilityLabel === label);
+    const node = find(render(), props => props.accessibilityLabel === label || (
+      props.accessibilityRole === 'button' && props.children?.props?.children === label
+    ));
     assert.ok(node, `Missing control: ${label}`);
     assert.ok(!node.props.disabled, `Disabled control: ${label}`);
     await node.props.onPress();
@@ -114,7 +121,7 @@ async function screen({ os = 'ios', saved = null, edit = false, playerOverrides 
   render();
   effects.splice(0).forEach(fn => fn());
   await new Promise(resolve => setImmediate(resolve));
-  return { render, find, field, change, press, paths, requests, updates, drafts };
+  return { render, find, field, change, press, paths, requests, updates, drafts, authActions };
 }
 
 for (const os of ['ios', 'android']) {
@@ -123,7 +130,7 @@ for (const os of ['ios', 'android']) {
     for (const label of optionalFields) assert.equal(h.field(`${label} (optional)`).value, '');
     h.change('First name', 'Test');
     h.change('Surname', 'Player');
-    h.change('Date of birth (required, YYYY-MM-DD)', '2000-02-29');
+    h.change('Date of birth (required, YYYY-MM-DD)', '20000229');
     await h.press('Continue to padel profile');
     h.change('Playtomic Level (required)', '3.25');
     h.find(h.render(), props => typeof props.onLevelDetected === 'function').props.onChange('signup/fixture/a.jpg');
@@ -143,6 +150,48 @@ for (const os of ['ios', 'android']) {
     assert.equal(payload.p_profile.p_email, 'player@example.com');
   });
 }
+
+test('birth date formats during entry, backspace and draft restore', async () => {
+  const label = 'Date of birth (required, YYYY-MM-DD)';
+  const h = await screen({ saved: { dateOfBirth: '200002' } });
+  assert.equal(h.field(label).keyboardType, 'number-pad');
+  assert.equal(h.field(label).value, '2000-02');
+  for (const [input, expected] of [
+    ['2000-022', '2000-02-2'],
+    ['2000-02-', '2000-02'],
+    ['2000-0', '2000-0'],
+    ['2000-', '2000'],
+    ['', ''],
+    ['20000229', '2000-02-29'],
+  ]) {
+    h.change(label, input);
+    assert.equal(h.field(label).value, expected);
+  }
+});
+
+test('a relay profile conflict offers recovery without creating another profile', async () => {
+  const h = await screen({
+    email: 'example@privaterelay.appleid.com',
+    saved: {
+      firstName: 'Test', lastName: 'Player', dateOfBirth: '2000-02-29', playtomicNoProfile: true,
+      category: "Men's Intermediate", clubId: 'club-1', bio: 'I enjoy padel.', racketBrand: 'Adidas', accepted: true,
+    },
+    profileSaveError: { code: 'P0001', message: 'Use your existing 4M Padel sign-in or contact support for help setting up your profile.' },
+  });
+  await h.press('Continue to padel profile');
+  await h.press('Save profile');
+  assert.equal(h.requests.length, 1);
+  assert.deepEqual(h.paths, []);
+  await h.press('Remove this unfinished Apple sign-in so you can link Apple to an existing profile');
+  assert.equal(h.paths[0].pathname, '/delete-account');
+  assert.equal(h.paths[0].params.accountId, 'onboarding-account');
+  assert.deepEqual(h.authActions, []);
+  await h.press('Use existing sign-in');
+  assert.equal(h.paths[1].pathname, '/(auth)/sign-in');
+  assert.equal(h.paths[1].params.intent, 'existing-profile');
+  assert.deepEqual(h.authActions, ['signed out']);
+  assert.equal(h.drafts.at(-1).bio, 'I enjoy padel.');
+});
 
 test('first name and surname still validate before advancing', async () => {
   const h = await screen();
@@ -240,7 +289,8 @@ test('profile age is read-only and recalculates immediately when the birth date 
   h.change('Date of birth (YYYY-MM-DD)', '2000-01-01');
   const older = Number(h.field('Age (calculated)').value);
   assert.equal(h.field('Age (calculated)').editable, false);
-  h.change('Date of birth (YYYY-MM-DD)', '2010-01-01');
+  h.change('Date of birth (YYYY-MM-DD)', '20100101');
+  assert.equal(h.field('Date of birth (YYYY-MM-DD)').value, '2010-01-01');
   assert.equal(Number(h.field('Age (calculated)').value), older - 10);
   h.change('Date of birth (YYYY-MM-DD)', '');
   assert.equal(h.field('Age (calculated)').value, '');

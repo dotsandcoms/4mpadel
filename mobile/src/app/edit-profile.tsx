@@ -41,7 +41,7 @@ import {
 } from '@/lib/registration';
 import { supabase } from '@/lib/supabase';
 import { changeProfilePhoto } from '@/lib/profile-photos';
-import { ageFromBirthDate, birthDateError, playtomicDetailsError, profileExtraction, type PlaytomicExtraction, fetchProfileDetails, saveEditedProfileDetails, PROOF_BUCKET } from '@/lib/profile-details';
+import { ageFromBirthDate, birthDateError, formatBirthDateInput, playtomicDetailsError, profileExtraction, type PlaytomicExtraction, fetchProfileDetails, saveEditedProfileDetails, PROOF_BUCKET } from '@/lib/profile-details';
 import { PlaytomicProofField } from '@/components/playtomic-proof-field';
 import { trackEvent } from '@/lib/analytics';
 import { COURT_SIDE_OPTIONS, PLAYING_HAND_OPTIONS, courtSideLabel, playingHandLabel } from '@/lib/player-preferences';
@@ -376,7 +376,7 @@ export default function EditProfileScreen() {
               <SelectField label="Gender" value={form.gender} options={[{ label: 'Prefer not to say', value: '' }, ...GENDERS.map(value => ({ label: value, value }))]} onChange={value => patch('gender', value)} />
               <SelectField label="Nationality" value={form.nationality} options={[{ label: 'Prefer not to say', value: '' }, ...NATIONALITIES.map(value => ({ label: value.label, value: value.value, badge: value.badge }))]} onChange={value => patch('nationality', value)} searchable />
               <LiquidField label="ID / passport number" value={form.idNumber} hint="Only you and authorised staff can access this private detail." onChangeText={value => patch('idNumber', value)} maxLength={50} autoCapitalize="characters" />
-              <LiquidField label="Date of birth (YYYY-MM-DD)" value={form.dateOfBirth} placeholder="YYYY-MM-DD" error={errors.dateOfBirth} invalid={!!errors.dateOfBirth} onChangeText={value => patch('dateOfBirth', value)} autoComplete="birthdate-full" autoCapitalize="none" maxLength={10} />
+              <LiquidField label="Date of birth (YYYY-MM-DD)" value={form.dateOfBirth} placeholder="YYYY-MM-DD" error={errors.dateOfBirth} invalid={!!errors.dateOfBirth} onChangeText={value => patch('dateOfBirth', formatBirthDateInput(value))} autoComplete="birthdate-full" keyboardType="number-pad" />
               <LiquidField label="Age (calculated)" value={age == null ? '' : String(age)} editable={false} placeholder="Enter your date of birth" hint="Calculated from your date of birth." />
               <Text style={{ color: brand.muted, fontSize: 12 }}>Your date of birth stays private. Your profile shows your age.</Text>
               <LiquidField label="Mobile number" icon="phone.fill" value={form.contactNumber} error={errors.contactNumber} invalid={!!errors.contactNumber} valid={filled(form.contactNumber) && !errors.contactNumber} onChangeText={(value) => patch('contactNumber', value)} keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" />
