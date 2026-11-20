@@ -303,17 +303,19 @@ async function open(kind) {
 }
 
 async function clickText(page, label, selector = 'button') {
-    await page.waitForFunction((label, selector) => [...document.querySelectorAll(selector)].some(node => node.textContent.trim() === label), {}, label, selector);
-    await page.evaluate((label, selector) => [...document.querySelectorAll(selector)].find(node => node.textContent.trim() === label).click(), label, selector);
+    await page.waitForFunction((label, selector) => [...document.querySelectorAll(selector)].some(node =>
+        node.getClientRects().length && !node.matches(':disabled') && node.textContent.trim() === label), { polling: 50 }, label, selector);
+    await page.evaluate((label, selector) => [...document.querySelectorAll(selector)].find(node =>
+        node.getClientRects().length && !node.matches(':disabled') && node.textContent.trim() === label).click(), label, selector);
 }
 
 test('the Bronze switch updates the original event list', async () => {
     const dashboard = await open('dashboard');
     try {
-        await dashboard.waitForFunction(() => document.body.textContent.includes('Silver Open'));
+        await dashboard.waitForFunction(() => document.body.textContent.includes('Silver Open'), { polling: 50 });
         assert.equal(await dashboard.evaluate(() => document.body.textContent.includes('Bronze Open')), false);
         await dashboard.$eval('[role=switch]', button => button.click());
-        await dashboard.waitForFunction(() => document.body.textContent.includes('Bronze Open'));
+        await dashboard.waitForFunction(() => document.body.textContent.includes('Bronze Open'), { polling: 50 });
     } finally { await dashboard.close(); }
 });
 
@@ -324,7 +326,7 @@ test('scoped Calendar opens its quick modal and consumes the create command', as
         await calendar.waitForSelector('[data-query="?keep=1"]');
         await clickText(calendar, 'Close quick editor');
         assert.equal(await calendar.$('[aria-label="Synthetic quick event editor"]'), null);
-        await calendar.waitForFunction(() => document.body.textContent.includes('Silver Open'));
+        await calendar.waitForFunction(() => document.body.textContent.includes('Silver Open'), { polling: 50 });
         assert.equal(await calendar.evaluate(() => document.body.textContent.includes('Other Open')), false);
     } finally { await calendar.close(); }
 });
@@ -353,7 +355,7 @@ test('player substitution requires a confirmed replacement selection', async () 
         await replace.$eval('[aria-label="Matching players"] button', button => button.click());
         assert.equal(await replace.evaluate(() => window.calls.length), 0);
         await clickText(replace, 'Confirm replacement');
-        await replace.waitForFunction(() => document.querySelector('[role=status]')?.textContent.includes('taken over'));
+        await replace.waitForFunction(() => document.querySelector('[role=status]')?.textContent.includes('taken over'), { polling: 50 });
         assert.equal(await replace.evaluate(() => window.calls[0][0]), 'replace_registration_player');
     } finally { await replace.close(); }
 });
@@ -369,7 +371,7 @@ test('group moves save a versioned fixture after review', async () => {
         await clickText(group, 'Review group change');
         assert.equal(await group.evaluate(() => window.calls.length), 0);
         await clickText(group, 'Confirm');
-        await group.waitForFunction(() => document.querySelector('[role=status]')?.textContent.includes('updated'));
+        await group.waitForFunction(() => document.querySelector('[role=status]')?.textContent.includes('updated'), { polling: 50 });
         assert.equal(await group.evaluate(() => window.calls[0][1].p_expected), 'draw-v1');
     } finally { await group.close(); }
 });
@@ -380,7 +382,7 @@ test('a fresh rehearsal stays in its sandbox before leaving', async () => {
         await rehearsal.waitForSelector('iframe[sandbox="allow-scripts allow-downloads"]');
         await clickText(rehearsal, 'Start fresh copy');
         await clickText(rehearsal, 'Replace private copy');
-        await rehearsal.waitForFunction(() => window.calls.filter(call => call[0] === 'private_draw_rehearsal_snapshot').length === 2);
+        await rehearsal.waitForFunction(() => window.calls.filter(call => call[0] === 'private_draw_rehearsal_snapshot').length === 2, { polling: 50 });
         await clickText(rehearsal, 'Leave rehearsal');
         assert.deepEqual(await rehearsal.evaluate(() => window.calls.map(call => call[0])), ['private_draw_rehearsal_snapshot', 'private_draw_rehearsal_snapshot', 'closed']);
     } finally { await rehearsal.close(); }
@@ -406,7 +408,7 @@ test('verified Tournament deep link selects the requested division and denies an
     } finally { await assigned.close(); }
     const unassigned = await open('tournament-other');
     try {
-        await unassigned.waitForFunction(() => document.querySelector('[role=alert]')?.textContent.includes('No access'));
+        await unassigned.waitForFunction(() => document.querySelector('[role=alert]')?.textContent.includes('No access'), { polling: 50 });
         assert.equal(await unassigned.$('.tm-tabs'), null);
         assert.deepEqual(await unassigned.evaluate(() => window.calls), [['tm_snapshot', { p_event: '13' }]]);
     } finally { await unassigned.close(); }
@@ -422,7 +424,7 @@ test('the original Tournament schedule publishes only the reviewed revision for 
         assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'tm_publish_schedule')), false);
         page.once('dialog', dialog => dialog.accept());
         await clickText(page, 'Publish schedule');
-        await page.waitForFunction(() => document.body.textContent.includes('Schedule published to the public court calendar'));
+        await page.waitForFunction(() => document.body.textContent.includes('Schedule published to the public court calendar'), { polling: 50 });
         assert.deepEqual(await page.evaluate(() => window.calls.find(call => call[0] === 'tm_publish_schedule')), ['tm_publish_schedule', { p_event: 11, p_expected: 2 }]);
     } finally { await page.close(); }
 });
@@ -439,7 +441,7 @@ test('the original Tournament Results drawer saves an explicitly entered score t
         await scoreFields[1].type('4');
         assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'tm_record_result')), false);
         await clickText(page, 'Save result');
-        await page.waitForFunction(() => document.body.textContent.includes('Result saved'));
+        await page.waitForFunction(() => document.body.textContent.includes('Result saved'), { polling: 50 });
         assert.deepEqual(await page.evaluate(() => window.calls.find(call => call[0] === 'tm_record_result')), ['tm_record_result', { p_event: 11, p_match: 'match-tm-1', p_expected: 'match-v1', p_result: {kind:'played',winner:'tm-1',reason:'',sets:[[6,4]]} }]);
     } finally { await page.close(); }
 });
@@ -447,13 +449,13 @@ test('the original Tournament Results drawer saves an explicitly entered score t
 test('Calendar RankedIn import reviews external IDs before making only the selected public import', async () => {
     const page = await open('rankedin-import');
     try {
-        await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => !button.disabled && button.textContent.trim() === 'Import RankedIn events'));
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => !button.disabled && button.textContent.trim() === 'Import RankedIn events'), { polling: 50 });
         await clickText(page, 'Import RankedIn events');
         await page.waitForSelector('dialog .cw-bulk-rankedin-list input[type=checkbox]');
         assert.match(await page.$eval('dialog', dialog => dialog.textContent), /Manual Linked Cup · Linked record needs manual review/);
         assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'insert')), false);
         await clickText(page, 'Confirm event import');
-        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent.includes('Added 1, updated 0'));
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent.includes('Added 1, updated 0'), { polling: 50 });
         const mutations = await page.evaluate(() => window.calls.filter(call => call[0] === 'insert'));
         assert.equal(mutations.length, 1);
         assert.equal(mutations[0][1], 'calendar');
@@ -466,13 +468,13 @@ test('Calendar RankedIn import reviews external IDs before making only the selec
 test('Calendar bulk refresh writes only the reviewed past cache and preserves it on provider failure', async () => {
     const page = await open('rankedin-refresh');
     try {
-        await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => !button.disabled && button.textContent.trim() === 'Refresh past RankedIn draws and results'));
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => !button.disabled && button.textContent.trim() === 'Refresh past RankedIn draws and results'), { polling: 50 });
         await clickText(page, 'Refresh past RankedIn draws and results');
         await page.waitForSelector('dialog [aria-label="Past RankedIn events"]');
         assert.doesNotMatch(await page.$eval('dialog', dialog => dialog.textContent), /Manual Linked Cup/);
         assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'upsert')), false);
         await clickText(page, 'Confirm cache refresh');
-        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent.includes('Refreshed 1 event caches. 1 could not be confirmed.'));
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent.includes('Refreshed 1 event caches. 1 could not be confirmed.'), { polling: 50 });
         const mutations = await page.evaluate(() => window.calls.filter(call => call[0] === 'upsert'));
         assert.equal(mutations.length, 1);
         assert.equal(mutations[0][1], 'rankedin_results_cache');
@@ -485,14 +487,14 @@ test('native draw operations mark live and feature the exact reviewed version, o
     for (const [label, expected] of [['Mark match live', { status:'in_progress' }], ['Feature match', { is_featured:true }]]) {
         const page = await open('native-draw');
         try {
-            await page.waitForFunction(() => [...document.querySelectorAll('dialog label')].some(label => label.textContent.startsWith('Match')));
+            await page.waitForFunction(() => [...document.querySelectorAll('dialog label')].some(label => label.textContent.startsWith('Match')), { polling: 50 });
             assert.doesNotMatch(await page.$eval('dialog', dialog => dialog.textContent), /Other org|Other announcement/);
             await page.evaluate(() => [...document.querySelectorAll('dialog label')].find(label => label.textContent.startsWith('Match')).querySelector('button').click());
             await clickText(page, 'Final · First Pair vs Second Pair', '[role=option]');
             await clickText(page, label);
             assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'update')), false);
             await clickText(page, 'Confirm draw action');
-            await page.waitForFunction(() => /Match marked live|Match featured/.test(document.querySelector('dialog [role=status]')?.textContent));
+            await page.waitForFunction(() => /Match marked live|Match featured/.test(document.querySelector('dialog [role=status]')?.textContent), { polling: 50 });
             const mutation = await page.evaluate(() => window.calls.find(call => call[0] === 'update'));
             assert.equal(mutation[1], 'draw_matches');
             assert.deepEqual(mutation[2], {id:'match-tm-1',draw_id:'draw-a',status:'scheduled',updated_at:'match-v1'});
@@ -508,7 +510,7 @@ test('native draw corrections reopen only the reviewed main draw and verify the 
         await clickText(page, 'Reopen draw for corrections');
         assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'reopen_native_draw_for_corrections')), false);
         await clickText(page, 'Confirm draw action');
-        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Draw reopened for corrections.');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Draw reopened for corrections.', { polling: 50 });
         assert.deepEqual(await page.evaluate(() => window.calls.find(call => call[0] === 'reopen_native_draw_for_corrections')), ['reopen_native_draw_for_corrections',{p_draw_id:'draw-a'}]);
     } finally { await page.close(); }
 });
@@ -521,7 +523,7 @@ test('native draw announcements publish and remove only the reviewed event and d
         await clickText(publish, 'Review announcement');
         assert.equal(await publish.evaluate(() => window.calls.some(call => call[0] === 'insert')), false);
         await clickText(publish, 'Confirm draw action');
-        await publish.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Announcement published.');
+        await publish.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Announcement published.', { polling: 50 });
         assert.deepEqual(await publish.evaluate(() => window.calls.find(call => call[0] === 'insert')), ['insert','native_draw_announcements',
             {event_id:11,division_id:51,draw_id:'draw-a',title:null,message:'Use the south door',is_pinned:false}]);
     } finally { await publish.close(); }
@@ -531,7 +533,7 @@ test('native draw announcements publish and remove only the reviewed event and d
         await clickText(remove, 'Remove announcement');
         assert.equal(await remove.evaluate(() => window.calls.some(call => call[0] === 'delete')), false);
         await clickText(remove, 'Confirm draw action');
-        await remove.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Announcement removed.');
+        await remove.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Announcement removed.', { polling: 50 });
         const mutation = await remove.evaluate(() => window.calls.find(call => call[0] === 'delete'));
         assert.deepEqual(mutation.slice(0, 3), ['delete','native_draw_announcements',
             { id:'announcement-1',event_id:11,updated_at:'notice-v1',division_id:51,draw_id:'draw-a' }]);
@@ -544,10 +546,10 @@ test('Event Manager Draw generator selects a division with no saved draw and sav
         await clickText(page, 'Draw generator');
         await page.waitForSelector('[data-query="?event=505&workspace=draws&division=fixture-open-division"]');
         await clickText(page, 'Generate draw preview');
-        await page.waitForFunction(() => document.body.textContent.includes('One / Two') && document.body.textContent.includes('Three / Four'));
+        await page.waitForFunction(() => document.body.textContent.includes('One / Two') && document.body.textContent.includes('Three / Four'), { polling: 50 });
         assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'tm_save_draw')), false);
         await clickText(page, 'Save draft');
-        await page.waitForFunction(() => document.body.textContent.includes('Private draw saved'));
+        await page.waitForFunction(() => document.body.textContent.includes('Private draw saved'), { polling: 50 });
         const mutation = await page.evaluate(() => window.calls.find(call => call[0] === 'tm_save_draw'));
         assert.equal(mutation[1].p_event, 505);
         assert.equal(mutation[1].p_division, 'fixture-open-division');
@@ -562,7 +564,7 @@ test('Event Manager Draw generator selects a division with no saved draw and sav
 test('per-match court setup saves only the reviewed fixture and preserves a start time when the court changes', async () => {
     const page = await open('court-single');
     try {
-        await page.waitForFunction(() => [...document.querySelectorAll('dialog label')].some(node => node.textContent.startsWith('Match')));
+        await page.waitForFunction(() => [...document.querySelectorAll('dialog label')].some(node => node.textContent.startsWith('Match')), { polling: 50 });
         await page.evaluate(() => [...document.querySelectorAll('dialog label')].find(node => node.textContent.startsWith('Match')).querySelector('button').click());
         await clickText(page, 'Final · First Pair vs Second Pair', '[role=option]');
         await clickText(page, 'Match court setup');
@@ -570,13 +572,13 @@ test('per-match court setup saves only the reviewed fixture and preserves a star
         await page.$eval(courtInput, input => { input.focus(); input.select(); });
         await page.keyboard.type('Court 3');
         await clickText(page, 'Review court changes');
-        await page.waitForFunction(() => document.querySelector('.ap-native-court-review')?.textContent.includes('Court 3 · 2035-01-21 14:00 SAST'));
+        await page.waitForFunction(() => document.querySelector('.ap-native-court-review')?.textContent.includes('Court 3 · 2035-01-21 14:00 SAST'), { polling: 50 });
         await clickText(page, 'Back');
         assert.equal(await page.$eval(courtInput, input => input.value), 'Court 3');
         await clickText(page, 'Review court changes');
         assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'update')), false);
         await clickText(page, 'Confirm draw action');
-        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Match court setup saved.');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Match court setup saved.', { polling: 50 });
         const update = await page.evaluate(() => window.calls.find(call => call[0] === 'update'));
         assert.deepEqual(update[2], {id:'match-tm-1',draw_id:'draw-a',status:'scheduled',updated_at:'match-v1'});
         assert.equal(update[3].court_name, 'Court 3');
@@ -595,10 +597,10 @@ test('bulk court setup uses SAST, keeps existing court assignments, and updates 
             input.dispatchEvent(new Event('change', {bubbles:true}));
         });
         await clickText(page, 'Review court changes');
-        await page.waitForFunction(() => document.querySelector('.ap-native-court-review')?.textContent.includes('Court 2 · 2035-01-21 15:00 SAST'));
+        await page.waitForFunction(() => document.querySelector('.ap-native-court-review')?.textContent.includes('Court 2 · 2035-01-21 15:00 SAST'), { polling: 50 });
         assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'update')), false);
         await clickText(page, 'Confirm draw action');
-        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Court setup saved for 2 matches.');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Court setup saved for 2 matches.', { polling: 50 });
         const updates = await page.evaluate(() => window.calls.filter(call => call[0] === 'update'));
         assert.deepEqual(updates.map(row => row[2].id), ['court-a', 'court-b']);
         assert.ok(updates.every(row => row[2].draw_id === 'draw-a'));
@@ -622,14 +624,14 @@ test('bulk court setup accounts for a partial write and denies a tenant scope be
         await partial.evaluate(() => { window.failSecondCourt=true; });
         await clickText(partial, 'Review court changes');
         await clickText(partial, 'Confirm draw action');
-        await partial.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('Saved 1 of 2 reviewed matches'));
+        await partial.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('Saved 1 of 2 reviewed matches'), { polling: 50 });
         const writes = await partial.evaluate(() => window.calls.filter(call => call[0] === 'update').map(call => call[2].id));
         assert.deepEqual(writes, ['court-a']);
     } finally { await partial.close(); }
 
     const tenant = await open('court-tenant');
     try {
-        await tenant.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('all-workspaces administrator'));
+        await tenant.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('all-workspaces administrator'), { polling: 50 });
         assert.equal(await tenant.evaluate(() => window.calls.length), 0);
         assert.doesNotMatch(await tenant.$eval('dialog', node => node.textContent), /Bulk court setup|Match court setup/);
     } finally { await tenant.close(); }
@@ -674,7 +676,7 @@ test('marking a native draw complete checks exact reviewed match states, draw ve
         await clickText(page, 'Mark draw complete');
         assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'update')), false);
         await clickText(page, 'Confirm draw action');
-        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Draw marked complete.');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Draw marked complete.', { polling: 50 });
         const mutation = await page.evaluate(() => window.calls.find(call => call[0] === 'update'));
         assert.deepEqual(mutation.slice(1,3), ['draws', { id:'draw-a',event_id:11,division_id:51,status:'published',updated_at:'draw-v1' }]);
         assert.equal(mutation[3].status, 'completed');
@@ -686,12 +688,12 @@ test('ranking awards review inserts exact finalists and winners into the scoped 
     const page = await open('draw-ranking');
     try {
         await clickText(page, 'Review ranking points');
-        await page.waitForFunction(() => document.querySelector('[aria-label="Final placements and points"]')?.textContent.includes('Avery (awarded)'));
+        await page.waitForFunction(() => document.querySelector('[aria-label="Final placements and points"]')?.textContent.includes('Avery (awarded)'), { polling: 50 });
         await clickText(page, 'Review points to award');
-        await page.waitForFunction(() => document.querySelector('.ap-native-court-review')?.textContent.includes('Morgan'));
+        await page.waitForFunction(() => document.querySelector('.ap-native-court-review')?.textContent.includes('Morgan'), { polling: 50 });
         assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'insert')), false);
         await clickText(page, 'Confirm draw action');
-        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === '3 player awards recorded.');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === '3 player awards recorded.', { polling: 50 });
         const writes = await page.evaluate(() => window.calls.filter(call => call[0] === 'insert'));
         assert.equal(writes.length, 1);
         assert.equal(writes[0][1], 'player_ranking_points');
@@ -706,7 +708,7 @@ test('native draw completion and ranking awards reject stale reviewed data witho
         await clickText(completion, 'Mark draw complete');
         await completion.evaluate(() => { window.changeResultRevision=true; });
         await clickText(completion, 'Confirm draw action');
-        await completion.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('reviewed results changed'));
+        await completion.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('reviewed results changed'), { polling: 50 });
         assert.equal(await completion.evaluate(() => window.calls.some(call => call[0] === 'update')), false);
     } finally { await completion.close(); }
 
@@ -716,7 +718,7 @@ test('native draw completion and ranking awards reject stale reviewed data witho
         await clickText(ranking, 'Review points to award');
         await ranking.evaluate(() => { window.changeRankingRule=true; });
         await clickText(ranking, 'Confirm draw action');
-        await ranking.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('placements, rules or award ledger changed'));
+        await ranking.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('placements, rules or award ledger changed'), { polling: 50 });
         assert.equal(await ranking.evaluate(() => window.calls.some(call => call[0] === 'insert')), false);
     } finally { await ranking.close(); }
 });
@@ -730,7 +732,7 @@ test('linked Silver and Bronze plate reviews show only opening-round losers and 
             assert.doesNotMatch(await page.$eval('dialog', node => node.textContent), /Plate Team 1|Plate Team 3/);
             assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'native_create_linked_plate')), false);
             await clickText(page, 'Confirm draw action');
-            await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent.includes('created and published'));
+            await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent.includes('created and published'), { polling: 50 });
             const calls = await page.evaluate(() => window.calls.filter(call => call[0] === 'native_create_linked_plate'));
             assert.deepEqual(calls, [['native_create_linked_plate', {
                 p_event_id:11,p_parent_draw:'draw-a',p_expected_parent:'draw-v1',p_expected_matches:{'plate-first':'match-v1','plate-second':'match-v1'},
@@ -752,7 +754,7 @@ test('play-day changes work before a draw exists, using exact event and day vers
         await clickText(page, 'Review playing hours');
         assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'native_save_event_play_days')), false);
         await clickText(page, 'Confirm draw action');
-        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Playing hours and courts saved.');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Playing hours and courts saved.', { polling: 50 });
         const payload = await page.evaluate(() => window.calls.find(call => call[0] === 'native_save_event_play_days')[1]);
         assert.equal(payload.p_event_id,11);
         assert.deepEqual(payload.p_expected, { '2035-01-21':'day-v1','2035-01-22':null });
@@ -765,7 +767,7 @@ test('play-day changes work before a draw exists, using exact event and day vers
         await clickText(remove, 'Remove 2035-01-21');
         assert.equal(await remove.evaluate(() => window.calls.some(call => call[0] === 'remove_event_play_day')), false);
         await clickText(remove, 'Confirm draw action');
-        await remove.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Play day removed.');
+        await remove.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Play day removed.', { polling: 50 });
         assert.deepEqual(await remove.evaluate(() => window.calls.find(call => call[0] === 'remove_event_play_day')),
             ['remove_event_play_day',{p_event_id:11,p_play_date:'2035-01-21'}]);
     } finally { await remove.close(); }
@@ -775,7 +777,7 @@ test('division schedule never offers another event and preserves its shared play
     const page = await open('special-division');
     try {
         await clickText(page, 'Division schedule');
-        await page.waitForFunction(() => [...document.querySelectorAll('dialog label')].some(label => label.textContent.startsWith('Scheduling priority')));
+        await page.waitForFunction(() => [...document.querySelectorAll('dialog label')].some(label => label.textContent.startsWith('Scheduling priority')), { polling: 50 });
         assert.doesNotMatch(await page.$eval('dialog', element => element.textContent), /Other Event Open/);
         await page.evaluate(() => [...document.querySelectorAll('dialog label')].find(label => label.textContent.startsWith('Scheduling priority')).querySelector('input').focus());
         await page.keyboard.type('2');
@@ -784,7 +786,7 @@ test('division schedule never offers another event and preserves its shared play
         await clickText(page, 'Review division plan');
         assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'update')), false);
         await clickText(page, 'Confirm draw action');
-        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Division schedule saved.');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Division schedule saved.', { polling: 50 });
         const mutation = await page.evaluate(() => window.calls.find(call => call[0] === 'update'));
         assert.deepEqual(mutation.slice(1,3), ['draw_player_reviews',{event_id:11,division_id:51,updated_at:'review-v1'}]);
         assert.equal(mutation[3].confirmed_by,'fixture-user');
@@ -796,12 +798,12 @@ test('automatic court planning consumes saved division hours and confirms the en
     const page = await open('special-automatic');
     try {
         await clickText(page, 'Preview automatic court plan');
-        await page.waitForFunction(() => document.querySelector('.ap-native-court-review, dialog [role=alert]'));
+        await page.waitForFunction(() => document.querySelector('.ap-native-court-review, dialog [role=alert]'), { polling: 50 });
         const review = await page.evaluate(() => document.querySelector('.ap-native-court-review, dialog [role=alert]').textContent);
         assert.match(review, /2035-01-21 10:00 SAST/);
         assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'native_apply_court_schedule')), false);
         await clickText(page, 'Confirm draw action');
-        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Court bookings saved for 2 matches.');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Court bookings saved for 2 matches.', { polling: 50 });
         const calls = await page.evaluate(() => window.calls.filter(call => call[0] === 'native_apply_court_schedule'));
         assert.equal(calls.length,1);
         assert.equal(calls[0][1].p_event_id,11);

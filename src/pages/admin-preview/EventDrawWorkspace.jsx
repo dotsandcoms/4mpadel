@@ -1,14 +1,16 @@
 import { ChevronRight, ExternalLink, RefreshCw, Trophy } from 'lucide-react';
 
+export function currentDrawForDivision(draws, division) {
+  const current = draws.filter(draw => String(draw.division_id) === String(division.id) && draw.status !== 'archived');
+  return current.find(draw => draw.draw_kind === 'main') || current[0];
+}
+
 export default function EventDrawWorkspace({
   event, divisions, draws, registrationCount, tournamentWorkspaces = [], onOpenTournament, onDrawDetails,
   onGroupDraw, onNativeOperations, onRehearsal, onRankedinSync,
 }) {
   const canOpen = workspace => onOpenTournament && tournamentWorkspaces.includes(workspace);
-  const findDraw = division => {
-    const inDivision = draws.filter(draw => String(draw.division_id) === String(division.id) && draw.status !== 'archived');
-    return inDivision.find(draw => draw.draw_kind === 'main') || inDivision[0];
-  };
+  const findDraw = division => currentDrawForDivision(draws, division);
   const firstPending = divisions.find(division => division.is_active !== false && !findDraw(division));
 
   return <>

@@ -57,3 +57,23 @@ The approved shared backend package comes from checked revision `3b48e2d2b766253
 | Club group team access | `20261119115541` |
 
 Synthetic accounts and fixtures exercise the confirmed write paths. Hosted verification checked deployed services and metadata read-only. No real money movement, support email, account changes or audience sends were used for verification.
+
+## Follow-up release order
+
+The previous approval covers the deployed package above. The shared changes below require a separate release approval and the repository gate for the exact candidate. The existing public website deployment is outside the release scope.
+
+| Local migration | Purpose |
+| --- | --- |
+| `20261119120821` | Reviewed Calendar duplication |
+| `20261119120936` | Reviewed federation and organisation event amendments |
+| `20261120023944` | Exact manual payments and corrections for imported participants |
+| `20261120052642` | Reviewed weekly Calendar visibility changes |
+| `20261120053234` | Registration name and withdrawn receipt corrections |
+| `20261120054121` | Scoped organisation host event builder |
+| `20261120054159` | Trusted receipt metadata for verified paid replacements, with transfer activation disabled |
+| `20261120055927` | Scoped organisation event media storage |
+| `20261120061610` | Exact case-insensitive organisation and club membership checks |
+| `20261120111700` | Complete RankedIn roster reviews and imports |
+| `20261120112000` | Reviewed refund reservations and provider status reconciliation |
+
+Install the compatible migrations before releasing the shared `paystack-webhook` and then `paystack-refund` bundles. The refund package uses the existing gateway settings and exact event authority. Install `organisation-event-attachments` after the host capability and storage migrations. Verify the service versions, signed-out responses, database function signatures and grants, and the source and assets of the separate review deployment. Payments, payouts and audience sends use synthetic fixtures for write verification. Keep verified paid-player transfers disabled while the current public Admin is on its existing reader version.

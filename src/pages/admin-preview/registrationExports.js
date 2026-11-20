@@ -3,7 +3,7 @@ const columns = [
   ['Division', 'division'], ['Payment state', 'payment_status'], ['Entry state', 'status'], ['Submitted', 'created_at'],
 ];
 
-function safeCsvCell(value) {
+export function safeCsvCell(value) {
   const text = String(value ?? '');
   const safe = /^[\s\u0000-\u001f]*[=+@-]/.test(text) ? `'${text}` : text;
   return `"${safe.replaceAll('"', '""')}"`;

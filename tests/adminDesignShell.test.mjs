@@ -33,6 +33,7 @@ const event = {
   end_date: '2035-01-21', created_at: '2025-01-01T09:00:00Z', organisation_id: north.id,
   is_manual: true, is_visible: true, sapa_status: 'Silver',
 };
+const drawDivision = { id: 'north-open-division', event_id: event.id, name: 'Open division', format: 'knockout', is_active: true };
 function query(table) {
   let rows = table === 'organisation_members' ? [
     { role: 'admin', user_email: email, organisation_id: north.id, organisations: north },
@@ -40,6 +41,7 @@ function query(table) {
   ].filter(row => window.fixtureAccount !== 'players-only' || row.user_email !== email)
    : table === 'calendar' || table === 'events' ? [event]
    : table === 'organisations' ? [north, south]
+   : table === 'tournament_divisions' && window.fixtureEventDraw ? [drawDivision]
    : table === 'players' && playerFixture() ? [player]
    : table === 'event_registrations' && playerFixture() ? [{ id: 3, event_id: event.id, email: player.email, status: 'registered', payment_status: 'pending', division: 'Open', calendar: event }]
    : [];
@@ -51,7 +53,7 @@ function query(table) {
   let single = false;
   const builder = {
     select(value) { fields = value; return builder; },
-    eq(key, value) { rows = rows.filter(row => row[key] === value || (key === 'id' && String(row.id) === String(value))); return builder; },
+    eq(key, value) { rows = rows.filter(row => row[key] === value || (['id', 'event_id'].includes(key) && String(row[key]) === String(value))); return builder; },
     in(key, values) { rows = rows.filter(row => values.map(String).includes(String(row[key]))); return builder; },
     order() { return builder; },
     range(start, end) { rows = rows.slice(start, end + 1); return builder; },
@@ -187,6 +189,7 @@ async function open(t, initial = '/admin-preview/home', account = 'platform', mo
     window.fixtureCalls = [];
     window.fixtureAccount = account;
     window.fixturePlayersRoute = /^\/admin-preview\/players?(?:\?|$)/.test(initial);
+    window.fixtureEventDraw = initial === '/admin-preview/event?event=101&tab=overview';
     window.fixtureStart(initial);
   }, initial, account);
   return page;
@@ -197,7 +200,7 @@ async function heading(page, title) {
 }
 
 async function route(page, expected) {
-  await page.waitForFunction(expected => document.querySelector('[data-fixture-route]')?.textContent === expected, {}, expected);
+  await page.waitForFunction(expected => document.querySelector('[data-fixture-route]')?.textContent === expected, { polling: 50 }, expected);
 }
 
 async function clickText(page, selector, label, exact = true) {
@@ -386,6 +389,31 @@ test('the old Player URL opens the original Players workspace and preserves the 
   const page = await open(t, '/admin-preview/player?view=directory');
   await route(page, '/admin-preview/players?view=directory');
   await heading(page, 'Players');
+});
+
+test('Event Overview opens the exact division draw generator and the canonical public event URL', async t => {
+  const page = await open(t, '/admin-preview/event?event=101&tab=overview');
+  await heading(page, 'North open');
+  await page.$eval('button[aria-label="Event options"]', button => button.click());
+  await page.waitForSelector('[role="dialog"] a');
+  assert.equal(await page.$eval('[role="dialog"] a', link => link.href), 'https://4mpadel.co.za/calendar/101');
+  await page.$eval('[role="dialog"] button[aria-label="Close dialog"]', button => button.click());
+  await page.waitForSelector('[role="dialog"]', { hidden: true });
+  await page.$eval('button.ap-division-button', button => button.click());
+  const generator = '[role="dialog"] button.ap-primary';
+  await page.waitForSelector(generator);
+  assert.equal(await page.$eval(generator, button => button.textContent.trim()), 'Draw generator');
+  await page.$eval(generator, button => button.click());
+  await route(page, '/admin-preview/tournaments?event=101&workspace=draws&division=north-open-division');
+});
+
+test('the same draw details show no write entry point for an organisation account without the draw grant', async t => {
+  const page = await open(t, '/admin-preview/event?event=101&tab=overview', 'tenant');
+  await page.waitForSelector('button.ap-division-button');
+  await page.$eval('button.ap-division-button', button => button.click());
+  await page.waitForSelector('[role="dialog"]');
+  assert.match(await page.$eval('[role="dialog"]', dialog => dialog.textContent), /Draw changes require Tournament Manager access/);
+  assert.equal(await page.$('[role="dialog"] .ap-primary'), null);
 });
 
 test('verified platform permission reaches the Players page and its account controls', async t => {
