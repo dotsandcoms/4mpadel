@@ -33,6 +33,7 @@ alter table public.draw_matches add column is_featured boolean default false;
 \ir ../supabase/migrations/20261120070002_reviewed_organisation_native_draw_actions.sql
 \ir ../supabase/migrations/20261120120915_scope_reviewed_organisation_draw_plates.sql
 \ir ../supabase/migrations/20261120120930_reviewed_linked_plate_results.sql
+\ir ../supabase/migrations/20261120121020_preserve_linked_plate_score_sources.sql
 
 insert into public.organisations values
   ('aaaaaaaa-1111-4111-8111-111111111111','approved'), ('bbbbbbbb-2222-4222-8222-222222222222','approved');
@@ -184,6 +185,7 @@ declare
   silver_id uuid;
   actor text;
   unavailable bigint;
+  source_match public.draw_matches;
 begin
   if has_function_privilege('anon','public.native_manage_organisation_draw_plate(uuid,bigint,uuid,timestamptz,text,jsonb)','EXECUTE')
     or has_function_privilege('service_role','public.native_manage_organisation_draw_plate(uuid,bigint,uuid,timestamptz,text,jsonb)','EXECUTE')
@@ -256,6 +258,16 @@ begin
   end if;
   receipt := public.native_manage_organisation_draw_plate(org,101,main_id,first_version,'create-plate',versions);
   if receipt->>'created' <> 'false' or receipt->>'id' <> silver_id::text then raise exception 'Identical review duplicated a plate'; end if;
+
+  perform set_config('host_draw.email','platform@example.invalid',true);
+  update public.draws set status='in_progress' where id=main_id;
+  select * into source_match from public.draw_matches where draw_id=main_id order by bracket_position limit 1;
+  begin
+    perform public.native_record_draw_result(source_match.id,source_match.updated_at,
+      jsonb_build_object('kind','played','winner',source_match.entry_two_id,'sets','[]'::jsonb,'summary','[0,2]'::jsonb,'reason','Changed main winner'));
+    raise exception 'The native scorer changed a main result used to seed Silver';
+  exception when raise_exception then if sqlerrm not like 'The Silver plate uses this result%' then raise; end if;
+  end;
 end $$;
 
 do $$
@@ -329,6 +341,20 @@ begin
       raise exception 'Recording Silver scores did not preserve sets, route winners or return a fresh receipt';
     end if;
   end loop;
+  -- Current Admin uses the original invoker RPC. It can correct an opening
+  -- winner while Silver's downstream match is pending and no Bronze uses it.
+  select * into opening from public.draw_matches where draw_id=source_draw.id and round_number=1
+    and entry_one_id is not null and entry_two_id is not null order by bracket_position limit 1;
+  perform set_config('host_draw.email','platform@example.invalid',true);
+  perform public.native_record_draw_result(opening.id,opening.updated_at,
+    jsonb_build_object('kind','played','winner',opening.entry_two_id,'sets','[]'::jsonb,'summary','[0,2]'::jsonb,'reason','Corrected original winner'));
+  select * into opening from public.draw_matches where id=opening.id;
+  if opening.winner_entry_id is distinct from opening.entry_two_id then
+    raise exception 'Current Admin could not correct a winner before Bronze creation';
+  end if;
+  perform public.native_record_draw_result(opening.id,opening.updated_at,
+    jsonb_build_object('kind','played','winner',opening.entry_one_id,'sets','[]'::jsonb,'summary','[2,0]'::jsonb,'reason','Restored verified winner'));
+  perform set_config('host_draw.email','host-admin@example.invalid',true);
   select jsonb_object_agg(id::text,updated_at) into versions
     from public.draw_matches where draw_id=source_draw.id and round_number=1;
   receipt := public.native_manage_organisation_draw_plate(org,101,source_draw.id,source_draw.updated_at,'create-plate',versions);
@@ -339,6 +365,13 @@ begin
     or exists (select 1 from public.draws where event_id=102 and draw_kind in ('silver','bronze')) then
     raise exception 'The host Bronze plate used an incorrect parent or event';
   end if;
+
+  -- Current Admin copies the Silver rule object into Bronze. A legacy row
+  -- therefore has the Main ID here if Silver was created by New Admin.
+  perform set_config('host_draw.email','platform@example.invalid',true);
+  update public.draws set scoring_rules=jsonb_set(scoring_rules,'{parent_draw_id}',source_draw.scoring_rules->'parent_draw_id') where id=bronze.id;
+  select * into bronze from public.draws where id=bronze.id;
+  perform set_config('host_draw.email','host-admin@example.invalid',true);
 
   select * into opening from public.draw_matches where draw_id=source_draw.id and round_number=1
     and entry_one_id is not null and entry_two_id is not null order by bracket_position limit 1;
@@ -351,6 +384,21 @@ begin
   if (select winner_entry_id from public.draw_matches where id=opening.id) <> opening.entry_one_id then
     raise exception 'Rejected Silver correction left the changed winner behind';
   end if;
+  perform set_config('host_draw.email','platform@example.invalid',true);
+  begin
+    perform public.native_record_draw_result(opening.id,opening.updated_at,
+      jsonb_build_object('kind','played','winner',opening.entry_two_id,'sets','[]'::jsonb,'summary','[0,2]'::jsonb,'reason','Changed winner from Current Admin'));
+    raise exception 'Current Admin left Bronze with an incorrect entrant';
+  exception when raise_exception then if sqlerrm not like 'The Bronze plate uses this result%' then raise; end if;
+  end;
+  perform public.native_record_draw_result(opening.id,opening.updated_at,
+    jsonb_build_object('kind','played','winner',opening.entry_one_id,'sets','[]'::jsonb,'summary','[2,0]'::jsonb,'reason','Confirmed original winner from Current Admin'));
+  select * into opening from public.draw_matches where id=opening.id;
+  if (select count(*) from public.draw_entries where draw_id=bronze.id) <> 2
+     or opening.winner_entry_id is distinct from opening.entry_one_id then
+    raise exception 'A Current Admin correction changed the linked Bronze entrants';
+  end if;
+  perform set_config('host_draw.email','host-admin@example.invalid',true);
   receipt := public.native_record_reviewed_plate_result(org,101,source_draw.id,source_draw.updated_at,opening.id,opening.updated_at,
       jsonb_build_object('kind','played','winner',opening.entry_one_id,'sets','[]'::jsonb,'summary','[2,1]'::jsonb,'reason','Corrected totals'));
   if receipt->>'status' <> 'completed' or (select result_summary from public.draw_matches where id=opening.id)

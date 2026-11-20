@@ -47,7 +47,6 @@ begin
            select 1 from public.draws parent
             where parent.event_id = d.event_id and parent.division_id = d.division_id
               and parent.draw_kind = case d.draw_kind when 'silver' then 'main' else 'silver' end
-              and coalesce(d.scoring_rules->>'parent_draw_id', parent.id::text) = parent.id::text
        )
      for update of d for share of v;
     if not found then
@@ -65,18 +64,6 @@ begin
     -- The checked definer is the database operator expected by the existing invoker.
     perform public.native_record_draw_result(prior.id, prior.updated_at, p_result);
     select * into saved from public.draw_matches where id = prior.id and draw_id = plate.id;
-
-    -- Silver opening-round losers are fixed once their Bronze bracket exists.
-    if plate.draw_kind = 'silver' and prior.winner_entry_id is not null
-        and prior.winner_entry_id is distinct from saved.winner_entry_id
-        and prior.round_number = (select min(round_number) from public.draw_matches where draw_id = plate.id)
-        and exists (
-            select 1 from public.draws bronze where bronze.event_id = plate.event_id
-              and bronze.division_id = plate.division_id and bronze.draw_kind = 'bronze'
-              and coalesce(bronze.scoring_rules->>'parent_draw_id', plate.id::text) = plate.id::text
-        ) then
-        raise exception 'The Bronze plate uses this result. Correct the score with the original winner';
-    end if;
 
     return jsonb_build_object('organisation_id', p_organisation_id, 'event_id', p_event_id,
         'draw_id', plate.id, 'match_id', saved.id, 'status', saved.status, 'winner_entry_id', saved.winner_entry_id,
