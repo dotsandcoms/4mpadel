@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import SearchableDropdown from '../../components/SearchableDropdown';
-import { prepareLinkedPlate } from './nativeLinkedPlate.js';
+import { publishedNativeDrawUrl } from './publicNativeDrawLink.js';
+import { canEnableSilverPlate, prepareLinkedPlate } from './nativeLinkedPlate.js';
 import { canCompleteNativeDraw, nativeCompletionReview } from './nativeDrawLifecycle.js';
 import { canReviewNativeRanking } from './nativeDrawRanking.js';
 import NativeDrawRankingReview, { NativeDrawAwardReceiptReview } from './NativeDrawRankingReview.jsx';
@@ -23,8 +24,10 @@ const drawLabel = draw => {
 export default function NativeDrawOperationsDialog({ client, session, scopeId, event, onClose }) {
   const title = useId();
   const userId = session?.user?.id;
+  const platform = scopeId === 'all';
   const { bindDialog, busy, error, result, close, run } = useEventOperation({ client, event, session, scopeId, onClose });
-  const [draws, setDraws] = useState(null);
+  const [eventDraws, setEventDraws] = useState(null);
+  const draws = eventDraws?.filter(draw => platform ? draw.status !== 'archived' : canUpdateNativeMatches(draw));
   const [drawId, setDrawId] = useState('');
   const [stored, setStored] = useState(null);
   const [loadError, setLoadError] = useState('');
@@ -38,13 +41,12 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
 
   useEffect(() => {
     const controller = new AbortController();
-    setDraws(null);
+    setEventDraws(null);
     listNativeDrawOperations({ client, event, expectedUserId: userId, scopeId, signal: controller.signal, isCurrent: () => !controller.signal.aborted })
       .then(rows => {
         if (controller.signal.aborted) return;
-        const next = rows.filter(draw => draw.status !== 'archived');
-        setDraws(next);
-        setDrawId(next[0]?.id || '');
+        setEventDraws(rows);
+        setDrawId(rows.find(draw => platform ? draw.status !== 'archived' : canUpdateNativeMatches(draw))?.id || '');
       })
       .catch(issue => { if (!controller.signal.aborted) setLoadError(issue.message); });
     return () => controller.abort();
@@ -61,9 +63,11 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
 
   const selected = stored?.draw.id === drawId ? stored : null;
   const match = selected?.matches.find(row => row.id === matchId);
+  const publicDrawUrl = selected && publishedNativeDrawUrl(event, [selected.draw]);
   const candidate = selected && prepareLinkedPlate(selected.draw, selected.matches, selected.entries);
   const plateName = candidate?.kind === 'silver' ? 'Silver plate' : 'Bronze plate';
-  const plate = candidate && !draws?.some(draw => draw.division_id === selected.draw.division_id && draw.draw_kind === candidate.kind) ? candidate : null;
+  const plate = candidate && !eventDraws?.some(draw => draw.division_id === selected.draw.division_id && draw.draw_kind === candidate.kind) ? candidate : null;
+  const enableSilver = selected && eventDraws && canEnableSilverPlate(selected.draw, selected.matches, eventDraws);
   const updateForm = (key, value) => setForm(current => ({ ...current, [key]: value }));
   const changeDraw = id => {
     setDrawId(id);
@@ -105,6 +109,7 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
       {result ? <p role="status">{result}</p> : review ? <>
         <h3>{review.heading}</h3><p>{review.summary}</p>
         {planActions.includes(review.type) && <NativeDrawPlayPlanReview action={review} />}
+        {review.type === 'enable-silver' && <p className="ap-payment-live-note">Confirmation enables Silver for this main draw. When the opening results are complete, use Create Silver plate to review and publish the new bracket.</p>}
         {review.type === 'plate' && <><p role="status">The new plate will be published after confirmation.</p><ul>{review.plate.teams.map((team, index) => <li key={index}>{team}</li>)}</ul></>}
         {review.type === 'rank' && <NativeDrawAwardReceiptReview rows={review.rows} />}
         {review.type === 'complete' && <p className="ap-payment-live-note">Complete this draw to confirm final placements and restrict changes to recorded scores.</p>}
@@ -115,16 +120,19 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
       </> : <>
         {loadError && <p role="alert">{loadError}</p>}
         {!loadError && !draws && <p role="status">Loading event draws…</p>}
-        {draws && <NativeDrawPlayPlan client={client} event={event} session={session} scopeId={scopeId}
+        {platform && draws && <NativeDrawPlayPlan client={client} event={event} session={session} scopeId={scopeId}
           activeDivisionId={selected?.draw.division_id} allowAuto={draws.length > 0} previous={calendarReview} onReview={setReview} />}
-        {draws?.length === 0 && <p>Save a draw in Tournament Manager to manage live matches and announcements.</p>}
+        {draws?.length === 0 && <p>{platform
+          ? 'Save a draw in Tournament Manager to manage live matches and announcements.'
+          : 'There are no active published draws to manage.'}</p>}
         {draws?.length > 0 && <label>Draw<SearchableDropdown value={drawId} onChange={event => changeDraw(event.target.value)}>
           {draws.map(draw => <option key={draw.id} value={draw.id}>{drawLabel(draw)}</option>)}
         </SearchableDropdown></label>}
         {drawId && !selected && !loadError && <p role="status">Loading draw matches…</p>}
         {selected && <>
-          {canReopenNativeDraw(selected.draw) && <button type="button" className="ap-secondary" onClick={() => setReview({ type: 'reopen', heading: 'Reopen draw for corrections', summary: drawLabel(selected.draw) })}>Reopen draw for corrections</button>}
-          {(canUpdateNativeMatches(selected.draw) || canScheduleNativeDraw(selected.draw)) && selected.matches.length > 0 && <>
+          {publicDrawUrl && <a className="ap-secondary" href={publicDrawUrl} target="_blank" rel="noreferrer">View public draw</a>}
+          {platform && canReopenNativeDraw(selected.draw) && <button type="button" className="ap-secondary" onClick={() => setReview({ type: 'reopen', heading: 'Reopen draw for corrections', summary: drawLabel(selected.draw) })}>Reopen draw for corrections</button>}
+          {(canUpdateNativeMatches(selected.draw) || platform && canScheduleNativeDraw(selected.draw)) && selected.matches.length > 0 && <>
             <label>Match<SearchableDropdown value={matchId} onChange={event => changeMatch(event.target.value)}><option value="">Choose a match</option>
               {selected.matches.map(row => <option key={row.id} value={row.id}>{row.round_label} · {row.label}{row.is_featured ? ' · Featured' : ''}</option>)}
             </SearchableDropdown></label>
@@ -134,18 +142,21 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
             </div>}
             {canUpdateNativeMatches(selected.draw) && !selected.featuredAvailable && <p>Featured-match controls are unavailable on this connection.</p>}
           </>}
-          {plate && (plate.issue ? <p>{plateName} · {plate.issue}</p> : <button type="button" className="ap-secondary" onClick={() => setReview({
+          {platform && enableSilver && <button type="button" className="ap-secondary" onClick={() => setReview({
+            type: 'enable-silver', heading: 'Enable Silver plate', summary: drawLabel(selected.draw),
+          })}>Enable Silver plate</button>}
+          {platform && plate && (plate.issue ? <p>{plateName} · {plate.issue}</p> : <button type="button" className="ap-secondary" onClick={() => setReview({
             type: 'plate', plate, heading: 'Create ' + plateName, summary: plate.teams.length + ' teams from the source draw’s opening round.',
           })}>Create {plateName}</button>)}
           {canCompleteNativeDraw(selected.draw, selected.matches) && <button type="button" className="ap-secondary" onClick={() => setReview({
             type: 'complete', matches: nativeCompletionReview(selected.matches), heading: 'Review draw completion', summary: drawLabel(selected.draw),
           })}>Mark draw complete</button>}
-          {canReviewNativeRanking(selected.draw) && (rankingOpen ? <NativeDrawRankingReview
+          {platform && canReviewNativeRanking(selected.draw) && (rankingOpen ? <NativeDrawRankingReview
             client={client} event={event} draw={selected.draw} session={session} scopeId={scopeId}
             overrides={rankingOverrides} setOverrides={setRankingOverrides} onReview={setReview}
           /> : <button type="button" className="ap-secondary" onClick={() => setRankingOpen(true)}>Review ranking points</button>)}
-          {canScheduleNativeDraw(selected.draw) && <NativeDrawCourtSetup key={drawId + ':' + matchId} match={match} snapshot={selected} previousReview={courtReview} onReview={setReview} />}
-          {selected.announcements ? <section className="ap-draw-announcements">
+          {platform && canScheduleNativeDraw(selected.draw) && <NativeDrawCourtSetup key={drawId + ':' + matchId} match={match} snapshot={selected} previousReview={courtReview} onReview={setReview} />}
+          {platform && (selected.announcements ? <section className="ap-draw-announcements">
             <h3>Public announcements</h3>
             {selected.announcements.length > 0 && <ul>{selected.announcements.map(item => <li key={item.id}>
               <strong>{item.title || item.message}</strong>{item.title && <p>{item.message}</p>}
@@ -158,7 +169,7 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
             <label>Announcement message<textarea value={form.message} onChange={event => updateForm('message', event.target.value)} /></label>
             <label className="ap-draw-pinned"><input type="checkbox" checked={form.pinned} onChange={event => updateForm('pinned', event.target.checked)} />Pin announcement</label>
             <button type="button" className="ap-secondary" disabled={!form.message.trim()} onClick={() => setReview({ ...form, type: 'announce', heading: form.title.trim() || 'Review public announcement', summary: form.message.trim() })}>Review announcement</button>
-          </section> : <p>Public announcements are unavailable on this connection.</p>}
+          </section> : <p>Public announcements are unavailable on this connection.</p>)}
         </>}
       </>}
       <footer>

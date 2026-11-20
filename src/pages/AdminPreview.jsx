@@ -35,13 +35,15 @@ import AccountSecurityWorkspace from './admin-preview/AccountSecurityWorkspace.j
 import ReviewSettingsWorkspace from './admin-preview/ReviewSettingsWorkspace.jsx';
 import ReviewBlogWorkspace from './admin-preview/ReviewBlogWorkspace.jsx';
 import ReviewAuditWorkspace from './admin-preview/ReviewAuditWorkspace.jsx';
+import EventActivityLog from './admin-preview/EventActivityLog.jsx';
+import { loadEventActivity } from './admin-preview/reviewAuditData.js';
 import ReviewIntegrationsWorkspace from './admin-preview/ReviewIntegrationsWorkspace.jsx';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, LayoutGroup, motion as Motion, useReducedMotion } from 'framer-motion';
 import {
   AlertCircle, ArrowLeft, ArrowRight, Banknote, Bell, Building2, CalendarDays,
   Check, CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, Clock3,
-  Command, CreditCard, Download, ExternalLink, FileText, Filter, GalleryVerticalEnd,
+  Command, CreditCard, Download, ExternalLink, FileText, GalleryVerticalEnd,
   LayoutDashboard, LoaderCircle, LockKeyhole, LogOut, Mail, MapPin, Menu, MessageSquare,
   MoreHorizontal, Network, Plus, Radio, RefreshCw, Search, Settings2, ShieldCheck,
   Trophy, UserPlus, FileSpreadsheet, Shuffle, Trash2, Link2,
@@ -189,16 +191,6 @@ const registrationEligibility = (row) => {
   return { label: 'Not available', tone: 'neutral' };
 };
 
-const activityTone = (category) => {
-  const value = String(category || '').toLowerCase();
-  if (value.includes('payment')) return 'payment';
-  if (value.includes('finance')) return 'neutral';
-  if (value.includes('player')) return 'amber';
-  if (value.includes('admin')) return 'violet';
-  if (value.includes('draw')) return 'info';
-  if (value.includes('registration')) return 'processed';
-  return 'neutral';
-};
 const normalizePayment = (row) => {
   const value = String(row?.payment_status || row?.status || 'pending').toLowerCase();
   if (['paid', 'success', 'successful', 'complete'].includes(value)) return 'paid';
@@ -268,12 +260,12 @@ function usePreviewData(session, permissions, forceFixture = false, focusEventId
         const [paymentResult, divisionResult, activityResult, drawResult] = await Promise.all([
           !canReadFinance ? [] : readAll(() => supabase.from('payments').select('*').eq('event_id', focusEventId).order('id')),
           readAll(() => supabase.from('tournament_divisions').select('*').eq('event_id', focusEventId).order('id')),
-          publicLive ? [] : readAll(() => supabase.from('event_activity_log').select('*').eq('event_id', focusEventId).order('id')),
-          readAll(() => supabase.from('draws').select('id, division_id, draw_kind, format, status, generated_at, public_announcement, tournament_divisions(name)').eq('event_id', focusEventId).order('id')),
+          publicLive ? [] : loadEventActivity(supabase, focusEventId, canReadFinance && scope?.id === 'all'),
+          readAll(() => supabase.from('draws').select('id, event_id, division_id, draw_kind, format, status, generated_at, public_announcement, tournament_divisions(name)').eq('event_id', focusEventId).order('id')),
         ]);
         payments = paymentResult;
         divisions = divisionResult;
-        activity = activityResult.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+        activity = activityResult;
         draws = drawResult;
         if (!publicLive && payments.length) {
           for (let offset = 0; offset < payments.length; offset += 50) {
@@ -596,10 +588,8 @@ export function EventDemoModal({ action, event, divisions, onClose, onExport, on
   </Motion.div>;
 }
 
-export function LiveEventCommandCentre({ event, registrations, payments, divisions, activity, draws = [], refunds = [], go, financeRestricted = false, canReadEventStatement = false, canManagePayments = false, session, scopeId = 'all', client = supabase, canRehearse = false, onOpenMessages, onOpenHelp, onOpenTournament, tournamentWorkspaces = [], onOpenPayouts, onOpenFinance, initialTab, initialAction, initialRegistrationId, onRefresh }) {
+export function LiveEventCommandCentre({ event, registrations, payments, divisions, activity, draws = [], refunds = [], go, financeRestricted = false, canReadEventStatement = false, canManagePayments = false, canOperateHostDraw = false, session, scopeId = 'all', client = supabase, canRehearse = false, onOpenMessages, onOpenHelp, onOpenTournament, tournamentWorkspaces = [], onOpenPayouts, onOpenFinance, initialTab, initialAction, initialRegistrationId, onRefresh }) {
   const [tab, setTab] = useState(initialTab === 'statement' ? 'Income statement' : 'Overview');
-  const [activityPage, setActivityPage] = useState(1);
-  const activityHeadingRef = useRef(null);
   const [action, setAction] = useState(null);
   const [paymentAction, setPaymentAction] = useState(null);
   const [moveAction, setMoveAction] = useState(null);
@@ -624,7 +614,8 @@ export function LiveEventCommandCentre({ event, registrations, payments, divisio
   const managedEvent = { ...event, management_completed_at: completion.value || null };
   const canAddEntry = operationAccess && event.event_status !== 'cancelled';
   const canSyncRankedin = canManagePayments && Boolean(eventRankedinId(event));
-  const canOperateNativeDraw = canManagePayments && canAddEntry && event.is_manual;
+  const hasActiveNativeDraw = draws.some(draw => ['published', 'in_progress'].includes(draw.status));
+  const canOperateNativeDraw = (canManagePayments || canOperateHostDraw && hasActiveNativeDraw) && canAddEntry && event.is_manual;
   const openRehearsal = canRehearse && event.is_manual ? () => { setAction(null); setRehearsing(true); } : undefined;
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [cancelScope, setCancelScope] = useState(null);
@@ -749,14 +740,8 @@ export function LiveEventCommandCentre({ event, registrations, payments, divisio
   });
   const filteredIds = new Set(filteredRegistrations.map((row) => String(row.id)));
   const teamGroups = groupTeamDivisions(teams, divisions, registrationDivision, filteredIds, divisionFilter, Boolean(query.trim()) || licenseFilter !== 'All licences');
-  const activityItems = activity;
-  const activityPages = Math.max(1, Math.ceil(activityItems.length / 50));
-  const currentActivityPage = Math.min(activityPage, activityPages);
-  const changeActivityPage = (next) => {
-    setActivityPage(Math.max(1, Math.min(next, activityPages)));
-    activityHeadingRef.current?.scrollIntoView({ block: 'start' });
-    activityHeadingRef.current?.focus({ preventScroll: true });
-  };
+  const activityItems = activity.filter(row => String(row.event_id) === String(event.id));
+  const canReadPrivateActivity = canManagePayments && scopeId === 'all';
   const drawForDivision = division => currentDrawForDivision(draws, division);
   const openDivisionDraw = onOpenTournament && tournamentWorkspaces.includes('draws') ? division => {
     setAction(null);
@@ -780,7 +765,7 @@ export function LiveEventCommandCentre({ event, registrations, payments, divisio
     <section className="ap-section ap-live-summary"><div className="ap-section-heading"><div><p className="ap-kicker">Event outcome</p><h2>{phase.label} operations</h2></div><Status tone={event.sapa_status ? tierTone(event.sapa_status) : phase.tone}>{event.sapa_status || phase.label}</Status></div><div className="ap-health-grid"><div><strong>{finance.totalEntries}</strong><span>Player entries</span><small>{finance.uniquePlayers} unique players</small></div><div><strong>{formatMoney(finance.netEntryIncome)}</strong><span>Net entry income</span><small>{formatMoney(collected)} gross collected</small></div><div className={outstanding > 0 ? 'is-risk' : ''}><strong>{formatMoney(outstanding)}</strong><span>Outstanding</span><small>{finance.pending} unpaid {finance.pending === 1 ? 'entry' : 'entries'}</small></div></div><div className="ap-license-strip" aria-label="SAPA licence breakdown"><span className="is-full"><b>{hasLicenseBreakdown ? licenseCounts.full : '-'}</b><small>Full licence</small></span><span className="is-temp"><b>{hasLicenseBreakdown ? licenseCounts.temp : '-'}</b><small>Temporary</small></span><span className="is-none"><b>{hasLicenseBreakdown ? licenseCounts.none : '-'}</b><small>No licence</small></span></div><dl className="ap-details-list ap-event-facts"><div><dt>Dates</dt><dd>{formatDate(event.start_date)} - {formatDate(event.end_date || event.start_date)}</dd></div><div><dt>Organisation</dt><dd>{event.organisations?.name || event.organiser_name || 'Not recorded'}</dd></div><div><dt>Host club</dt><dd>{event.clubs?.short_name || event.clubs?.name || event.venue || 'Not recorded'}</dd></div><div><dt>Venue</dt><dd>{event.venue || event.city || 'Not recorded'}</dd></div><div><dt>Registration closed</dt><dd>{formatDate(event.registration_closes_at)}</dd></div><div><dt>RankedIn</dt><dd>{event.rankedin_id ? `Tournament ${event.rankedin_id}` : 'Not linked'}</dd></div></dl></section>
     <section className="ap-section ap-live-divisions"><div className="ap-section-heading"><div><p className="ap-kicker">Competition</p><h2>Divisions</h2></div><button className="ap-text-button" onClick={() => setTab('Draws')}>View draws <ArrowRight size={15} /></button></div><div className="ap-division-list">{divisions.length ? divisions.map((division) => { const name = division.name || division.division_name || 'Unnamed division'; const count = activeRegistrations.filter((row) => registrationMatchesDivision(row, division, divisions)).length; return <button className="ap-division-button" key={division.id || name} onClick={() => setAction({ type: 'draw', division, draw: drawForDivision(division) })}><span><b>{name}</b><small>{division.format || division.type || 'Tournament division'}</small></span><strong>{count}<small> entries</small></strong><ChevronRight size={16} /></button>; }) : <div className="ap-empty-inline">No division records were returned.</div>}</div></section>
     <section className="ap-section ap-operational-feed"><div className="ap-section-heading"><div><p className="ap-kicker">Registration ledger</p><h2>Entry health</h2><button className="ap-text-button" onClick={() => setTab('Solo entries')}>{soloEntries.length} solo entries · View players <ArrowRight size={15} /></button></div><button className="ap-text-button" onClick={() => setTab('Registrations')}>Open registrations <ArrowRight size={15} /></button></div><div className="ap-ledger-summary"><span><b>{finance.paid4M + finance.paidManual}</b> paid</span><span><b>{paymentIssues.length}</b> outstanding</span><span><b>{registrations.length - rawActiveRegistrations.length}</b> withdrawn</span></div>{paymentIssues.length > 0 ? <button className="ap-inline-alert" onClick={() => setTab('Needs attention')}><AlertCircle size={19} /><span><b>{paymentIssues.length} registration{paymentIssues.length === 1 ? '' : 's'} need attention</b><small>Inspect payment and eligibility state.</small></span><ArrowRight size={17} /></button> : <div className="ap-clear-state"><CheckCircle2 size={17} /><span><b>No open payment exceptions</b><small>The loaded registration ledger is settled.</small></span></div>}</section>
-    <section className="ap-section ap-activity"><div className="ap-section-heading"><div><p className="ap-kicker">Audit trail</p><h2>Latest activity</h2></div><button className="ap-text-button" onClick={() => setTab('Activity log')}>View all</button></div><ol>{activityItems.slice(0, 4).map((item) => <li key={item.id}><span /><div><b>{displayValue(item.summary || item.action, 'Event update')}</b><small>{formatDate(item.created_at)}, {displayValue(item.actor_email || item.actor_role, 'System')}</small></div></li>)}</ol></section>
+    <section className="ap-section ap-activity"><div className="ap-section-heading"><div><p className="ap-kicker">Audit trail</p><h2>Latest activity</h2></div><button className="ap-text-button" onClick={() => setTab('Activity log')}>View all</button></div><ol>{activityItems.slice(0, 4).map((item) => <li key={item.id}><span /><div><b>{displayValue(item.summary || item.action, 'Event update')}</b><small>{formatDate(item.created_at)}, {displayValue((canReadPrivateActivity && item.actor_email) || item.actor_role, 'System')}</small></div></li>)}</ol></section>
   </div>;
 
   const players = <><div className="ap-tab-heading"><div><h2>Teams</h2><button className="ap-text-button" onClick={() => setTab('Solo entries')}>{soloEntries.length} solo entries · View players <ArrowRight size={15} /></button><p>Teams, payments, licence types and management actions in one operational view.</p></div>{canAddEntry && <button className="ap-primary" onClick={() => setAction({ type: 'add' })}><UserPlus size={16} /> Add player / team</button>}</div>{toolbar}<EventTeamDivisions groups={teamGroups} formatMoney={formatMoney} renderTeam={({ players: team, seed, totalPoints }) => {
@@ -803,7 +788,7 @@ export function LiveEventCommandCentre({ event, registrations, payments, divisio
     : <section className="ap-section ap-live-loading"><h2>Income statement access is required</h2>
       {onOpenFinance && <button className="ap-secondary" onClick={onOpenFinance}>Open finance reports</button>}</section>;
 
-  const history = <><div className="ap-tab-heading"><div><h2 ref={activityHeadingRef} tabIndex={-1}>Activity log</h2><p>Registration, payment, draw and event changes in one chronological record.</p></div><button className="ap-secondary" onClick={() => setAction({ type: 'settings' })}><Filter size={15} /> Log options</button></div>{!activity.length && <div className="ap-data-notice"><LockKeyhole size={16} />No activity records were returned. No representative entries have been added.</div>}<section className="ap-section ap-activity-table"><div className="ap-activity-row ap-event-demo-head"><span>Date</span><span>Change</span><span>Actor</span><span>Area</span><span /></div>{activityItems.slice((currentActivityPage - 1) * 50, currentActivityPage * 50).map((item) => <button className="ap-activity-row" key={item.id} onClick={() => setAction({ type: 'settings' })}><span><b>{formatDate(item.created_at)}</b></span><span><b>{displayValue(item.summary || item.action, 'Event update')}</b><small>{displayValue(item.details, 'Event history record')}</small></span><span>{displayValue(item.actor_email || item.actor_role, 'System')}</span><Status tone={activityTone(item.category)}>{displayValue(item.category, 'System')}</Status><ChevronRight size={16} /></button>)}</section>{activityItems.length > 0 && <nav className="ap-pagination" aria-label="Activity log pages"><span role="status">Showing {(currentActivityPage - 1) * 50 + 1}–{Math.min(currentActivityPage * 50, activityItems.length)} of {activityItems.length} entries</span><div><button className="ap-secondary" disabled={currentActivityPage === 1} onClick={() => changeActivityPage(currentActivityPage - 1)}>Previous</button><span>Page {currentActivityPage} of {activityPages}</span><button className="ap-secondary" disabled={currentActivityPage === activityPages} onClick={() => changeActivityPage(currentActivityPage + 1)}>Next</button></div></nav>}</>;
+  const history = <EventActivityLog event={event} activity={activityItems} includePrivate={canReadPrivateActivity} />;
   const attentionList = <EventAttentionList rows={paymentIssues.map(row => ({ id: row.id, name: personName(row), partner: row.partner_name, division: divisionLabelFor(row), issue: paymentDisplayFor(row).detail || 'Payment needs review', eligibility: registrationEligibility(row).label }))} onBack={() => setTab('Overview')} onOpen={id => { const registration = paymentIssues.find(row => row.id === id); if (registration) setAction({ type: 'team', registration, team: teamFor(registration) }); }}/>;
   const soloList = <EventAttentionList solo rows={soloEntries.map(row => ({ id: row.id, name: personName(row), division: divisionLabelFor(row), issue: 'Solo · No partner recorded', eligibility: registrationEligibility(row).label }))} onBack={() => setTab('Overview')} onOpen={id => { const registration = soloEntries.find(row => row.id === id); if (registration) setAction({ type: 'team', registration, team: teamFor(registration) }); }}/>;
   const sections = { 'Solo entries': soloList, Overview: overview, Teams: players, Registrations: registrationList, 'Needs attention': attentionList, Draws: drawWorkspace, 'Income statement': incomeStatement, 'Activity log': history };
@@ -1000,6 +985,8 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
   else if (page === 'event' && focusEventId) content = <LiveEventCommandCentre key={`${scope.id}:${focusEventId}`} initialTab={queryParams.get('tab')} initialAction={queryParams.get('action')} initialRegistrationId={queryParams.get('registration')} session={session} scopeId={scope.id} event={activeEvent} registrations={data.registrations} payments={data.payments} divisions={data.divisions} activity={data.activity} draws={data.draws} refunds={data.refunds} go={go} financeRestricted={permissions?.role !== 'super_admin' || (localLivePreview && !session)} canManagePayments={Boolean(session) && !localFixture && permissions?.role === 'super_admin' && scope.id === 'all'}
     canReadEventStatement={Boolean(session) && !localFixture && (permissions?.role === 'super_admin'
       || (scope.id.startsWith('org:') && permissions?.orgs?.some(org => `org:${org.id}` === scope.id && ['owner', 'admin'].includes(org.member_role))))}
+    canOperateHostDraw={Boolean(session) && !localFixture && scope.id === `org:${activeEvent.organisation_id}`
+      && permissions?.orgs?.some(org => String(org.id) === String(activeEvent.organisation_id) && ['owner', 'admin'].includes(org.member_role))}
     canRehearse={permissions?.role === 'super_admin' && scope.id === 'all'}
     onOpenMessages={canOpen('messaging') ? () => go('messaging', { event: activeEvent }) : undefined}
     onOpenHelp={canOpen('help') ? () => go('help', { event: activeEvent }) : undefined}

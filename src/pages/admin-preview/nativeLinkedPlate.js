@@ -1,7 +1,18 @@
 const resolvedOpeningStatus = ['completed', 'walkover', 'retired'];
+const published = ['published', 'in_progress', 'completed'];
+
+export function canEnableSilverPlate(draw, matches, eventDraws) {
+  const rules = draw.scoring_rules;
+  return draw.draw_kind === 'main' && ['knockout', 'group_knockout'].includes(draw.format)
+    && published.includes(draw.status) && Boolean(draw.updated_at) && draw.tournament_divisions?.is_active !== false
+    && rules && typeof rules === 'object' && !Array.isArray(rules) && (rules.plate_mode ?? 'none') === 'none'
+    && matches.some(match => match.stage === 'knockout')
+    && !matches.some(match => match.round_code?.startsWith('places_'))
+    && !eventDraws.some(item => item.division_id === draw.division_id && item.draw_kind === 'silver');
+}
 
 export function linkedPlateKind(draw, matches) {
-  if (!['published', 'in_progress', 'completed'].includes(draw.status)) return null;
+  if (!published.includes(draw.status)) return null;
   const mode = draw.scoring_rules?.plate_mode;
   if (draw.draw_kind === 'silver' && draw.format === 'knockout' && mode === 'triple') return 'bronze';
   if (draw.draw_kind === 'main' && ['knockout', 'group_knockout'].includes(draw.format) && ['double', 'triple'].includes(mode)

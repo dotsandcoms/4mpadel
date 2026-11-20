@@ -6,21 +6,29 @@ import { readAll } from './playersData.js';
 import { verifyCalendarPlatformActor } from './calendarRecordActions.js';
 import { completeReviewedNativeDraw } from './nativeDrawLifecycle.js';
 import { insertReviewedNativeAwards, readNativeRankingReview } from './nativeDrawRanking.js';
+import { organisationDrawScope, saveOrganisationDrawOperation, verifyOrganisationDrawScope } from './nativeOrganisationDraw.js';
 import { verifyEventOperationAccess } from './eventOperationAccess.js';
 
-const drawFields = 'id,event_id,division_id,draw_kind,format,status,updated_at,scoring_rules,tournament_divisions(name)';
+const drawFields = 'id,event_id,division_id,draw_kind,format,status,updated_at,scoring_rules,tournament_divisions(name,is_active)';
 const matchFields = 'id,draw_id,entry_one_id,entry_two_id,round_label,round_number,bracket_position,stage,round_code,winner_entry_id,status,court_name,scheduled_start,scheduled_end,updated_at';
 const announcementFields = 'id,event_id,division_id,draw_id,title,message,is_pinned,is_active,created_at,updated_at';
 const liveStatuses = ['pending', 'scheduled', 'in_progress'];
 const optionalSchema = new Set(['42P01', '42703', 'PGRST204', 'PGRST205']);
 
 async function verifyNativeEvent({ client, event, expectedUserId, scopeId, isCurrent, signal }) {
-  await verifyCalendarPlatformActor({ client, expectedUserId, scopeId, isCurrent });
+  const host = organisationDrawScope(scopeId);
+  if (!host) await verifyCalendarPlatformActor({ client, expectedUserId, scopeId, isCurrent });
   const access = await verifyEventOperationAccess({ client, eventId: event.id, expectedUserId, scopeId, signal });
   if (!access.event.is_manual || access.event.event_status === 'cancelled' || !isCurrent()) {
     throw new Error('Choose an active 4M-hosted event.');
   }
+  if (host) await verifyOrganisationDrawScope({ client, event: access.event, expectedUserId, scopeId, isCurrent });
   return access.user;
+}
+
+async function verifyPlatformNativeEvent(context) {
+  if (context.scopeId !== 'all') throw new Error('This draw operation requires the platform workspace.');
+  return verifyNativeEvent(context);
 }
 
 function nativeDrawSelect(client, event) {
@@ -69,12 +77,13 @@ export async function loadNativeDrawOperations({ client, event, drawId, signal, 
   await verifyNativeEvent({ client, event, signal, ...access });
   const draw = await readNativeDraw(client, event, drawId);
   if (!access.isCurrent()) throw new Error('The draw workspace changed.');
+  const platform = access.scopeId === 'all';
   const [matches, entries, featured, announcements, playDays] = await Promise.all([
     nativeMatches(client, draw, signal),
     readAll(() => client.from('draw_entries').select('id,team_name,status').eq('draw_id', draw.id).order('id'), signal),
     featuredMatches(client, draw, signal),
-    eventAnnouncements(client, event, signal),
-    canScheduleNativeDraw(draw) ? nativeEventPlayDays(client, event, signal) : [],
+    platform ? eventAnnouncements(client, event, signal) : null,
+    platform && canScheduleNativeDraw(draw) ? nativeEventPlayDays(client, event, signal) : [],
   ]);
   const names = new Map(entries.map(entry => [entry.id, entry.team_name]));
   return {
@@ -125,24 +134,24 @@ async function applyNativeMatchSchedule({ client, event, draw, operation, isCurr
 }
 
 export async function loadNativeCalendarPlan({ client, event, ...access }) {
-  await verifyNativeEvent({ client, event, ...access });
+  await verifyPlatformNativeEvent({ client, event, ...access });
   return readNativeEventPlayPlan(client, event, access.signal);
 }
 
 export async function loadNativeDivisionPlan({ client, event, divisionId, ...access }) {
-  await verifyNativeEvent({ client, event, ...access });
+  await verifyPlatformNativeEvent({ client, event, ...access });
   return readNativeDivisionSchedule(client, event.id, divisionId);
 }
 
 export async function previewNativeAutomaticCourts({ client, event, ...access }) {
-  await verifyNativeEvent({ client, event, ...access });
+  await verifyPlatformNativeEvent({ client, event, ...access });
   const data = await readNativeAutoCourtPlan(client, event, access.signal);
   if (!access.isCurrent()) throw new Error('The event workspace changed.');
   return prepareNativeAutoCourtPlan(data);
 }
 
 export async function saveNativeEventCalendarPlan({ client, event, operation, onAttempt, ...access }) {
-  const user = await verifyNativeEvent({ client, event, ...access });
+  const user = await verifyPlatformNativeEvent({ client, event, ...access });
   if (operation.type === 'automatic-courts') {
     const plan = nativeAutoBookingRows(prepareNativeAutoCourtPlan(await readNativeAutoCourtPlan(client, event, access.signal)));
     if (!plan.length || !access.isCurrent() || JSON.stringify(plan) !== JSON.stringify(nativeAutoBookingRows(operation.plan))) {
@@ -179,7 +188,7 @@ export async function saveNativeEventCalendarPlan({ client, event, operation, on
 }
 
 export async function loadNativeDrawRanking({ client, event, draw, ...access }) {
-  await verifyNativeEvent({ client, event, ...access });
+  await verifyPlatformNativeEvent({ client, event, ...access });
   const current = await readNativeDraw(client, event, draw.id);
   if (current.updated_at !== draw.updated_at || !access.isCurrent()) throw new Error('The draw changed. Reopen it before reviewing points.');
   return readNativeRankingReview({ client, event, draw: current, signal: access.signal });
@@ -190,6 +199,21 @@ export async function saveNativeDrawOperation({ client, event, draw, operation, 
   await verifyNativeEvent(context);
   const fresh = await readNativeDraw(client, event, draw.id);
   if (fresh.updated_at !== draw.updated_at || !access.isCurrent()) throw new Error('The draw changed. Reopen it before continuing.');
+  if (organisationDrawScope(access.scopeId)) return saveOrganisationDrawOperation({ client, event, draw: fresh, operation, onAttempt, ...access });
+
+  if (operation.type === 'enable-silver') {
+    const expectedVersion = fresh.updated_at;
+    onAttempt();
+    const { data, error } = await client.rpc('native_enable_silver_plate', {
+      p_event_id: event.id, p_draw_id: fresh.id, p_expected_draw: expectedVersion,
+    });
+    if (error) throw error;
+    if (data?.id !== fresh.id || String(data.event_id) !== String(event.id) || data.division_id !== fresh.division_id
+      || data.plate_mode !== 'double' || !data.updated_at || data.updated_at === expectedVersion) {
+      throw new Error('Could not confirm the Silver plate setting.');
+    }
+    return 'Silver plate enabled. Reopen draw operations to review creation after the opening round is complete.';
+  }
 
   if (operation.type === 'plate') {
     onAttempt();

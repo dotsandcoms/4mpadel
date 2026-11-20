@@ -40,11 +40,13 @@ alter table public.event_play_days add column is_removed boolean not null defaul
 \ir ../supabase/migrations/20261119111803_transactional_native_draw_specialist_actions.sql
 alter table public.draw_matches add column court_name text, add column americano_fixture_key text;
 \ir ../supabase/migrations/20261119112841_atomic_native_court_schedule.sql
+\ir ../supabase/migrations/20261120065013_enable_reviewed_native_silver_plate.sql
 
 insert into public.calendar values (101, 1000, true, 'active'), (102, 1001, true, 'active');
 insert into public.tournament_divisions values
   ('11111111-1111-4111-8111-111111111112', 101, true),
-  ('11111111-1111-4111-8111-111111111113', 102, true);
+  ('11111111-1111-4111-8111-111111111113', 102, true),
+  ('11111111-1111-4111-8111-111111111130', 101, true);
 insert into public.draws(id, event_id, division_id, draw_kind, format, status, scoring_rules, updated_at)
 values ('11111111-1111-4111-8111-111111111114', 101, '11111111-1111-4111-8111-111111111112',
         'main', 'knockout', 'published', '{"plate_mode":"triple"}', '2035-01-20T00:00:00Z');
@@ -223,6 +225,103 @@ begin
   exception when raise_exception then
     if sqlerrm not like 'A reviewed booking falls outside%' then raise; end if;
   end;
+end $$;
+-- An existing published draw can enable Silver without rebuilding its bracket.
+do $$
+declare
+  division uuid := '11111111-1111-4111-8111-111111111130';
+  legacy_draw uuid := '11111111-1111-4111-8111-111111111131';
+  separate_plate uuid := '11111111-1111-4111-8111-111111111132';
+  expected timestamptz := '2035-02-01T00:00:00Z';
+  old_rules jsonb := '{"sets_to_win":2,"ranking_points":{"basis":"fixture"}}';
+  matches_before jsonb;
+  receipt jsonb;
+  created jsonb;
+  row_mode record;
+begin
+  insert into public.draws(id,event_id,division_id,draw_kind,format,status,scoring_rules,updated_at)
+  values (legacy_draw,101,division,'main','group_knockout','published',old_rules,expected);
+  insert into public.draw_entries(draw_id,team_name,player_one_name,seed_number)
+  select legacy_draw,'Legacy team '||n,'Legacy player '||n,n from generate_series(1,4) n;
+  insert into public.draw_matches(draw_id,stage,round_code,round_label,round_number,bracket_position,
+    entry_one_id,entry_two_id,winner_entry_id,loser_entry_id,status,result_type,updated_at)
+  select a.draw_id,'knockout','r2','Semifinals',1,(a.seed_number+1)/2,a.id,b.id,a.id,b.id,'completed','played',expected
+    from public.draw_entries a join public.draw_entries b on b.draw_id=a.draw_id and b.seed_number=a.seed_number+1
+    where a.draw_id=legacy_draw and a.seed_number % 2=1;
+
+  if has_function_privilege('anon','public.native_enable_silver_plate(bigint,uuid,timestamptz)','EXECUTE')
+    or has_function_privilege('service_role','public.native_enable_silver_plate(bigint,uuid,timestamptz)','EXECUTE') then
+    raise exception 'Silver enabled through an unexpected grant';
+  end if;
+  perform set_config('specialist.email','tenant@example.invalid',true);
+  begin
+    perform public.native_enable_silver_plate(101,legacy_draw,expected); raise exception 'Tenant enabled Silver';
+  exception when insufficient_privilege then null;
+  end;
+  perform set_config('specialist.email','inactive@example.invalid',true);
+  begin
+    perform public.native_enable_silver_plate(101,legacy_draw,expected); raise exception 'Inactive admin enabled Silver';
+  exception when insufficient_privilege then null;
+  end;
+  perform set_config('specialist.email','admin@example.invalid',true);
+  begin
+    perform public.native_enable_silver_plate(102,legacy_draw,expected); raise exception 'Another event enabled Silver';
+  exception when raise_exception then
+    if sqlerrm not like 'Choose an eligible%' then raise; end if;
+  end;
+  begin
+    perform public.native_enable_silver_plate(101,legacy_draw,expected - interval '1 second'); raise exception 'Stale draw enabled Silver';
+  exception when raise_exception then
+    if sqlerrm not like 'The draw changed%' then raise; end if;
+  end;
+  update public.tournament_divisions set is_active=false where id=division;
+  begin
+    perform public.native_enable_silver_plate(101,legacy_draw,expected); raise exception 'Inactive division enabled Silver';
+  exception when raise_exception then
+    if sqlerrm not like 'Choose an eligible%' then raise; end if;
+  end;
+  update public.tournament_divisions set is_active=true where id=division;
+
+  for row_mode in select mode from (values ('"triple"'::jsonb), ('"all"'::jsonb), ('[{"min":3,"max":5}]'::jsonb)) config(mode) loop
+    update public.draws set scoring_rules=old_rules||jsonb_build_object('plate_mode',row_mode.mode) where id=legacy_draw;
+    begin
+      perform public.native_enable_silver_plate(101,legacy_draw,expected); raise exception 'Existing rules were overwritten';
+    exception when raise_exception then
+      if sqlerrm not like 'This division already uses%' then raise; end if;
+    end;
+  end loop;
+  update public.draws set scoring_rules=old_rules where id=legacy_draw;
+  insert into public.draws(id,event_id,division_id,draw_kind,format,status)
+  values (separate_plate,101,division,'silver','knockout','archived');
+  begin
+    perform public.native_enable_silver_plate(101,legacy_draw,expected); raise exception 'Archived plate collision was accepted';
+  exception when raise_exception then
+    if sqlerrm not like 'This division already uses%' then raise; end if;
+  end;
+  delete from public.draws where id=separate_plate;
+  update public.draw_matches set round_code='places_3_4', stage='placement' where draw_id=legacy_draw and bracket_position=1;
+  begin
+    perform public.native_enable_silver_plate(101,legacy_draw,expected); raise exception 'Placement fixture was ignored';
+  exception when raise_exception then
+    if sqlerrm not like 'The main draw needs%' then raise; end if;
+  end;
+  update public.draw_matches set round_code='r2',stage='knockout' where draw_id=legacy_draw and bracket_position=1;
+
+  select jsonb_object_agg(m.id,to_jsonb(m)) into matches_before from public.draw_matches m where m.draw_id=legacy_draw;
+  receipt := public.native_enable_silver_plate(101,legacy_draw,expected);
+  if receipt->>'id' <> legacy_draw::text or receipt->>'event_id' <> '101' or receipt->>'division_id' <> division::text
+    or receipt->>'plate_mode' <> 'double' or (receipt->>'updated_at')::timestamptz = expected
+    or (select scoring_rules from public.draws where id=legacy_draw) <> old_rules || '{"plate_mode":"double"}'
+    or (select status from public.draws where id=legacy_draw) <> 'published'
+    or exists (select 1 from public.draws where division_id=division and draw_kind<>'main')
+    or (select jsonb_object_agg(m.id,to_jsonb(m)) from public.draw_matches m where m.draw_id=legacy_draw) is distinct from matches_before
+    then raise exception 'Enabling Silver changed more than the reviewed draw setting'; end if;
+
+  created := public.native_create_linked_plate(101,legacy_draw,(receipt->>'updated_at')::timestamptz,
+    (select jsonb_object_agg(id,updated_at) from public.draw_matches where draw_id=legacy_draw));
+  if created->>'kind' <> 'silver' or created->>'created' <> 'true' or created->>'entry_count' <> '2' then
+    raise exception 'Existing linked-plate generation failed after enable';
+  end if;
 end $$;
 reset role;
 rollback;

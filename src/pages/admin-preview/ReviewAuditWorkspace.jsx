@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import SearchableDropdown from '../../components/SearchableDropdown';
 import RecordLoading from './RecordLoading';
 import { ReviewDialog } from './ReviewNavigationDialogs';
-import { auditPageSize, loadAuditEvents, loadAuditPage } from './reviewAuditData';
+import { auditPageSize, formatAuditDate, loadAuditEvents, loadAuditPage } from './reviewAuditData';
 import './ReviewSettingsWorkspace.css';
 
 const categories = ['REGISTRATION', 'PAYMENT', 'DRAW', 'EVENT', 'ADMIN', 'SYSTEM'];
@@ -52,7 +52,7 @@ export default function ReviewAuditWorkspace({ client, permissions, scope, refre
   const view = result?.key === requestKey ? result : null;
   const error = eventsError || view?.error;
   const subject = id => events?.find(event => String(event.id) === String(id))?.event_name || `Event #${id}`;
-  const date = value => new Intl.DateTimeFormat('en-ZA', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Johannesburg' }).format(new Date(value));
+  const date = value => formatAuditDate(value, true);
   const pages = Math.max(1, Math.ceil((view?.count || 0) / auditPageSize));
 
   return <>

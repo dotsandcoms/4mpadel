@@ -1,18 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadAuditPage } from '../src/pages/admin-preview/reviewAuditData.js';
+import { loadAuditPage, loadEventActivity } from '../src/pages/admin-preview/reviewAuditData.js';
 
-function fixture() {
+function fixture(rows = [{ id: 'audit-fixture' }]) {
   const calls = [];
   const client = { from: table => {
     assert.equal(table, 'event_activity_log');
+    let bounds;
     const query = {
       select: (fields, options) => { calls.push(['select', fields, options]); return query; },
       order: () => query,
       eq: (field, value) => { calls.push(['eq', field, value]); return query; },
       ilike: (field, value) => { calls.push(['ilike', field, value]); return query; },
-      range: (from, to) => { calls.push(['range', from, to]); return query; },
-      then: resolve => resolve({ data: [{ id: 'audit-fixture' }], count: 72 }),
+      range: (from, to) => { bounds = [from, to]; calls.push(['range', from, to]); return query; },
+      then: resolve => resolve({ data: bounds?.[0] === 0 ? rows : [], count: 72 }),
     };
     return query;
   } };
@@ -32,4 +33,15 @@ test('tenant audit restricts records to a verified event before reading each pag
   await assert.rejects(loadAuditPage(denied.client, { ...options, eventId: '91' }), /Choose an event/);
   await assert.rejects(loadAuditPage(denied.client, { ...options, eventId: '' }), /Choose an event/);
   assert.deepEqual(denied.calls, []);
+});
+
+test('an event activity query is scoped and excludes private fields for delegated operators', async () => {
+  const exact = { id: 'exact', event_id:42, created_at:'2035-02-01' };
+  const newer = { ...exact, id:'newer', created_at:'2035-02-02' };
+  const { client, calls } = fixture([exact, { id:'other', event_id:91 }, newer]);
+  assert.deepEqual(await loadEventActivity(client, 42, false), [newer, exact]);
+  assert.doesNotMatch(calls[0][1], /actor_email|details/);
+  assert.deepEqual(calls[1], ['eq', 'event_id', 42]);
+  assert.deepEqual(await loadEventActivity(client, 42, true), [newer, exact]);
+  assert.match(calls.filter(([operation]) => operation === 'select').at(-1)[1], /actor_email,details$/);
 });

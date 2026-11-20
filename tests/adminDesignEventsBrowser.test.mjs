@@ -100,6 +100,22 @@ before(async () => {
                 rpc(name,args) {
                     window.calls.push([name,args]);
                     const request = (async()=>{
+                    if (name==='admin_organisation_host_builder') {
+                        if (window.kind==='host-native' || window.kind==='host-draw-complete') {
+                            return {data:{organisation:{id:'org-a',status:'approved'},event_id:11}};
+                        }
+                        return {error:{message:'Current owner or admin access to the host organisation is required.'}};
+                    }
+                    if (name==='native_manage_organisation_draw') {
+                        return {data:{organisation_id:args.p_organisation_id,event_id:args.p_event_id,draw_id:args.p_draw_id,
+                            match_id:args.p_match_id,action:args.p_action,status:args.p_action==='complete'?'completed':'in_progress',featured:true}};
+                    }
+                    if (name==='native_enable_silver_plate') {
+                        if (window.rejectSilverReview) return {error:{message:'The draw changed. Reopen it before enabling the Silver plate.'}};
+                        window.silverEnabled=true;
+                        nativeDraw.updated_at='draw-v2';
+                        return {data:{id:nativeDraw.id,event_id:11,division_id:51,plate_mode:'double',updated_at:'draw-v2'}};
+                    }
                     if (name==='native_create_linked_plate') return {data:{id:'plate-new',kind:window.kind==='special-bronze'?'bronze':'silver',created:true}};
                     if (name==='native_apply_court_schedule') return {data:args.p_bookings.length};
                     if (name==='native_save_event_play_days') return {data:args.p_days.length};
@@ -135,7 +151,7 @@ before(async () => {
                     if (table==='payments' && window.kind.startsWith('payment-')) rows=[window.kind==='payment-stale' ? {...receipt, payment_method:'cash'} : receipt];
                     if (table==='draw_matches') rows=window.kind.startsWith('court-bulk') ? courtMatches : [nativeMatch];
                     if (window.kind==='draw-ranking' && table==='draws') { nativeDraw.status='completed'; }
-                    if (['draw-ranking','draw-complete'].includes(window.kind) && table==='draw_matches') rows=[window.changeResultRevision ? { ...completedMatch, updated_at:'match-v2' } : completedMatch];
+                    if (['draw-ranking','draw-complete','host-draw-complete'].includes(window.kind) && table==='draw_matches') rows=[window.changeResultRevision ? { ...completedMatch, updated_at:'match-v2' } : completedMatch];
                     if (table==='tournament_divisions') rows=[{id:51,event_id:11,ranking_tier_id:'tier-a',ranking_category:1}];
                     if (table==='ranking_tiers') rows=[{id:'tier-a',code:'silver',name:'Silver'}];
                     if (table==='ranking_points_table') rows=[
@@ -147,11 +163,14 @@ before(async () => {
                     if (table==='draw_entries') rows=(window.kind==='draw-ranking'?rankingEntries:tournament.entries).map(row=>({...row,draw_id:draw.id}));
                     if (window.kind.startsWith('special-') && table==='draws') {
                         if (window.kind==='special-days' || window.kind==='special-division' || window.kind==='special-remove') rows=[];
-                        else { nativeDraw.scoring_rules={plate_mode:'triple'}; nativeDraw.draw_kind=window.kind==='special-bronze'?'silver':'main'; }
+                        else {
+                            nativeDraw.scoring_rules=window.kind.startsWith('special-enable') ? {plate_mode:window.silverEnabled?'double':'none'} : {plate_mode:'triple'};
+                            nativeDraw.draw_kind=window.kind==='special-bronze'?'silver':'main';
+                        }
                     }
                     if (window.kind==='special-automatic' && table==='draw_matches') rows=courtMatches.map(row=>({...row,court_name:null}));
-                    if (['special-silver','special-bronze'].includes(window.kind) && table==='draw_matches') rows=linkedPlateMatches;
-                    if (['special-silver','special-bronze'].includes(window.kind) && table==='draw_entries') rows=linkedPlateEntries;
+                    if (['special-silver','special-bronze','special-enable-silver'].includes(window.kind) && table==='draw_matches') rows=linkedPlateMatches;
+                    if (['special-silver','special-bronze','special-enable-silver'].includes(window.kind) && table==='draw_entries') rows=linkedPlateEntries;
                     if (window.kind.startsWith('special-') && table==='event_play_days') rows=[
                         { id:501,event_id:11,play_date:'2035-01-21',start_time:'08:00',end_time:'18:00',courts_count:1,
                           match_duration_minutes:45,minimum_break_minutes:10,is_active:true,updated_at:'day-v1' },
@@ -219,8 +238,11 @@ before(async () => {
                 if (kind.startsWith('payment-')) return <EventPaymentDialog action={{ type:'correct', registration:{...paid, _editablePayment:receipt} }} client={client} session={session}
                     event={event} divisions={[division]} scopeId={kind==='payment-tenant'?'org:org-a':'all'} onClose={result=>window.calls.push(['closed',result])}/>;
                 if (kind==='draw-generator') return <MemoryRouter initialEntries={['/admin-preview/event?event=505']}><GeneratorFixture /></MemoryRouter>;
-                if (kind==='native-draw' || kind.startsWith('special-') || kind.startsWith('court-') || ['draw-complete','draw-ranking'].includes(kind)) return <NativeDrawOperationsDialog client={client} session={session} event={event}
-                    scopeId={kind==='court-tenant'?'org:org-a':'all'} onClose={()=>window.calls.push(['closed'])} />;
+                if (kind.startsWith('public-draw-')) return <EventDrawWorkspace event={event} divisions={[division]}
+                    draws={[kind==='public-draw-live'?nativeDraw:{...nativeDraw,status:'draft'},otherNativeDraw]}
+                    registrationCount={()=>4} onDrawDetails={()=>{}} />;
+                if (kind==='native-draw' || kind.startsWith('special-') || kind.startsWith('court-') || kind.startsWith('host-') || ['draw-complete','draw-ranking'].includes(kind)) return <NativeDrawOperationsDialog client={client} session={session} event={kind==='host-foreign'?other:event}
+                    scopeId={kind.startsWith('host-')||['court-tenant','special-enable-silver-tenant'].includes(kind)?'org:org-a':'all'} onClose={()=>window.calls.push(['closed'])} />;
                 if (kind.startsWith('rankedin-')) return <MemoryRouter><CalendarWorkspace session={session} client={client}
                   scope={{id:'all'}} permissions={{role:'super_admin'}} scopeId="all" canManageEvents /></MemoryRouter>;
                 if (kind==='calendar') return <MemoryRouter initialEntries={['/?create=quick&keep=1']}><CalendarFixture /></MemoryRouter>;
@@ -483,6 +505,51 @@ test('Calendar bulk refresh writes only the reviewed past cache and preserves it
     } finally { await page.close(); }
 });
 
+test('view public draw points to the canonical host and remains absent for a draft', async () => {
+    const live = await open('public-draw-live');
+    try {
+        const link = await live.waitForSelector('a[href="https://4mpadel.co.za/native-draws/silver-open"]');
+        assert.match(await link.evaluate(node=>node.textContent), /View public draw/);
+    } finally { await live.close(); }
+    const draft = await open('public-draw-draft');
+    try {
+        await draft.waitForFunction(()=>document.querySelector('.ap-draw-list')?.textContent.includes('draft'));
+        assert.equal(await draft.$('a[href*="/native-draws/"], a[href*="/draws-preview/"]'), null);
+    } finally { await draft.close(); }
+});
+
+test('verified host reviews live and completion changes through exact organisation RPCs', async () => {
+    const owner = await open('host-native');
+    try {
+        await owner.waitForFunction(() => [...document.querySelectorAll('dialog label')].some(label => label.textContent.startsWith('Match')), { polling: 50 });
+        await owner.evaluate(() => [...document.querySelectorAll('dialog label')].find(label => label.textContent.startsWith('Match')).querySelector('button').click());
+        await clickText(owner, 'Final · First Pair vs Second Pair', '[role=option]');
+        await clickText(owner, 'Mark match live');
+        assert.equal(await owner.evaluate(()=>window.calls.some(([name])=>name==='native_manage_organisation_draw')), false);
+        await clickText(owner, 'Confirm draw action');
+        await owner.waitForFunction(()=>document.querySelector('dialog [role=status]')?.textContent.includes('Match marked live'));
+        const requests = await owner.evaluate(()=>window.calls.filter(([name])=>name==='native_manage_organisation_draw'));
+        assert.deepEqual(requests,[['native_manage_organisation_draw',{p_organisation_id:'org-a',p_event_id:11,p_draw_id:'draw-a',
+            p_expected_draw:'draw-v1',p_action:'live',p_match_id:'match-tm-1',p_expected_match:'match-v1'}]]);
+        assert.equal(await owner.evaluate(()=>window.calls.some(([name])=>name==='update')), false);
+    } finally { await owner.close(); }
+    const completion = await open('host-draw-complete');
+    try {
+        await clickText(completion, 'Mark draw complete');
+        await clickText(completion, 'Confirm draw action');
+        await completion.waitForFunction(()=>document.querySelector('dialog [role=status]')?.textContent.includes('Draw marked complete'));
+        const options = await completion.evaluate(()=>window.calls.find(([name])=>name==='native_manage_organisation_draw')[1]);
+        assert.equal(options.p_action,'complete');
+        assert.deepEqual(options.p_matches,{'match-tm-1':['completed','match-v1']});
+        assert.equal(await completion.evaluate(()=>window.calls.some(([name])=>name==='player_ranking_points')),false);
+    } finally { await completion.close(); }
+    const foreign = await open('host-foreign');
+    try {
+        await foreign.waitForFunction(()=>document.querySelector('dialog [role=alert]')?.textContent.includes('no longer available'));
+        assert.equal(await foreign.evaluate(()=>window.calls.some(([name])=>name==='native_manage_organisation_draw')),false);
+    } finally { await foreign.close(); }
+});
+
 test('native draw operations mark live and feature the exact reviewed version, one reviewed action at a time', async () => {
     for (const [label, expected] of [['Mark match live', { status:'in_progress' }], ['Feature match', { is_featured:true }]]) {
         const page = await open('native-draw');
@@ -631,8 +698,12 @@ test('bulk court setup accounts for a partial write and denies a tenant scope be
 
     const tenant = await open('court-tenant');
     try {
-        await tenant.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('all-workspaces administrator'), { polling: 50 });
-        assert.equal(await tenant.evaluate(() => window.calls.length), 0);
+        await tenant.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('host organisation is required'), { polling: 50 });
+        const calls = await tenant.evaluate(() => window.calls);
+        assert.deepEqual(calls, [
+            ['can_manage_event', { p_event_id: 11 }],
+            ['admin_organisation_host_builder', { p_organisation_id: 'org-a', p_event_id: 11 }],
+        ]);
         assert.doesNotMatch(await tenant.$eval('dialog', node => node.textContent), /Bulk court setup|Match court setup/);
     } finally { await tenant.close(); }
 });
@@ -739,6 +810,46 @@ test('linked Silver and Bronze plate reviews show only opening-round losers and 
             }]]);
         } finally { await page.close(); }
     }
+});
+
+test('legacy main draw enables Silver after confirmation and keeps plate creation as a separate reviewed action', async () => {
+    const page = await open('special-enable-silver');
+    try {
+        await clickText(page, 'Enable Silver plate');
+        assert.match(await page.$eval('dialog', node => node.textContent), /Open · Main draw · published/);
+        assert.match(await page.$eval('dialog', node => node.textContent), /use Create Silver plate/);
+        assert.equal(await page.evaluate(() => window.calls.some(([name]) => name === 'native_enable_silver_plate')), false);
+        await clickText(page, 'Back');
+        await clickText(page, 'Enable Silver plate');
+        await clickText(page, 'Confirm draw action');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent.includes('Silver plate enabled'));
+        const actions = await page.evaluate(() => window.calls.filter(([name]) => ['native_enable_silver_plate','native_create_linked_plate'].includes(name)));
+        assert.deepEqual(actions, [['native_enable_silver_plate', { p_event_id: 11, p_draw_id: 'draw-a', p_expected_draw: 'draw-v1' }]]);
+
+        await page.evaluate(() => { window.show('native-draw'); });
+        await page.evaluate(() => { window.show('special-enable-silver'); });
+        await clickText(page, 'Create Silver plate');
+        assert.match(await page.$eval('dialog', node => node.textContent), /Plate Team 2Plate Team 4/);
+        assert.equal(await page.evaluate(() => window.calls.some(([name]) => name === 'native_create_linked_plate')), false);
+    } finally { await page.close(); }
+});
+
+test('legacy Silver enable rejects a stale server review and disallows tenant attempts', async () => {
+    const stale = await open('special-enable-silver');
+    try {
+        await clickText(stale, 'Enable Silver plate');
+        await stale.evaluate(() => { window.rejectSilverReview=true; });
+        await clickText(stale, 'Confirm draw action');
+        await stale.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('draw changed'));
+        assert.equal(await stale.evaluate(() => Boolean(window.silverEnabled)), false);
+    } finally { await stale.close(); }
+
+    const tenant = await open('special-enable-silver-tenant');
+    try {
+        await tenant.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('host organisation is required'));
+        assert.equal(await tenant.evaluate(() => document.querySelector('dialog')?.textContent.includes('Enable Silver plate')), false);
+        assert.equal(await tenant.evaluate(() => window.calls.some(([name]) => name === 'native_enable_silver_plate')), false);
+    } finally { await tenant.close(); }
 });
 
 test('play-day changes work before a draw exists, using exact event and day versions', async () => {
