@@ -5,17 +5,21 @@ import { HomeShortcuts } from '@/components/home-shortcuts';
 import { type Href, useNavigation, useRouter } from 'expo-router';
 import type { NavigationProp } from 'expo-router/react-navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Animated, type FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ErrorBanner } from '@/components/error-banner';
 import { HomeAction } from '@/components/home-action';
 import { HomeHeader } from '@/components/home-header';
+import { HomeSky } from '@/components/home-sky';
+import { PremierNewsRail } from '@/components/home-premier-news';
 import { TourTarget, ContextualTip, useGuidedTour } from '@/components/guided-tour';
 import { HomeSourcePicker, type HomeFeedTab } from '@/components/home-source-picker';
 import { FollowingFeedList } from '@/components/following-feed-list';
 import { FeedSection, FollowingRail, HomeIdentity, LocalNowRail, LocalResults, MediaRail, OfficialFipRail, SectionState, SpotlightRail, TourLiveRail, TourResults, TourSpotlight, UpcomingEntries } from '@/components/home-feed';
 import { ObserveReady } from '@/components/observe-ready';
+import { useForegroundClock } from '@/hooks/use-foreground-clock';
 import { useHomeFeed, type HomeSource } from '@/hooks/use-home-feed';
+import { useHomeConditions } from '@/hooks/use-home-conditions';
 import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
 import { EMPTY_HOME, profileGaps, resolveFeaturedCta, resolveScheduleEntryCta, type CalendarEvent, type PendingAction } from '@/lib/home';
 import { homeEventState, homeOfficialFipEvents, homeTourEvents, tourPath } from '@/lib/home-feed';
@@ -27,7 +31,7 @@ import { markPushPromptSeen, requestPushPermission, shouldPromptForPush } from '
 import { openSitePath } from '@/lib/site';
 import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 
-type Section = 'spotlight' | 'shortcuts' | 'now' | 'following' | 'upcoming' | 'results' | 'media' | 'fip';
+type Section = 'spotlight' | 'shortcuts' | 'now' | 'following' | 'upcoming' | 'results' | 'media' | 'fip' | 'news';
 
 export default function HomeScreen() {
   const router = useRouter(), insets = useSafeAreaInsets(), tabPadding = useTabScenePadding();
@@ -41,7 +45,13 @@ export default function HomeScreen() {
   const source: HomeSource = tab === 'international' ? 'international' : '4m';
   const following = tab === 'following';
   const feed = useHomeFeed(source, !following);
+  const conditions = useHomeConditions(feed.signedIn, feed.profile.data?.region, feed.clubArea.data);
+  const now = new Date(useForegroundClock(60_000));
+  const hour = now.getHours();
+  const playerId = feed.profile.data?.id;
   const list = useRef<FlatList<Section>>(null), mounted = useRef(true);
+  const scrollY = useMemo(() => new Animated.Value(0), []);
+  const onHomeScroll = useMemo(() => Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: Platform.OS !== 'web' }), [scrollY]);
   const local = source === '4m';
   const followedPlayers = (feed.following.data?.followedPlayers ?? []).filter(player => player.source === (local ? 'local' : 'pro'));
   const pending = useMemo(() => [...(feed.payments.data ?? []), ...profileGaps(feed.profile.data ?? null)], [feed.payments.data, feed.profile.data]);
@@ -57,10 +67,13 @@ export default function HomeScreen() {
   const comingUpEvents = upcomingTourEvents(internationalEvents, liveEvents).map(presentTour);
   const officialEvents = homeOfficialFipEvents(feed.fip.data?.tournaments ?? []);
   const internationalResults = selectProMatches(feed.tour.data?.matches ?? [], null).filter(match => match.status === 'finished' && match.score.length > 0);
-  const sections: Section[] = local ? ['spotlight', 'shortcuts', 'now', 'following', 'upcoming', 'results', 'media'] : ['now', 'shortcuts', 'spotlight', 'following', 'results', 'fip'];
+  const sections: Section[] = local ? ['spotlight', 'shortcuts', 'now', 'following', 'upcoming', 'results', 'media'] : ['now', 'news', 'shortcuts', 'spotlight', 'following', 'results', 'fip'];
 
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
-  useEffect(() => { list.current?.scrollToOffset({ offset: 0, animated: false }); }, [tab]);
+  useEffect(() => {
+    scrollY.setValue(0);
+    list.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [tab, scrollY]);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -99,6 +112,7 @@ export default function HomeScreen() {
   };
   const openPending = (action: PendingAction) => action.kind === 'profile' ? router.push('/edit-profile') : void openSitePath(action.path);
   const openTour = (event: ProTournament) => open(tourPath(event));
+  const openPremierNews = (slug?: string) => router.push({ pathname: '/pro/news', params: slug ? { slug } : {} });
   const refresh = async () => {
     if (refreshing) return;
     setRefreshing(true);
@@ -131,6 +145,10 @@ export default function HomeScreen() {
         return <FeedSection title="Following" onMore={() => open(`/rankings?view=Following&source=${local ? '4m' : 'pro'}`)}>
           {followedPlayers.length ? <FollowingRail players={followedPlayers} onPlayer={player => open(`${player.source === 'pro' ? '/pro/player' : '/players'}/${player.id}`)} /> : state(feed.following, feed.signedIn ? 'Follow players to see their current rankings here.' : 'Sign in to follow players.')}
         </FeedSection>;
+      case 'news':
+        return <FeedSection title="Premier Padel news" onMore={() => openPremierNews()}>
+          {feed.news.data?.length ? <PremierNewsRail articles={feed.news.data} onOpen={openPremierNews} /> : state(feed.news, 'Headlines will appear when available.')}
+        </FeedSection>;
       case 'upcoming':
         if (!feed.signedIn) return null;
         return <FeedSection title="My next events" onMore={() => open('/my-entries')}>
@@ -154,7 +172,7 @@ export default function HomeScreen() {
   }
 
   const listHeader = <View style={{ flexShrink: 0 }}>
-        <HomeIdentity player={feed.profile.data} loading={feed.profile.loading} onProfile={() => open('/(tabs)/profile')} onRankings={() => open('/rankings?view=Rankings&source=4m')} />
+        <HomeIdentity player={feed.profile.data} loading={feed.profile.loading} {...conditions} now={now} onProfile={() => open('/(tabs)/profile')} onRankings={() => open('/rankings?view=Rankings&source=4m')} />
         <TourTarget id="home.feed" onReveal={() => { if (following) revealFollowing.current(); else list.current?.scrollToOffset({ offset: 0, animated: false }); }} style={{ marginBottom: 16, flexShrink: 0 }}><HomeSourcePicker following value={tab} onChange={setTab} /></TourTarget>
         <ContextualTip chapter="home" style={{ marginBottom: 12 }} />
         {feed.signedIn && <ProfileCompletionBanner missing={profileMissing} onEdit={() => router.push('/edit-profile')} />}
@@ -162,9 +180,11 @@ export default function HomeScreen() {
       </View>;
 
   return <View style={s.page}>
+    <HomeSky night={hour < 6 || hour >= 18} top={insets.top - 12} scrollY={scrollY} />
     <ObserveReady ready={following ? !feed.profile.loading : local ? !feed.spotlight.loading : !feed.tour.loading} />
-    <View style={{ paddingTop: insets.top, backgroundColor: b.page }}><HomeHeader onSearch={() => open(local ? '/search' : '/search?source=international')} onNotifications={() => open('/notifications')} /></View>
-    {following ? <FollowingFeedList onTourScrollReady={reveal => { revealFollowing.current = reveal; }} header={listHeader} horizontalPadding={20} bottomPadding={tabPadding} /> : <FlatList ref={list} data={sections} extraData={feed} keyExtractor={section => `${source}:${section}`} renderItem={({ item }) => renderSection(item)}
+    <View style={{ paddingTop: insets.top }}><HomeHeader transparent onSearch={() => open(local ? '/search' : '/search?source=international')} onNotifications={() => open('/notifications')} followers={playerId != null ? { playerId: String(playerId), onPress: () => router.push({ pathname: '/followers', params: { playerId: String(playerId) } }) } : undefined} /></View>
+    {following ? <FollowingFeedList onTourScrollReady={reveal => { revealFollowing.current = reveal; }} header={listHeader} horizontalPadding={20} bottomPadding={tabPadding} onScroll={onHomeScroll} /> : <Animated.FlatList ref={list} data={sections} extraData={feed} keyExtractor={section => `${source}:${section}`} renderItem={({ item }) => renderSection(item)}
+      onScroll={onHomeScroll} scrollEventThrottle={16}
       initialNumToRender={3} maxToRenderPerBatch={2} windowSize={5} showsVerticalScrollIndicator={false}
       contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 32 : tabPadding }}
       refreshControl={<RefreshControl colors={[loadingBlue]} refreshing={refreshing} onRefresh={() => void refresh()} tintColor={loadingBlue} />}

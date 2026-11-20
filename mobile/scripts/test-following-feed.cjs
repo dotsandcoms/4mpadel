@@ -24,7 +24,7 @@ test('local ranking posts require a verified SAPA Main source, not the displayed
     const page = feed.parseFeedPage({ items: [{ ...row, payload }], has_more: true });
     assert.equal(page.items.length, 0); assert.equal(page.cursor.id, row.id); assert.equal(page.hasMore, true);
   }
-  const page = feed.parseFeedPage({ items: [{ ...row, payload: { ...mainScope, before_rank: 24, rank: 17, points: 3381 } }], has_more: false });
+  const page = feed.parseFeedPage({ items: [{ ...row, payload: { ...mainScope, before_rank: 42, rank: 17, points: 3381 } }], has_more: false });
   assert.equal(page.items.length, 1);
   const change = feed.feedRankingChange(page.items[0]);
   assert.equal(change.label, 'SAPA Men-Main'); assert.equal(change.rank, 17); assert.equal(change.points, 3381);
@@ -34,22 +34,23 @@ test('Women-Main identity cannot be labelled as Men-Main or borrowed from anothe
   assert.equal(feed.feedRankingChange({ kind: 'ranking', path: '/players/192', payload }).label, 'SAPA Women-Main');
   assert.equal(feed.feedRankingChange({ kind: 'ranking', path: '/players/192', payload: { ...payload, age_group: 'Men-Main' } }), null);
 });
-test('ranking movement directions describe places gained or lost within the same SAPA Main scope', () => {
-  for (const [before, rank, change] of [[40, 46, -6], [46, 39, 7]]) {
+test('significant ranking climbs preserve places gained within the same SAPA Main scope', () => {
+  for (const [before, rank, change] of [[64, 39, 25], [105, 99, 6]]) {
     const movement = feed.feedRankingChange({ kind: 'ranking', path: '/players/1', payload: { ...mainScope, before_rank: before, rank } });
     assert.equal(movement.change, change);
     assert.equal(movement.scope, 'sapa:15809:3:82');
     assert.equal(movement.label, 'SAPA Men-Main');
   }
 });
-test('local and FIP ranking posts require more than five places or entry into a top milestone', () => {
+test('local and FIP ranking posts require a top-10 or top-100 debut or a 25-place climb to rank 499 or better', () => {
   const cases = [
-    [394, 397, false], [122, 127, false], [127, 122, false],
-    [122, 128, true], [128, 122, true],
-    [11, 10, true], [21, 20, true], [101, 100, true],
-    [12, 9, true], [22, 19, true], [102, 99, true],
+    [86, 94, false], [1448, 1435, false], [122, 127, false], [127, 122, false],
+    [144, 120, false], [145, 120, true], [120, 145, false],
+    [11, 10, true], [21, 20, false], [101, 100, true],
+    [12, 9, true], [22, 19, false], [102, 99, true],
     [10, 9, false], [20, 19, false], [100, 99, false],
     [10, 11, false], [20, 21, false], [100, 101, false],
+    [524, 499, true], [525, 500, false], [550, 520, false],
     [9, 9, false], [null, 10, false], [0, 10, false], [10, null, false],
   ];
   for (const path of ['/players/191', '/pro/player/95']) {
@@ -260,9 +261,9 @@ test('an invalidated account request does not continue collecting personal feed 
   const api=load('src/lib/following-feed.ts',name=>name.includes('supabase')?{supabase:{rpc:async()=>{calls++;return {data:{items:[{id:'00000000-0000-4000-8000-000000000001',kind:'entry',title:'Public entry',path:'/events/3',occurred_at:'2026-10-07T10:00:00Z'}],has_more:true},error:null};}}}:routing);
   await api.fetchFollowingWindow('all',80,()=>false); assert.equal(calls,1);
 });
-test('feed windows and load more skip unchanged ranking pages to reach real updates', async () => {
+test('feed windows and load more skip small ranking changes to reach milestones', async () => {
   const calls = [];
-  const entries = Array.from({ length: 5 }, (_, i) => ({ id: `00000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`, kind: 'ranking', title: 'Ranking update', path: '/pro/player/95', occurred_at: new Date(now - i * 1000).toISOString(), payload: { before_rank: 10, rank: i < 3 ? 9 : 3 } }));
+  const entries = Array.from({ length: 5 }, (_, i) => ({ id: `00000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`, kind: 'ranking', title: 'Ranking update', path: '/pro/player/95', occurred_at: new Date(now - i * 1000).toISOString(), payload: { before_rank: 11, rank: i < 3 ? 12 : 3 } }));
   const api = load('src/lib/following-feed.ts', name => name.includes('supabase') ? { supabase: { rpc: async (_name, args) => {
     calls.push(args);
     const offset = args.p_before_id ? entries.findIndex(row => row.id === args.p_before_id) + 1 : 0;
@@ -282,6 +283,23 @@ test('match cards preserve all exact player portraits and countries without unsa
   const fallback=feed.feedParticipants({...activity,payload:{...activity.payload,participants:null}});
   assert.equal(fallback[1][0].name,'Brad');assert.equal(fallback[1][0].photo,null);
 });
+test('tournament cards identify what changed for new and older feed posts', () => {
+  const detail = { kind: 'tournament', body: 'Venue: New courts · Main clubhouse', payload: { update_type: 'details' } };
+  const legacy = feed.feedTournamentUpdate(detail);
+  assert.equal(legacy.label, 'Venue changed');
+  assert.equal(legacy.changes[0].after, 'New courts · Main clubhouse');
+  assert.equal(legacy.changes[0].before, '');
+  const venue = { field: 'venue', before: 'Old courts', after: 'New courts' };
+  const one = feed.feedTournamentUpdate({ ...detail, payload: { ...detail.payload, changes: [venue] } });
+  assert.equal(one.label, 'Venue changed');
+  assert.equal(one.changes[0].before, 'Old courts');
+  const multiple = feed.feedTournamentUpdate({ ...detail, payload: { ...detail.payload, changes: [venue, { field: 'start_date', after: '20 November 2026' }, { field: 'internal', after: 'Unsupported' }] } });
+  assert.equal(multiple.label, 'Tournament details changed');
+  assert.deepEqual(Array.from(multiple.changes, change => change.label), ['Venue', 'Start date']);
+  assert.equal(feed.feedTournamentUpdate({ ...detail, payload: { update_type: 'schedule' } }).label, 'Schedule published');
+  assert.equal(feed.feedTournamentUpdate({ ...detail, kind: 'entry' }), null);
+});
+
 test('entry timers use current structured deadlines and distinguish closed, future and invalid dates', () => {
   const item={kind:'tournament',body:'Entries close: old date',payload:{registration_closes_at:'2026-10-08T11:00:00Z',changes:[{field:'registration_closes_at',after:'old date'}]}};
   assert.equal(feed.feedDeadline(item),'2026-10-08T11:00:00.000Z');

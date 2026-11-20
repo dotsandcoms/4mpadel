@@ -9,11 +9,96 @@ function load(file) {
     { module: mod, exports: mod.exports, Date, Map, Promise, Intl, require: () => ({}) });
   return mod.exports;
 }
+
+test('Home weather sends only rounded area coordinates and renders the current temperature', async () => {
+  const mod = { exports: {} }, requests = [];
+  const signal = new AbortController().signal;
+  const modules = { './event-weather': load('src/lib/event-weather.ts'), './registration': load('src/lib/registration.ts') };
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/home-weather.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText,
+    { module: mod, exports: mod.exports, URLSearchParams, require: id => modules[id], fetch: async (url, options) => {
+      requests.push({ url: new URL(url), signal: options.signal });
+      return { ok: true, json: async () => ({ current: { temperature_2m: 18.6, weather_code: 61, is_day: 0 } }) };
+    } });
+  const { fetchHomeWeather, areaLabel, profileRegionLabel } = mod.exports;
+  const weather = await fetchHomeWeather(-26.2041, 28.0473, signal);
+  assert.equal(requests.length, 1);
+  const [{ url, signal: requestSignal }] = requests;
+  assert.equal(url.origin, 'https://api.open-meteo.com');
+  assert.deepEqual(Object.fromEntries(url.searchParams), { latitude: '-26.2', longitude: '28.0', current: 'temperature_2m,weather_code,is_day' });
+  assert.equal(requestSignal, signal);
+  assert.equal(weather.temp, 19);
+  assert.equal(weather.condition, 'Rain');
+  assert.equal(weather.daylight, false);
+  assert.equal(areaLabel('Johannesburg', 'South Africa'), 'Johannesburg, South Africa');
+  assert.equal(profileRegionLabel('Gauteng'), 'Gauteng, South Africa');
+  assert.equal(profileRegionLabel('Lisbon'), 'Lisbon');
+  assert.equal(profileRegionLabel(null), '');
+});
 const { createHomeFeedCache } = load('src/lib/home-feed-cache.ts');
 const { homeEventState, homeFeedSource, homeTourEvents, tourPath, tourSource, tourLevelLabel, spotlightCountdown, homeFollowingTeam, homeOfficialFipEvents } = load('src/lib/home-feed.ts');
 const { resultHighlight, resultHighlights, resultPortraits, resultHighlightKey } = load('src/lib/home-results.ts');
 const { createHomePortraitCache } = load('src/lib/home-pro-portraits.ts');
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
+
+test('Premier Padel news uses official photos and renders published story blocks as native text', () => {
+  const mod = { exports: {} };
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/premier-news.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText,
+    { module: mod, exports: mod.exports, URL, require });
+  const { parsePremierNews, parsePremierStory, isPremierNewsSlug } = mod.exports;
+  const first = { slug: 'tour-final', title: 'Finals & more', published_at: '2026-11-17T10:00:00Z',
+    hero_image_url: '/uploads/hero/final.jpg', hero_media_thumbnail: '/uploads/thumb/final.jpg' };
+  const page = parsePremierNews({ status: true, totalPages: 2, data: [
+    first, first, { slug: 'second', title: 'Another headline', hero_image_url: 'https://example.com/photo.jpg' },
+    { slug: '../outside', title: 'Invalid story' },
+  ] }, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(page)), { nextPage: 2, articles: [
+    { slug: 'tour-final', title: 'Finals & more', publishedAt: '2026-11-17T10:00:00Z', image: 'https://cdn.premierpadel.com/uploads/thumb/final.jpg' },
+    { slug: 'second', title: 'Another headline', publishedAt: null, image: null },
+  ] });
+  const data = { ...first, status: 'published', blocks: [
+    { block_type: 'text', sort_order: 2, content: { text: '<p>Match &amp; results <a href="https://example.com">here</a>.</p>' } },
+    { block_type: 'text', sort_order: 1, content: { text: '<h2>Finals</h2><script>hidden()</script>' } },
+    { block_type: 'text', content: { is_active: false, text: '<p>Inactive</p>' } },
+  ] };
+  const story = parsePremierStory({ status: true, data }, 'tour-final');
+  assert.equal(story.image, 'https://cdn.premierpadel.com/uploads/hero/final.jpg');
+  assert.deepEqual(JSON.parse(JSON.stringify(story.paragraphs)), [
+    { style: 'heading', text: 'Finals' }, { style: 'body', text: 'Match & results here.' },
+  ]);
+  assert.throws(() => parsePremierStory({ status: true, data: { ...data, status: 'draft' } }, 'tour-final'));
+  assert.throws(() => parsePremierStory({ status: true, data }, 'other-story'));
+  assert.equal(isPremierNewsSlug('tour-final'), true);
+  for (const value of [['tour-final'], '../other', 'https://example.com/story', 'tour?other']) assert.equal(isPremierNewsSlug(value), false);
+});
+
+test('Home card controls follow arrow presses and swipes and hide when all cards fit', () => {
+  const mod = { exports: {} }, offsets = [];
+  let page = 0;
+  const modules = {
+    react: {
+      useState: initial => initial === 0 ? [page, next => { page = next; }] : [initial, () => {}],
+      useRef: () => ({ current: { scrollToOffset: ({ offset }) => offsets.push(offset) } }),
+    },
+    'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
+    'react-native': { FlatList: 'FlatList', Text: 'Text', View: 'View', useWindowDimensions: () => ({ width: 400, fontScale: 1 }) },
+    './home-action': { HomeAction: 'HomeAction' },
+    '@/theme/tokens': { lightBrand: {} },
+  };
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/components/swipe-cards.tsx', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText,
+    { module: mod, exports: mod.exports, require: name => modules[name] });
+  const rail = (items = [1, 2], compact = false) => mod.exports.SwipeCards({ items, compact, itemKey: String, renderCard: () => null }).props.children;
+  const [list, controls] = rail();
+  const [previous, counter, next] = controls.props.children;
+  assert.equal(previous.props.disabled, true);
+  assert.equal(counter.props.accessibilityLabel, 'Card 1 of 2');
+  next.props.onPress();
+  assert.deepEqual(offsets, [356]);
+  assert.equal(rail()[1].props.children[2].props.disabled, true);
+  list.props.onScrollEndDrag({ nativeEvent: { contentOffset: { x: 320 }, targetContentOffset: { x: 0 } } });
+  assert.equal(rail()[1].props.children[1].props.accessibilityLabel, 'Card 1 of 2');
+  assert.equal(rail([1])[1], false);
+  assert.equal(rail([1, 2], true)[1], false);
+});
 
 test('Home offers Following in the native picker while the event calendar keeps its two circuits', () => {
   const mod = { exports: {} }, selected = [];
@@ -44,19 +129,24 @@ for (const [source, expected] of [
   assert.deepEqual(opened, expected);
 });
 
-test('FIP Home shortcuts select the native calendar and Players tabs with their destination filters', () => {
+test('FIP Home shortcuts and news open their destinations inside the app', () => {
   const mod = { exports: {} }, navigated = [], pushed = [];
   const empty = { data: null, loading: false, error: false };
   const feed = Object.fromEntries(['profile', 'following', 'payments', 'schedule', 'matches', 'spotlight', 'happening', 'results', 'media', 'tour', 'fixtures', 'live', 'fip'].map(name => [name, empty]));
+  const article = { slug: 'tour-final', title: 'The tour final' };
+  feed.profile = { ...empty, data: { id: 73 } };
+  feed.news = { ...empty, data: [article] };
   let stateIndex = 0;
   const modules = {
     react: { useState: value => [stateIndex++ === 0 ? 'international' : value, () => {}], useMemo: fn => fn(), useRef: current => ({ current }), useEffect() {} },
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
-    'react-native': { Platform: { OS: 'ios' }, StyleSheet: { create: styles => styles }, View: 'View', FlatList: 'FlatList', RefreshControl: 'RefreshControl' },
+    'react-native': { Platform: { OS: 'ios' }, StyleSheet: { create: styles => styles }, View: 'View', Animated: { FlatList: 'FlatList', Value: class {}, event: () => () => {} }, RefreshControl: 'RefreshControl' },
     'expo-router': { useRouter: () => ({ push: path => pushed.push(path) }), useNavigation: () => ({ navigate: (name, params) => navigated.push({ name, params }) }) },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0 }) },
     '@/hooks/use-tab-scene-padding': { useTabScenePadding: () => 0 },
-    '@/hooks/use-home-feed': { useHomeFeed: () => ({ ...feed, completion: empty }) },
+    '@/hooks/use-home-feed': { useHomeFeed: () => ({ ...feed, completion: empty, clubArea: empty }) },
+    '@/hooks/use-home-conditions': { useHomeConditions: () => ({ location: null, weather: null }) },
+    '@/hooks/use-foreground-clock': { useForegroundClock: () => Date.now() },
     '@/hooks/use-home-banner-dismissal': { useHomeBannerDismissal: () => ({ ready: true, hidden: false, dismiss() {} }) },
     '@/components/guided-tour': { useGuidedTour: () => null, TourTarget: 'TourTarget', ContextualTip: 'ContextualTip' },
     '@/lib/profile-completion': { missingProfileFields: () => [] },
@@ -72,7 +162,8 @@ test('FIP Home shortcuts select the native calendar and Players tabs with their 
     { module: shortcuts, exports: shortcuts.exports, require: id => id === 'react/jsx-runtime' ? runtime : { HomeAction: 'HomeAction' } });
   vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/app/(tabs)/index.tsx', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText,
     { module: mod, exports: mod.exports, URLSearchParams, require: id => modules[id] || new Proxy({}, { get: (_, key) => key }) });
-  const list = mod.exports.default().props.children.find(child => child?.type === 'FlatList');
+  const screen = mod.exports.default();
+  const list = screen.props.children.find(child => child?.type === 'FlatList');
   const shortcutProps = list.props.renderItem({ item: 'shortcuts' }).props.children.props;
   assert.equal(shortcutProps.source, 'international');
   const actions = shortcuts.exports.HomeShortcuts(shortcutProps).props.children;
@@ -83,6 +174,18 @@ test('FIP Home shortcuts select the native calendar and Players tabs with their 
     { name: 'rankings', params: { view: 'Discover', source: 'pro', query: '', gender: 'all' } },
   ]);
   assert.equal(pushed.length, 0);
+  const header = screen.props.children.find(child => child?.props?.children?.type === 'HomeHeader').props.children;
+  assert.equal(header.props.followers.playerId, '73');
+  header.props.followers.onPress();
+  const news = list.props.renderItem({ item: 'news' });
+  assert.equal(news.props.children.type, 'PremierNewsRail');
+  news.props.children.props.onOpen(article.slug);
+  news.props.onMore();
+  assert.deepEqual(JSON.parse(JSON.stringify(pushed)), [
+    { pathname: '/followers', params: { playerId: '73' } },
+    { pathname: '/pro/news', params: { slug: article.slug } },
+    { pathname: '/pro/news', params: {} },
+  ]);
 });
 
 test('bundled event defaults follow the website tier and name rules', () => {
@@ -446,6 +549,7 @@ function homeHarness() {
     },
     '@/lib/following-feed': { fetchFollowingFeed: response('following', { items: [] }) },
     '@/lib/media': { fetchMediaAlbums: response('media', []) },
+    '@/lib/premier-news': { fetchPremierNews: response('news', { articles: [{ title: 'Tour headlines' }] }) },
     '@/lib/pro-padel': { fetchProSnapshot: response('snapshot', { matches: [], tournaments: [], tournament: null }) },
     '@/lib/pro-padel-live': { fetchLiveTournaments: response('live', []) },
     '@/lib/matches': { fetchPlayerMatches: response('matches', { upcoming: [] }) },
@@ -463,13 +567,14 @@ test('Home mounts safely before auth is ready and displays spotlight before a sl
   const state = await app.flush();
   assert.equal(state.spotlight.data[0].id, 1);
   assert.equal(state.payments.loading, true);
-  assert.equal(app.calls.some(([name]) => name === 'snapshot' || name === 'live'), false);
+  assert.equal(app.calls.some(([name]) => name === 'snapshot' || name === 'live' || name === 'news'), false);
   assert.equal(app.timers.size, 0);
   app.payments.resolve([]); await app.flush();
 });
-test('switching source loads international resources once and stops its live timer when blurred', async () => {
+test('switching source loads international news and scores once and stops its live timer when blurred', async () => {
   const app = homeHarness(); await app.flush();
-  app.setSource('international'); await app.flush();
+  app.setSource('international'); const international = await app.flush();
+  assert.equal(international.news.data[0].title, 'Tour headlines');
   assert.deepEqual(app.calls.filter(([name]) => name === 'snapshot').map(([, kind]) => kind).sort(), ['fip-calendar', 'fixtures', 'tour']);
   assert.equal(app.timers.size, 1);
   app.setActive(false); await app.flush(); assert.equal(app.timers.size, 0);

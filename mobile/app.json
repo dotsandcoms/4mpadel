@@ -164,7 +164,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow 4M Padel to use your location to find nearby padel clubs.",
+          "locationWhenInUsePermission": "Allow 4M Padel to show your city, use an approximate area for local weather from Open-Meteo, and find nearby padel clubs.",
           "isIosBackgroundLocationEnabled": false,
           "isAndroidBackgroundLocationEnabled": false
         }

@@ -35,6 +35,15 @@ export function parseClub(row: Record<string, unknown>): Club | null {
   return { approved: row.verified === true || row.status === '4m_approved' || row.status === '4m_premium', sapaRegistered: row.sapa_registered === true, clubType: text(row.club_type), group, groupId: text(row.group_id) || group?.id || null, shortName: text(row.short_name), id: text(row.id), name: text(row.name), slug: text(row.slug), status: text(row.status), logo: group?.shareLogo && group.logo ? group.logo : publicPhoto(row.logo_url), cover: publicPhoto(row.cover_image_url), city: text(row.city), province: text(row.province), country: text(row.country), address: text(row.address), coordinate: coordinate(row.lat, row.lng), indoor: count(object(courts.indoor).count), outdoor: count(object(courts.outdoor).count) };
 }
 export function clubLocation(club: Club) { return [club.city, club.province].filter(Boolean).join(' · ') || club.country || 'Location not listed'; }
+export async function fetchPublicClubArea(id: string, name: string) {
+  if (!id && !name) return null;
+  const query = supabase.from('clubs').select('city,country,lat,lng').in('status', [...PUBLIC_CLUB_STATUSES]);
+  const { data, error } = await (id ? query.eq('id', id) : query.eq('name', name)).limit(2);
+  if (error) throw error;
+  if (data?.length !== 1) return null;
+  const [club] = data;
+  return { city: text(club.city), country: text(club.country), point: coordinate(club.lat, club.lng) };
+}
 export function clubCourts(club: Club) {
   if (club.indoor === null && club.outdoor === null) return null;
   return [club.indoor ? `${club.indoor} indoor` : '', club.outdoor ? `${club.outdoor} outdoor` : ''].filter(Boolean).join(' · ') || null;
