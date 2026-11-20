@@ -21,6 +21,17 @@ const person = id => ({ id, name: `Player ${id}` });
 const match = (id, teams, overrides = {}) => ({ id, category: 'men', round: 1, tournamentName: 'Paris', status: 'finished', winner: 'team_1', playedAt: '2026-09-13', teams: teams.map(t => t.map(person)), score: [['7', '6(1)'], ['6', '3']], ...overrides });
 const stamp = { version: 1, updatedAt: '2026-09-18T05:00:00Z' };
 
+test('finals styling uses the match round and respects explicit earlier round labels', () => {
+  const { api } = load();
+  for (const roundName of ['Final', 'Finals', 'Grand Final', ' finals ', null]) {
+    assert.equal(api.isProFinal({ round: 1, roundName }), true);
+  }
+  for (const roundName of ['Semi-finals', 'Quarter-finals', 'Qualification Final', 'Third place']) {
+    assert.equal(api.isProFinal({ round: 1, roundName }), false);
+  }
+  assert.equal(api.isProFinal({ round: 2, roundName: null }), false);
+});
+
 test('following both pairs yields one result, unrelated matches stay out, and women filter is respected', () => {
   const { api } = load();
   const one = match(1, [[66, 65], [115, 114]]);

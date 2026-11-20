@@ -79,6 +79,7 @@ alter table public.event_registrations add column full_name text,add column part
 \ir ../supabase/migrations/20261113101314_help_conversation_archive.sql
 \ir ../../supabase/migrations/20261116083323_messaging_admin_inbox_and_org_search.sql
 \ir ../../supabase/migrations/20261116090058_messaging_super_admin_org_outreach_and_event_cutoff.sql
+\ir ../../supabase/migrations/20261120073514_scope_messaging_account_erasure_to_affected_groups.sql
 
 create function pg_temp.expect(ok boolean,label text) returns void language plpgsql as $$begin if ok is distinct from true then raise exception 'FAIL: %',label; end if; end$$;
 create function pg_temp.reject(query text,pattern text) returns void language plpgsql as $$begin

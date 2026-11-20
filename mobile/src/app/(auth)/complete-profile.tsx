@@ -32,6 +32,8 @@ import { SelectField } from '@/components/select-field';
 import { Toast, type ToastKind } from '@/components/toast';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { signOut } from '@/lib/auth';
+import { homeFeedCache } from '@/lib/home-feed-cache';
+import { normalizeProfileSelection } from '@/lib/profile-completion';
 import {
   clearProfileDraft,
   createPlayerProfile,
@@ -54,7 +56,7 @@ import {
   SA_REGIONS,
 } from '@/lib/registration';
 import { supabase } from '@/lib/supabase';
-import { birthDateError, playtomicDetailsError, type PlaytomicExtraction } from '@/lib/profile-details';
+import { birthDateError, formatBirthDateInput, playtomicDetailsError, type PlaytomicExtraction } from '@/lib/profile-details';
 import { PlaytomicProofField } from '@/components/playtomic-proof-field';
 import { FieldColors, profileColors as brand } from '@/components/field-colors';
 
@@ -62,6 +64,7 @@ type Errors = Partial<Record<string, string>>;
 
 const CONTROL_H = 52;
 const CONTROL_R = 14;
+const APPLE_RELAY_DUPLICATE_ERROR = 'Use your existing 4M Padel sign-in or contact support for help setting up your profile.';
 
 function filled(value: string) {
   return value.trim().length > 0;
@@ -200,16 +203,16 @@ export default function CompleteProfileScreen() {
         setFirstName((v) => v || saved?.firstName || names.firstName);
         setLastName((v) => v || saved?.lastName || names.lastName);
         if (saved) {
-          setDateOfBirth((v) => v || saved.dateOfBirth || '');
+          setDateOfBirth((v) => v || formatBirthDateInput(saved.dateOfBirth ?? ''));
           setPlaytomicLevel((v) => v || saved.playtomicLevel || '');
           setPlaytomicProofPath((v) => v || saved.playtomicProofPath || '');
           setPlaytomicNoProfile(saved.playtomicNoProfile === true);
           setPlaytomicExtraction(saved.playtomicExtraction ?? null);
           setContactNumber((v) => v || saved.contactNumber || '');
-          setGender((v) => v || saved.gender || '');
-          setNationality((v) => v || saved.nationality || '');
+          setGender((v) => v || normalizeProfileSelection(saved.gender));
+          setNationality((v) => v || normalizeProfileSelection(saved.nationality));
           setIdNumber((v) => v || saved.idNumber || '');
-          setRegion((v) => v || saved.region || '');
+          setRegion((v) => v || normalizeProfileSelection(saved.region));
           setCategory((v) => v || saved.category || '');
           setClubId((v) => v || saved.clubId || '');
           setCustomClub((v) => v || saved.customClub || '');
@@ -348,6 +351,20 @@ export default function CompleteProfileScreen() {
     catch { setFormError('Your draft could not be saved securely. Please try again before signing out.'); }
   }
 
+  async function useExistingAccount() {
+    if (busy || savingStep || proofSaving) return;
+    setBusy(true);
+    try {
+      await saveProfileDraft(draft());
+      await signOut();
+      router.replace({ pathname: '/(auth)/sign-in', params: { intent: 'existing-profile' } });
+    } catch {
+      flash('Unable to switch accounts. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function finish() {
     if (busy || proofSaving) return;
     const next = validateStep2();
@@ -363,19 +380,22 @@ export default function CompleteProfileScreen() {
     setBusy(true);
     try {
       await createPlayerProfile(draft(), clubs);
+      homeFeedCache.invalidate(['profile:', 'profile-completion:']);
       void trackEvent('profile_completed');
       await clearProfileDraft(email);
       router.replace('/(tabs)');
     } catch (e: any) {
       const msg = e?.message ?? 'Unable to save your profile. Try again.';
       setFormError(msg);
-      flash(msg);
+      if (!appleRelay || msg !== APPLE_RELAY_DUPLICATE_ERROR) flash(msg);
     } finally {
       setBusy(false);
     }
   }
 
   const saving = savingStep || busy || proofSaving;
+  const appleRelay = email.toLowerCase().endsWith('@privaterelay.appleid.com');
+  const appleProfileConflict = appleRelay && formError === APPLE_RELAY_DUPLICATE_ERROR;
   const ctaMuted = step === 2 && !accepted;
   const ctaLabel = saving
     ? 'Saving details…'
@@ -415,7 +435,7 @@ export default function CompleteProfileScreen() {
               <Text
                 className="text-[12px] font-bold"
                 style={{ color: percent > 0 ? brand.accent : brand.faint }}>
-                Profile {percent}% complete
+                Setup {percent}% complete
               </Text>
             ) : (
               <View />
@@ -451,6 +471,17 @@ export default function CompleteProfileScreen() {
           keyboardDismissMode="interactive"
           automaticallyAdjustKeyboardInsets
           contentContainerStyle={{ paddingHorizontal: 28, paddingBottom: 16 }}>
+          {appleRelay && !appleProfileConflict && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityHint="Sign out and return to sign in"
+              disabled={saving}
+              onPress={useExistingAccount}
+              className="mb-5 min-h-11 rounded-xl border border-court-edge px-4 py-3">
+              <Text style={{ color: brand.accent, fontWeight: '700' }}>Sign in to an existing profile</Text>
+              <Text className="mt-1 text-court-muted">Use your usual sign-in, then link Apple in Account &amp; settings.</Text>
+            </Pressable>
+          )}
           <StepSlide key={step} step={step} animate={hasStepped}>
             {step === 1 ? (
               <>
@@ -462,7 +493,7 @@ export default function CompleteProfileScreen() {
                 </Text>
                 <Text className="mb-6 text-court-muted" style={{ fontSize: 16, lineHeight: 24 }}>
                   Use the same name as your RankedIn profile so we can match your results.
-                  {'\n'}ID / passport, mobile number, gender, nationality and region are optional.
+                  {'\n'}You can add gender, nationality and region later from Home.
                 </Text>
 
                 <SectionLabel first>Identity</SectionLabel>
@@ -506,7 +537,7 @@ export default function CompleteProfileScreen() {
                     />
                   </View>
                 </View>
-                <LiquidField label="Date of birth (required, YYYY-MM-DD)" value={dateOfBirth} placeholder="YYYY-MM-DD" error={errors.dateOfBirth} invalid={!!errors.dateOfBirth} valid={!!dateOfBirth && !birthDateError(dateOfBirth)} onChangeText={value => { setDateOfBirth(value); clearError('dateOfBirth'); }} autoComplete="birthdate-full" autoCapitalize="none" maxLength={10} />
+                <LiquidField label="Date of birth (required, YYYY-MM-DD)" value={dateOfBirth} placeholder="YYYY-MM-DD" error={errors.dateOfBirth} invalid={!!errors.dateOfBirth} valid={!!dateOfBirth && !birthDateError(dateOfBirth)} onChangeText={value => { setDateOfBirth(formatBirthDateInput(value)); clearError('dateOfBirth'); }} autoComplete="birthdate-full" keyboardType="number-pad" />
                 <LiquidField
                   ref={idRef}
                   label="ID / passport (optional)"
@@ -548,9 +579,10 @@ export default function CompleteProfileScreen() {
                     <SelectField
                       label="Gender (optional)"
                       value={gender}
+                      placeholder="Select gender"
                       error={errors.gender}
                       valid={!!gender && !errors.gender}
-                      options={[{ label: 'Prefer not to say', value: '' }, ...GENDERS.map((g) => ({ label: g, value: g }))]}
+                      options={GENDERS.map((g) => ({ label: g, value: g }))}
                       onChange={(v) => {
                         setGender(v);
                         clearError('gender');
@@ -561,10 +593,12 @@ export default function CompleteProfileScreen() {
                     <SelectField
                       label="Nationality (optional)"
                       value={nationality}
+                      placeholder="Select nationality"
                       error={errors.nationality}
                       valid={filled(nationality) && !errors.nationality}
                       badge={nationalityBadge}
-                      options={[{ label: 'Prefer not to say', value: '' }, ...nationalityOptions]}
+                      options={nationalityOptions}
+                      searchable
                       onChange={(v) => {
                         setNationality(v);
                         clearError('nationality');
@@ -575,10 +609,11 @@ export default function CompleteProfileScreen() {
                 <SelectField
                   label="Region (optional)"
                   value={region}
+                  placeholder="Select region"
                   error={errors.region}
                   valid={!!region && !errors.region}
                   badge={regionBadge}
-                  options={[{ label: 'Prefer not to say', value: '' }, ...SA_REGIONS.map((r) => ({ label: r, value: r }))]}
+                  options={SA_REGIONS.map((r) => ({ label: r, value: r }))}
                   onChange={(v) => {
                     setRegion(v);
                     clearError('region');
@@ -773,7 +808,7 @@ export default function CompleteProfileScreen() {
             )}
           </StepSlide>
 
-          {formError ? (
+          {formError && !appleProfileConflict ? (
             <Text accessibilityRole="alert" className="mt-3 text-[14px] leading-5 text-court-danger">
               {formError}
             </Text>
@@ -781,6 +816,25 @@ export default function CompleteProfileScreen() {
         </ScrollView>
 
         <View className="px-7" style={{ paddingTop: 8, paddingBottom: insets.bottom + 16 }}>
+          {appleProfileConflict ? (
+            <View className="mb-3 rounded-xl border border-court-edge px-4 py-3">
+              <Text accessibilityRole="alert" className="text-[14px] leading-5 text-court-ink">
+                A profile already uses this name. Use your usual sign-in to open it.
+              </Text>
+              <Pressable accessibilityRole="button" disabled={saving} onPress={useExistingAccount} className="min-h-11 justify-center">
+                <Text style={{ color: brand.accent, fontWeight: '700' }}>Use existing sign-in</Text>
+              </Pressable>
+              {signupUserId && Platform.OS === 'ios' ? (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={saving}
+                  onPress={() => router.push({ pathname: '/delete-account', params: { accountId: signupUserId } })}
+                  className="min-h-11 justify-center">
+                  <Text className="text-court-muted">Remove this unfinished Apple sign-in so you can link Apple to an existing profile</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
           <PressableScale
             disabled={saving || ctaMuted}
             onPress={step === 1 ? goNext : finish}

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -66,9 +66,12 @@ function main() {
   const tar = execFileSync('git', ['archive', `${commit}:mobile`], { cwd: root, maxBuffer: 128 * 1024 * 1024 });
   execFileSync('tar', ['-xf', '-', '-C', sourceFolder], { input: tar });
   const manifest = sourceManifest(sourceFolder);
-  const dependencies = path.join(root, 'mobile/node_modules');
-  if (!existsSync(dependencies)) throw new Error('Install mobile dependencies from its lockfile first');
-  symlinkSync(dependencies, path.join(sourceFolder, 'node_modules'), 'dir');
+  // Expo includes resolved dependency paths in the update fingerprint. Install
+  // inside the snapshot so both the local CLI and the cloud worker see node_modules here.
+  const installed = spawnSync('npm', ['ci', '--prefer-offline', '--no-audit', '--no-fund'], {
+    cwd: sourceFolder, stdio: 'inherit',
+  });
+  if (installed.status !== 0) throw new Error(`Snapshot dependency installation failed; inspect ${receiptFolder}`);
   const profile = JSON.parse(readFileSync(path.join(sourceFolder, 'eas.json'), 'utf8')).build.preview;
   if (profile.distribution !== 'internal' || profile.extends || profile.ios?.simulator) throw new Error('Preview must be a direct internal phone profile');
   const cli = JSON.parse(readFileSync(path.join(root, '.github/workstreams.json'), 'utf8')).expoCliVersion;

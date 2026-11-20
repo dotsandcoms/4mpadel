@@ -75,6 +75,7 @@ export type HomePlayer = {
   rankingChange?: number | null;
   contact_number?: string | null; gender?: string | null; nationality?: string | null;
   home_club?: string | null; bio?: string | null; court_side?: string | null; playing_hand?: string | null;
+  club_id?: string | number | null;
 };
 
 export type PendingKind = 'payment' | 'profile';
@@ -406,7 +407,7 @@ export async function fetchPlayer(email: string, strict = false): Promise<Omit<H
     const { data, error } = await supabase
       .from('players')
       .select(
-        'id, name, rank_label, points, region, racket_brand, rankedin_id, category, gender, rankings, image_url, license_type, paid_registration, contact_number, nationality, home_club, bio, court_side, playing_hand'
+        'id, name, rank_label, points, region, racket_brand, rankedin_id, category, gender, rankings, image_url, license_type, paid_registration, contact_number, nationality, home_club, club_id, bio, court_side, playing_hand'
       )
       .ilike('email', email.trim().replace(/[\\%_]/g, '\\$&'))
       .maybeSingle();
