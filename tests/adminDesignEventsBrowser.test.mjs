@@ -246,13 +246,14 @@ before(async () => {
                     if (window.kind.startsWith('special-') && table==='draws') {
                         if (window.kind==='special-days' || window.kind==='special-division' || window.kind==='special-remove') rows=[];
                         else {
-                            nativeDraw.scoring_rules=window.kind.startsWith('special-enable') ? {plate_mode:window.silverEnabled?'double':'none'} : {plate_mode:'triple'};
+                            const legacyPlateMode = window.kind.endsWith('-empty-custom') ? [] : window.kind.endsWith('-used-custom') ? ['places_3_4'] : 'none';
+                            nativeDraw.scoring_rules=window.kind.startsWith('special-enable') ? {plate_mode:window.silverEnabled?'double':legacyPlateMode} : {plate_mode:'triple'};
                             nativeDraw.draw_kind=window.kind==='special-bronze'?'silver':'main';
                         }
                     }
                     if (window.kind==='special-automatic' && table==='draw_matches') rows=courtMatches.map(row=>({...row,court_name:null}));
-                    if (['special-silver','special-bronze','special-enable-silver'].includes(window.kind) && table==='draw_matches') rows=linkedPlateMatches;
-                    if (['special-silver','special-bronze','special-enable-silver'].includes(window.kind) && table==='draw_entries') rows=linkedPlateEntries;
+                    if ((['special-silver','special-bronze'].includes(window.kind) || window.kind.startsWith('special-enable-silver')) && table==='draw_matches') rows=linkedPlateMatches;
+                    if ((['special-silver','special-bronze'].includes(window.kind) || window.kind.startsWith('special-enable-silver')) && table==='draw_entries') rows=linkedPlateEntries;
                     if (window.kind.startsWith('special-') && table==='event_play_days') rows=[
                         { id:501,event_id:11,play_date:'2035-01-21',start_time:'08:00',end_time:'18:00',courts_count:1,
                           match_duration_minutes:45,minimum_break_minutes:10,is_active:true,updated_at:'day-v1' },
@@ -1005,6 +1006,24 @@ test('legacy main draw enables Silver after confirmation and keeps plate creatio
         assert.match(await page.$eval('dialog', node => node.textContent), /Plate Team 2Plate Team 4/);
         assert.equal(await page.evaluate(() => window.calls.some(([name]) => name === 'native_create_linked_plate')), false);
     } finally { await page.close(); }
+});
+
+test('published draws with empty custom placements can enable Silver and configured placements cannot', async () => {
+    const empty = await open('special-enable-silver-empty-custom');
+    try {
+        await clickText(empty, 'Enable Silver plate');
+        await clickText(empty, 'Confirm draw action');
+        await empty.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent.includes('Silver plate enabled'));
+        assert.deepEqual(await empty.evaluate(() => window.calls.filter(([name]) => name === 'native_enable_silver_plate')),
+            [['native_enable_silver_plate', { p_event_id: 11, p_draw_id: 'draw-a', p_expected_draw: 'draw-v1' }]]);
+    } finally { await empty.close(); }
+
+    const configured = await open('special-enable-silver-used-custom');
+    try {
+        await configured.waitForFunction(() => document.querySelector('dialog')?.textContent.includes('View public draw'));
+        assert.equal(await configured.evaluate(() => document.querySelector('dialog')?.textContent.includes('Enable Silver plate')), false);
+        assert.equal(await configured.evaluate(() => window.calls.some(([name]) => name === 'native_enable_silver_plate')), false);
+    } finally { await configured.close(); }
 });
 
 test('legacy Silver enable rejects a stale server review and disallows tenant attempts', async () => {

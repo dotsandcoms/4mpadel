@@ -3,7 +3,7 @@ import SearchableDropdown from '../../components/SearchableDropdown';
 import EventRichTextEditor from '../../components/admin/EventRichTextEditor';
 import { sanitizeHtml, safeUrl } from '../../utils/sanitizeHtml';
 import RecordLoading from './RecordLoading';
-import { canReviewBroadcast, verifyBroadcastAccess, loadBroadcastEvents, loadBroadcastAudience, parseBroadcastEmails, combineBroadcastAudience, emailBroadcastCapability, sendReviewedBroadcastBatch } from './emailBroadcastData.js';
+import { canReviewBroadcast, verifyBroadcastAccess, loadBroadcastEvents, loadBroadcastAudience, parseBroadcastEmails, combineBroadcastAudience, emailBroadcastCapability, sendReviewedBroadcastBatch, broadcastAttemptKey, readBroadcastAttempt, writeBroadcastAttempt } from './emailBroadcastData.js';
 import './EmailBroadcastWorkspace.css';
 
 const empty = { events: [], payment: 'all', partner: 'all', manual: false, manualText: '', subject: '', html: '', tests: '', excluded: [] };
@@ -97,7 +97,8 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
     guard.current = true;
     setSending(true); setError(''); setDeliveryStatus('');
     const batchSize = review.delivery.batchSize;
-    const signature = JSON.stringify([review.kind, review.subject, review.html, [...review.recipients].sort()]);
+    const addresses = [...review.recipients].sort();
+    const signature = JSON.stringify([review.kind, review.subject, review.html, addresses]);
     let attempt = deliveryAttempts.current.get(signature);
     try {
       const signedIn = await verifyBroadcastAccess(client, userId, scopeId, abort.signal);
@@ -124,22 +125,25 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
       }
       await emailBroadcastCapability(client, abort.signal);
       if (!current()) return;
-      if (!deliveryAttempts.current.has(signature)) {
-        const batches = [];
-        for (let index = 0; index < review.recipients.length; index += batchSize) {
-          batches.push({ id: crypto.randomUUID(), emails: review.recipients.slice(index, index + batchSize) });
-        }
-        deliveryAttempts.current.set(signature, { batches, completed: 0, startedAt: Date.now() });
+      const storageKey = await broadcastAttemptKey(userId, scopeId, signature);
+      if (!current()) return;
+      const batchCount = Math.ceil(addresses.length / batchSize);
+      if (!attempt) {
+        const saved = readBroadcastAttempt(storageKey, batchCount);
+        attempt = { ...(saved || { batchIds: Array.from({ length: batchCount }, () => crypto.randomUUID()), startedAt: Date.now() }), completed: 0 };
+        deliveryAttempts.current.set(signature, attempt);
+        writeBroadcastAttempt(storageKey, attempt);
       }
-      attempt = deliveryAttempts.current.get(signature);
       if (Date.now() - attempt.startedAt > 23 * 60 * 60 * 1000) throw new Error('This delivery review expired. Check the original delivery result before sending again.');
-      for (const batch of attempt.batches.slice(attempt.completed)) {
+      for (let index = attempt.completed; index < attempt.batchIds.length; index++) {
         if (!current()) return;
-        await sendReviewedBroadcastBatch(client, { signal: abort.signal, requestId: batch.id, emails: batch.emails, subject: review.subject, html: review.html });
+        const emails = addresses.slice(index * batchSize, (index + 1) * batchSize);
+        await sendReviewedBroadcastBatch(client, { signal: abort.signal, requestId: attempt.batchIds[index], emails, subject: review.subject, html: review.html });
         if (!current()) return;
         attempt.completed++;
       }
       deliveryAttempts.current.delete(signature);
+      writeBroadcastAttempt(storageKey, null);
       setDeliveryStatus(`Email accepted by the provider for ${review.count} recipient${review.count === 1 ? '' : 's'}.`);
       setReview(null);
       if (review.kind === 'broadcast') setDraft(empty);
@@ -178,12 +182,16 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
     if (image) { node.src = href; node.alt = caption || ''; } else { node.href = href; node.textContent = caption || href; node.rel = 'noopener noreferrer'; }
     change('html', draft.html + `<p>${node.outerHTML}</p>`); setUrl(''); setCaption('');
   };
+  const searchTerm = search.trim().toLowerCase();
+  const matchingEvents = (catalog.events || []).filter(event => String(event.event_name || '').toLowerCase().includes(searchTerm));
   if (!allowed) return <div className="email-broadcast"><h1>Email broadcast</h1><p role="alert">Platform Email Broadcast access is required. Scoped event access does not grant broadcast access.</p></div>;
   return <div className="email-broadcast"><header><h1>Email broadcast</h1><p className="fo-note">Build a BCC audience from event registrations or a manual list, then review the message before sending.</p></header>
     <fieldset className="email-broadcast-grid" disabled={sending}><div className="email-broadcast-stack">
       <section><h2>Audience</h2><p className="fo-note">Choose events. Duplicate email addresses are counted once, ignoring case and surrounding spaces.</p>
         <label>Search events<input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Event name…"/></label>
-        {catalog.loading ? <RecordLoading label="Loading events…"/> : catalog.error ? <p role="alert">{catalog.error}</p> : <div className="email-broadcast-events">{catalog.events.filter(event => String(event.event_name || '').toLowerCase().includes(search.toLowerCase())).map(event => <label className="email-broadcast-check" key={event.id}><input type="checkbox" checked={draft.events.includes(String(event.id))} onChange={e => change('events', e.target.checked ? [...draft.events, String(event.id)] : draft.events.filter(id => id !== String(event.id)))}/><span>{event.event_name || 'Unnamed event'}<small>{event.start_date || 'Date not set'}</small></span></label>)}</div>}
+        {catalog.loading ? <RecordLoading label="Loading events…"/> : catalog.error ? <p role="alert">{catalog.error}</p> : matchingEvents.length === 0
+          ? <p role="status">{searchTerm ? 'No events match your search.' : 'No events are available.'}</p>
+          : <div className="email-broadcast-events">{matchingEvents.map(event => <label className="email-broadcast-check" key={event.id}><input type="checkbox" checked={draft.events.includes(String(event.id))} onChange={e => change('events', e.target.checked ? [...draft.events, String(event.id)] : draft.events.filter(id => id !== String(event.id)))}/><span>{event.event_name || 'Unnamed event'}<small>{event.start_date || 'Date not set'}</small></span></label>)}</div>}
         <div className="email-broadcast-filters"><label>Payment<SearchableDropdown value={draft.payment} onChange={e => change('payment', e.target.value)}><option value="all">All payments</option><option value="paid">Paid</option><option value="pending">Pending / not paid</option></SearchableDropdown></label><label>Partner<SearchableDropdown value={draft.partner} onChange={e => change('partner', e.target.value)}><option value="all">All entries</option><option value="has_partner">Has partner</option><option value="solo">Solo / no partner</option></SearchableDropdown></label></div>
         {(draft.payment !== 'all' || draft.partner !== 'all') && <p className="fo-note">Filters use site registrations only. Rankedin participants have no payment or partner state and are excluded while filters are active.</p>}
         {audience.error && <p role="alert">{audience.error} No partial audience is usable.</p>}<button type="button" className="ap-secondary" onClick={() => setRevision(n => n + 1)}>Reload events and audience</button>

@@ -212,6 +212,56 @@ test('Email requires server capability and resumes an interrupted reviewed BCC d
   } finally { await page.close(); }
 });
 
+test('a browser reload retains batch IDs for the same reviewed BCC delivery without saving its content', async () => {
+  const page = await browser.newPage();
+  const fixtureUrl = 'https://broadcast-fixture.test/';
+  const recipients = Array.from({ length: 50 }, (_, index) => 'retry-reader' + index + '@example.test');
+  page.setDefaultTimeout(7000);
+  try {
+    await page.setRequestInterception(true);
+    page.on('request', request => request.url() === fixtureUrl
+      ? request.respond({ status: 200, contentType: 'text/html', body: '<div id="root"></div>' })
+      : request.abort());
+    page.on('dialog', dialog => void dialog.accept());
+    const reconstruct = async addresses => {
+      await page.evaluate(() => { window.useEmail = true; window.emailReady = true; });
+      await page.addScriptTag({ path: bundle });
+      await page.waitForSelector('input[placeholder="Your announcement…"]');
+      await enter(page, 'input[placeholder="Your announcement…"]', 'Fictional retry subject');
+      await page.$eval('[aria-label="Broadcast message"]', editor => {
+        editor.innerHTML = '<p>Fictional retry content</p>';
+        editor.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      });
+      await page.evaluate(() => [...document.querySelectorAll('label')].find(label => label.textContent.trim() === 'Include a manual email list').querySelector('input').click());
+      await page.waitForSelector('textarea[rows="3"]');
+      await enter(page, 'textarea[rows="3"]', addresses.join(','));
+      await click(page, 'Review broadcast');
+    };
+
+    await page.goto(fixtureUrl);
+    await reconstruct(recipients);
+    await page.evaluate(() => { window.failSecondEmail = true; });
+    await click(page, 'Send broadcast');
+    await page.waitForFunction(() => document.body.textContent.includes('The provider accepted 1 earlier batch.'));
+    const first = await page.evaluate(() => window.emailCalls.filter(call => call.template === 'broadcast'));
+    assert.equal(first.length, 2);
+    assert.notEqual(first[0].broadcastRequestId, first[1].broadcastRequestId);
+    const saved = await page.evaluate(() => Object.entries(sessionStorage).filter(([key]) => key.startsWith('4m-admin:email-review:')));
+    assert.equal(saved.length, 1);
+    assert.match(saved[0][0], /^4m-admin:email-review:[a-f0-9]{64}$/);
+    assert.deepEqual(Object.keys(JSON.parse(saved[0][1])).sort(), ['batchIds', 'startedAt']);
+    assert.doesNotMatch(JSON.stringify(saved), /retry-reader|Fictional retry/);
+
+    await page.reload();
+    await reconstruct([...recipients].reverse());
+    await click(page, 'Send broadcast');
+    await page.waitForFunction(() => document.body.textContent.includes('Email accepted by the provider for 50 recipients.'));
+    const retried = await page.evaluate(() => window.emailCalls.filter(call => call.template === 'broadcast'));
+    assert.deepEqual(retried, first);
+    assert.equal(await page.evaluate(() => Object.keys(sessionStorage).some(key => key.startsWith('4m-admin:email-review:'))), false);
+  } finally { await page.close(); }
+});
+
 test('Email audience controls select, filter, remove, restore and reset reviewed event recipients', async () => {
   const page = await browser.newPage();
   page.setDefaultTimeout(7000);
@@ -222,6 +272,8 @@ test('Email audience controls select, filter, remove, restore and reset reviewed
     await page.evaluate(() => { window.useEmail = true; window.emailManagedEvent = '61'; });
     await page.addScriptTag({ path: bundle });
     await page.waitForSelector('.email-broadcast-events input');
+    await enter(page, 'input[placeholder="Event name…"]', 'nonexistent');
+    await page.waitForFunction(() => document.querySelector('section [role=status]')?.textContent === 'No events match your search.');
     await enter(page, 'input[placeholder="Event name…"]', 'coastal');
     assert.equal(await page.$$eval('.email-broadcast-events label', rows => rows.length), 1);
     await page.click('.email-broadcast-events input');

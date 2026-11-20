@@ -107,3 +107,37 @@ export async function sendReviewedBroadcastBatch(client, { signal, requestId, em
     throw new Error('The provider did not confirm this batch. Retry the same review to avoid sending it twice.');
   }
 }
+
+// Only the provider request IDs survive navigation. Retrying a reconstructed
+// review asks the provider to confirm every batch using its original key.
+export async function broadcastAttemptKey(userId, scopeId, signature) {
+  try {
+    const bytes = new TextEncoder().encode(JSON.stringify([userId, scopeId, signature]));
+    const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+    return '4m-admin:email-review:' + Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return null;
+  }
+}
+
+export function readBroadcastAttempt(key, batchCount) {
+  if (!key) return null;
+  try {
+    const saved = JSON.parse(globalThis.sessionStorage.getItem(key));
+    return Number.isSafeInteger(saved?.startedAt) && saved.startedAt > 0 && saved.startedAt <= Date.now()
+      && Array.isArray(saved.batchIds) && saved.batchIds.length === batchCount
+      && new Set(saved.batchIds).size === batchCount
+      && saved.batchIds.every(id => typeof id === 'string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id))
+      ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeBroadcastAttempt(key, attempt) {
+  if (!key) return;
+  try {
+    if (attempt) globalThis.sessionStorage.setItem(key, JSON.stringify({ batchIds: attempt.batchIds, startedAt: attempt.startedAt }));
+    else globalThis.sessionStorage.removeItem(key);
+  } catch { /* The current workspace can still retry with its in-memory IDs. */ }
+}

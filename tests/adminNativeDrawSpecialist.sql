@@ -41,6 +41,7 @@ alter table public.event_play_days add column is_removed boolean not null defaul
 alter table public.draw_matches add column court_name text, add column americano_fixture_key text;
 \ir ../supabase/migrations/20261119112841_atomic_native_court_schedule.sql
 \ir ../supabase/migrations/20261120065013_enable_reviewed_native_silver_plate.sql
+\ir ../supabase/migrations/20261120113720_allow_silver_after_empty_custom_placement.sql
 
 insert into public.calendar values (101, 1000, true, 'active'), (102, 1001, true, 'active');
 insert into public.tournament_divisions values
@@ -233,7 +234,7 @@ declare
   legacy_draw uuid := '11111111-1111-4111-8111-111111111131';
   separate_plate uuid := '11111111-1111-4111-8111-111111111132';
   expected timestamptz := '2035-02-01T00:00:00Z';
-  old_rules jsonb := '{"sets_to_win":2,"ranking_points":{"basis":"fixture"}}';
+  old_rules jsonb := '{"sets_to_win":2,"ranking_points":{"basis":"fixture"},"plate_mode":[]}';
   matches_before jsonb;
   receipt jsonb;
   created jsonb;
@@ -281,8 +282,15 @@ begin
     if sqlerrm not like 'Choose an eligible%' then raise; end if;
   end;
   update public.tournament_divisions set is_active=true where id=division;
+  update public.draws set status='draft' where id=legacy_draw;
+  begin
+    perform public.native_enable_silver_plate(101,legacy_draw,expected); raise exception 'A private draft enabled Silver';
+  exception when raise_exception then
+    if sqlerrm not like 'Choose an eligible%' then raise; end if;
+  end;
+  update public.draws set status='published' where id=legacy_draw;
 
-  for row_mode in select mode from (values ('"triple"'::jsonb), ('"all"'::jsonb), ('[{"min":3,"max":5}]'::jsonb)) config(mode) loop
+  for row_mode in select mode from (values ('"triple"'::jsonb), ('"all"'::jsonb), ('[{"min":3,"max":5}]'::jsonb), ('["places_3_4"]'::jsonb)) config(mode) loop
     update public.draws set scoring_rules=old_rules||jsonb_build_object('plate_mode',row_mode.mode) where id=legacy_draw;
     begin
       perform public.native_enable_silver_plate(101,legacy_draw,expected); raise exception 'Existing rules were overwritten';
