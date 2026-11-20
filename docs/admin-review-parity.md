@@ -43,7 +43,7 @@ The original New Admin pages, sidebars, dialogs and drawers are the visual basel
 
 ## Release evidence
 
-The [New Admin review](https://4madmin.vercel.app/admin-preview/events) serves `dpl_AFGX5cJsgKYNotjdNfyxRy39XvGT` from `4e08ac8dfe59c387c85e30b8159f0733dee3e0c4`. The [repository gate](https://github.com/dotsandcoms/4mpadel/actions/runs/44519231037) passed for that exact revision. Nine hosted routes served the checked bundle, and 92 focused browser and server checks passed. The current [public Admin](https://4mpadel.co.za/admin) remains on deployment `dpl_6CPfpCEkztw5HbUrjkSkNvnfmpeb` from `f17c90b6`.
+The first New Admin review release used `dpl_AFGX5cJsgKYNotjdNfyxRy39XvGT` from `4e08ac8dfe59c387c85e30b8159f0733dee3e0c4`. The [repository gate](https://github.com/dotsandcoms/4mpadel/actions/runs/44519231037) passed for that exact revision. Nine hosted routes served the checked bundle, and 92 focused browser and server checks passed. The current [public Admin](https://4mpadel.co.za/admin) remains on deployment `dpl_6CPfpCEkztw5HbUrjkSkNvnfmpeb` from `f17c90b6`.
 
 The approved shared backend package comes from checked revision `3b48e2d2b766253adde96e11b9575a1b790560bc`. The hosted source files matched the committed Edge Function files for `send-email` v79 and `admin-paystack-backfill` v1. Both rejected signed-out requests. Hosted metadata confirmed seven new operations, anonymous denial and service-only Paystack recording.
 
@@ -60,7 +60,7 @@ Synthetic accounts and fixtures exercise the confirmed write paths. Hosted verif
 
 ## Follow-up release order
 
-The previous approval covers the deployed package above. The shared changes below require a separate release approval and the repository gate for the exact candidate. The existing public website deployment is outside the release scope.
+Brad approved the follow-up for the dedicated review and the listed shared services. The existing public website deployment is outside the release scope.
 
 | Local migration | Purpose |
 | --- | --- |
@@ -77,3 +77,23 @@ The previous approval covers the deployed package above. The shared changes belo
 | `20261120112000` | Reviewed refund reservations and provider status reconciliation |
 
 Install the compatible migrations before releasing the shared `paystack-webhook` and then `paystack-refund` bundles. The refund package uses the existing gateway settings and exact event authority. Install `organisation-event-attachments` after the host capability and storage migrations. Verify the service versions, signed-out responses, database function signatures and grants, and the source and assets of the separate review deployment. Payments, payouts and audience sends use synthetic fixtures for write verification. Keep verified paid-player transfers disabled while the current public Admin is on its existing reader version.
+
+## Follow-up release receipt
+
+On 20 November 2026, the [New Admin review](https://4madmin.vercel.app/admin-preview/events) moved to `dpl_3nymTeNwgZMJ7LcTGZzH3oiKxKPF` from `3d18db0f5b2834dbd330d99afa9bc15e1d998026`. The required [Repository checks](https://github.com/dotsandcoms/4mpadel/actions/runs/44687734939) passed on that commit, including web/admin, native bundles and database contracts. The signed-in synthetic browser runs passed 61 event, shell and registration checks and 68 communications, network and money checks. The exact compiled build signed in all three synthetic roles and checked their finance routes. Twelve hosted routes and the deployed JavaScript matched the checked artifact before and after aliasing. JavaScript SHA-256 is `8040fe7955c4de4572e8de197bca9b5dda4828b3e274d5a324859913631b2d1b`.
+
+| Local migration | Hosted version |
+| --- | --- |
+| `20261119120821` | `20261120063207` |
+| `20261119120936` | `20261120063224` |
+| `20261120023944` | `20261120063231` |
+| `20261120052642` | `20261120063239` |
+| `20261120053234` | `20261120063246` |
+| `20261120054121` | `20261120063255` |
+| `20261120054159` | `20261120063303` |
+| `20261120055927` | `20261120063311` |
+| `20261120061610` | `20261120063318` |
+| `20261120111700` | `20261120063326` |
+| `20261120112000` | `20261120063333` |
+
+The deployed files for `paystack-webhook` v45, `paystack-refund` v41 and `organisation-event-attachments` v1 matched the commit byte-for-byte. Each rejected a signed-out or unsigned request with HTTP 401. Hosted database checks confirmed service-only refund reservation and reconciliation, authenticated host and roster operations, exact organisation and club identity checks, and disabled verified paid-player transfers. The public `4mpadel.co.za` alias still served `dpl_6CPfpCEkztw5HbUrjkSkNvnfmpeb` after the review switch. Hosted verification used route, metadata and authorisation checks. The action walkthrough used synthetic sign-ins and records.
