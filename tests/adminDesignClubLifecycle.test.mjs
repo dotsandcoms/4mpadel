@@ -91,7 +91,10 @@ before(async () => {
     plugins: [{ name: 'fixture-connector', setup(build) {
       build.onResolve({ filter: /\/(supabaseClient|googleMaps)(?:\.js)?$/ }, args => ({ path: args.path.includes('googleMaps') ? 'maps' : 'client', namespace: 'fixture' }));
       build.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ contents: args.path === 'maps'
-        ? 'export const attachPlacesAutocomplete = async () => ({ destroy() {} }); export const loadGoogleMaps = async () => null;'
+        ? `export const attachPlacesAutocomplete = async () => ({ destroy() {} });
+           export const loadGoogleMaps = async () => null;
+           export async function searchPlacesText() { throw new Error('No Places request in the club lifecycle fixture'); }
+           export async function getPlaceDetails() { throw new Error('No Places request in the club lifecycle fixture'); }`
         : 'export const supabase = null; export const isSupabaseConfigured = () => false;' }));
     } }],
   });
