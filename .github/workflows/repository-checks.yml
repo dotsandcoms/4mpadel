@@ -158,6 +158,8 @@ jobs:
           psql -X -q -d fourm_admin_imported_payment_test -f tests/adminReviewedImportedPayments.sql
           createdb fourm_admin_calendar_weekly_series_test
           psql -X -q -d fourm_admin_calendar_weekly_series_test -f tests/adminCalendarWeeklySeries.sql
+          createdb fourm_refund_retry_test
+          psql -X -q -d fourm_refund_retry_test -f tests/adminReviewedRefundRetry.sql
       - name: Verify Paystack receipt recovery and checkout compatibility
         env:
           PGPORT: '55444'

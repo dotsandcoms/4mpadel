@@ -35,8 +35,9 @@ const tables = {
   tournament_divisions: [{id:51,event_id:11,name:'Open'}, {id:52,event_id:11,name:'Advanced'}, {id:80,event_id:21,name:'South Only'}],
   players: [{id:31,name:'Alpha on file',email:'alpha@example.invalid',contact_number:'+27 12 345 6789'}, {id:41,name:'Synthetic Replacement',email:'replacement@example.invalid'},
     {id:71,name:'South private profile',email:'south@example.invalid'}],
-  payments: [receipt, { ...receipt, id:'south-money', event_id:21, reference:'SOUTH-PRIVATE' }],
+  payments: [receipt, { ...receipt, id:'paystack-zulu', payment_method:'paystack', reference:'PAYSTACK-ZULU', metadata:{registration_id:'zulu'} }, { ...receipt, id:'south-money', event_id:21, reference:'SOUTH-PRIVATE' }],
   payment_refunds: [
+    { id:'zulu-refund', event_registration_id:'zulu', payment_id:'paystack-zulu', status:'failed', amount:125, reason:'admin_removal', metadata:{verify_failed:true} },
     { id:'alpha-refund', event_registration_id:'alpha', payment_id:'manual-1', status:'failed', amount:100, reason:'admin_removal' },
     { id:'wrong-payment', event_registration_id:'alpha', payment_id:'south-money', status:'failed', amount:999, reason:'admin_removal' },
   ],
@@ -51,6 +52,20 @@ HTMLAnchorElement.prototype.click = function () {
   return click.call(this);
 };
 const client = {
+  functions: { async invoke(name, {body}) {
+    window.requests.push(['edge',name,body]);
+    const refund = tables.payment_refunds.find(row=>row.id===body.payment_refund_id);
+    if (name!=='paystack-refund' || !refund || body.event_id!==11 || body.reviewed_registration_id!=='zulu' || 'registration_id' in body || window.fixtureRole!=='platform') return {error:{}};
+    if (body.action==='reviewed_retry_failed') {
+      refund.status='needs_attention'; refund.metadata={...refund.metadata,reviewed_retry:{phase:'held',method:'paystack',reference:'4m-refund-fixture'}};
+      return {data:null,error:{context:new Response(JSON.stringify({error:'Refund outcome is unconfirmed. The refund remains held for Paystack reconciliation.'}))}};
+    }
+    if (body.action==='reconcile_retry') {
+      refund.status='processed'; refund.metadata.reviewed_retry.phase='verified';
+      return result({status:'processed'});
+    }
+    return {error:{}};
+  } },
   auth: { getUser: async () => result({user:session.user}) },
   rpc(name, args) {
     window.requests.push(['rpc',name,args]);
@@ -280,4 +295,28 @@ test('stale WhatsApp and unlisted events fail before a mutation; platform receip
   assert.doesNotMatch(await viewer.$eval('.ap-drawer', item => item.innerText), /Update group record|Replace player/);
   await clickText(viewer, '.ap-drawer button', 'Resolve payment');
   await routeTo(viewer, '/admin-preview/payment?event=11&registration=zulu');
+});
+
+
+test('platform refund review holds an unconfirmed receipt, then checks its saved reference without retrying', async t => {
+  const page = await open(t,'platform','/admin-preview/registrations?event=11&registration=zulu');
+  await drawer(page, 'Zulu Player');
+  await clickText(page, '.ap-drawer button', 'Retry failed refund');
+  await clickText(page, 'dialog button', 'Cancel');
+  assert.equal(await page.evaluate(() => window.requests.filter(call=>call[0]==='edge').length),0);
+  await clickText(page, '.ap-drawer button', 'Retry failed refund');
+  await clickText(page, 'dialog button', 'Confirm refund retry');
+  await page.waitForSelector('dialog [role="alert"]');
+  assert.match(await page.$eval('dialog [role="alert"]', node=>node.textContent), /refund remains held/);
+  await clickText(page, 'dialog button', 'Close');
+  await clickText(page, '.ap-drawer button', 'Check Paystack status');
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll('.ap-drawer button')].some(button=>button.textContent==='Retry failed refund')),false);
+  await clickText(page, 'dialog button', 'Check status');
+  await page.waitForSelector('dialog [role="status"]');
+  assert.match(await page.$eval('dialog [role="status"]', node=>node.textContent), /recorded as processed/);
+  await clickText(page, 'dialog button', 'Done');
+  assert.deepEqual(await page.evaluate(() => window.requests.filter(call=>call[0]==='edge')), [
+    ['edge','paystack-refund',{action:'reviewed_retry_failed',event_id:11,reviewed_registration_id:'zulu',payment_refund_id:'zulu-refund'}],
+    ['edge','paystack-refund',{action:'reconcile_retry',event_id:11,reviewed_registration_id:'zulu',payment_refund_id:'zulu-refund'}],
+  ]);
 });

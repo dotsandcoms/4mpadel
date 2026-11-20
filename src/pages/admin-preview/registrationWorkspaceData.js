@@ -109,12 +109,14 @@ export async function loadRegistrationWorkspace({ client, eventId, expectedUserI
   });
   const refunds = [];
   if (platform) {
-    const paymentIds = new Set(paymentsInEvent.map(row => String(row.id)));
+    const paymentsById = new Map(paymentsInEvent.map(row => [String(row.id), row]));
     for (let offset = 0; offset < rows.length; offset += 50) {
       const ids = rows.slice(offset, offset + 50).map(row => row.id);
       const idSet = new Set(ids.map(String));
-      const batch = await readAll(() => client.from('payment_refunds').select('id,event_registration_id,payment_id,amount,status,reason,created_at,metadata').in('event_registration_id', ids).order('id'), signal);
-      refunds.push(...batch.filter(refund => idSet.has(String(refund.event_registration_id)) && (!refund.payment_id || paymentIds.has(String(refund.payment_id)))));
+      const batch = await readAll(() => client.from('payment_refunds').select('id,event_registration_id,payment_id,paystack_refund_id,amount,status,reason,created_at,metadata').in('event_registration_id', ids).order('id'), signal);
+      refunds.push(...batch.filter(refund => idSet.has(String(refund.event_registration_id)) && (!refund.payment_id || paymentsById.has(String(refund.payment_id)))).map(refund => ({
+        ...refund, _paymentMethod: refund.payment_id ? String(paymentsById.get(String(refund.payment_id)).payment_method || 'paystack').toLowerCase() : null,
+      })));
     }
   }
   return { event, rows, divisions: divisions.filter(row => sameId(row.event_id, eventId)), ledger: indexRegistrationLedger(rows, paymentsInEvent, refunds), canOperate: managesEvent && event.event_status !== 'cancelled' };

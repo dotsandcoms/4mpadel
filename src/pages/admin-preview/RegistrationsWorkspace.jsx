@@ -5,6 +5,8 @@ import { Link } from 'react-router-dom';
 import SearchableDropdown from '../../components/SearchableDropdown';
 import EventReplacementDialog from './EventReplacementDialog';
 import RecordLoading from './RecordLoading';
+import RegistrationRefundReview from './RegistrationRefundReview.jsx';
+import { registrationRefundAction } from './registrationRefundReview.js';
 import { downloadRegistrations } from './registrationExports.js';
 import { filterRegistrationWorkspace, indexRegistrationLedger, loadRegistrationWorkspace, recordedRegistrationPayment, registrationDivisionLabel, registrationIsWithdrawn, registrationName, registrationPaymentState, saveRegistrationWhatsApp } from './registrationWorkspaceData.js';
 import { useEventOperation } from './useEventOperation.js';
@@ -141,6 +143,7 @@ function EventRegistrations({ client, session, scopeId, event, events, initialRe
       </>}
     {drawer && <RegistrationDrawer key={drawer.id} row={drawer} payment={ledger.payments.get(String(drawer.id))} refunds={ledger.refunds.get(String(drawer.id))} division={registrationDivisionLabel(drawer, divisions)}
       {...{ event, go, canOperate, canOpenPlayer, closeDrawer }} operation={operation} setOperation={setOperation} />}
+    {drawer && operation?.refund && <RegistrationRefundReview {...{ client, session, scopeId, event }} row={drawer} refund={operation.refund} action={operation.action} onClose={closeOperation} />}
     {drawer && canOperate && operation === 'whatsapp' && <RegistrationGroupDialog {...{ client, session, scopeId, event }} row={drawer} onClose={closeOperation} />}
     {drawer && canOperate && operation === 'replacement' && <EventReplacementDialog {...{ client, session, scopeId, event }} team={[drawer]} initialRegistrationId={drawer.id} onClose={closeOperation} />}
   </>;
@@ -171,7 +174,13 @@ function RegistrationDrawer({ row, payment, refunds = [], division, event, go, c
           {canChange && row.email && <button className="ap-secondary" onClick={() => setOperation('replacement')}>Replace player / Change profile</button>}
         </section>
         <section><h3>Recorded payment</h3><dl className="ap-details-list">{record.method && <div><dt>Method</dt><dd>{record.method}</dd></div>}{record.reference && <div><dt>Reference</dt><dd>{record.reference}</dd></div>}{record.recipient && <div><dt>Received by</dt><dd>{record.recipient}</dd></div>}{record.note && <div><dt>Notes</dt><dd>{record.note}</dd></div>}{payment?.amount != null && <div><dt>Amount</dt><dd>{moneyFormat.format(payment.amount)}</dd></div>}</dl>
-          {refunds.length > 0 && <ul>{refunds.map(refund => <li key={refund.id}>{moneyFormat.format(refund.amount)} · {String(refund.status).replaceAll('_', ' ')}{refund.reason && <> · {refund.reason.replaceAll('_', ' ')}</>}</li>)}</ul>}
+          {refunds.length > 0 && <ul>{refunds.map(refund => {
+            const next = registrationRefundAction(refund);
+            return <li key={refund.id}>{moneyFormat.format(refund.amount)} · {String(refund.status).replaceAll('_', ' ')}{refund.reason && <> · {refund.reason.replaceAll('_', ' ')}</>}
+              {next && <button className="ap-secondary" onClick={() => setOperation({ refund, action: next })}>{next === 'reconcile' ? 'Check Paystack status' : ['cash', 'manual'].includes(refund._paymentMethod) ? 'Record cash refund' : 'Retry failed refund'}</button>}
+              {!next && refund.status === 'failed' && <small>Manual refund review required.</small>}
+            </li>;
+          })}</ul>}
         </section>
         <section><h3>WhatsApp group</h3><p>{row.whatsapp_added ? 'Recorded on group' : 'Not recorded on group'}</p>{canChange && <button className="ap-secondary" onClick={() => setOperation('whatsapp')}>Update group record</button>}</section>
       </div>

@@ -1,3 +1,4 @@
+import { canReviewEventRefund, handleReviewedRefundRetry } from './reviewed-refund-retry.ts';
 import { belongsToDivision, cancellationRefundStatus } from './division-cancellation.js';
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -41,7 +42,14 @@ type Action =
     | 'cancel_event'
     | 'cancel_division'
     | 'switch_division'
-    | 'retry_failed';
+    | 'retry_failed'
+    | 'reviewed_retry_failed'
+    | 'reconcile_retry';
+
+const supportedActions = new Set<Action>([
+    'withdraw', 'withdraw_all', 'remove_partner', 'admin_remove', 'cancel_event',
+    'cancel_division', 'switch_division', 'retry_failed', 'reviewed_retry_failed', 'reconcile_retry',
+]);
 
 type RefundReason =
     | 'owner_withdraw'
@@ -798,267 +806,6 @@ async function handleSwitchDivision(
     });
 }
 
-/**
- * Re-issue a failed payment_refunds row against the correct Paystack gateway
- * reference (parent REGEV-* for LIC-* ledger splits). Admin only.
- */
-async function handleRetryFailedRefund(
-    supabaseAdmin: SupabaseClient,
-    opts: {
-        paymentRefundId?: string;
-        callerEmail: string;
-        json: (status: number, body: unknown) => Response;
-    },
-): Promise<Response> {
-    const { paymentRefundId, callerEmail, json } = opts;
-    if (!paymentRefundId) {
-        return json(400, { error: 'payment_refund_id is required' });
-    }
-
-    const { data: refundRow, error: refundErr } = await supabaseAdmin
-        .from('payment_refunds')
-        .select('*')
-        .eq('id', paymentRefundId)
-        .maybeSingle();
-    if (refundErr) return json(500, { error: refundErr.message });
-    if (!refundRow) return json(404, { error: 'Refund row not found' });
-    if (String(refundRow.status || '') !== 'failed') {
-        return json(400, {
-            error: `Refund is status "${refundRow.status}", only failed rows can be retried`,
-        });
-    }
-    if (!refundRow.payment_id) {
-        return json(400, { error: 'Refund row has no payment_id' });
-    }
-
-    const { data: payment, error: payErr } = await supabaseAdmin
-        .from('payments')
-        .select('*')
-        .eq('id', refundRow.payment_id)
-        .maybeSingle();
-    if (payErr) return json(500, { error: payErr.message });
-    if (!payment) return json(404, { error: 'Payment not found' });
-
-    const method = String(payment.payment_method || 'paystack');
-    const isCash = method === 'cash' || method === 'manual';
-    const gatewayRef = resolvePaystackGatewayReference(payment as PaymentRow);
-    const amountRands = roundRands(Number(refundRow.amount || 0));
-    if (amountRands <= 0) return json(400, { error: 'Refund amount must be > 0' });
-
-    const coverType = String(parseMeta(refundRow.metadata).cover_type || '');
-    const prevMeta = parseMeta(refundRow.metadata);
-
-    if (isCash) {
-        await supabaseAdmin
-            .from('payment_refunds')
-            .update({
-                status: 'processed',
-                paystack_reference: gatewayRef || refundRow.paystack_reference,
-                processed_at: new Date().toISOString(),
-                metadata: {
-                    ...prevMeta,
-                    method,
-                    retried_at: new Date().toISOString(),
-                    retried_by: `admin:${callerEmail}`,
-                    ledger_reference: payment.reference,
-                    previous_paystack_reference: refundRow.paystack_reference,
-                },
-            })
-            .eq('id', refundRow.id);
-
-        if (coverType === 'license' && refundRow.event_registration_id) {
-            const { data: reg } = await supabaseAdmin
-                .from('event_registrations')
-                .select('email, event_id')
-                .eq('id', refundRow.event_registration_id)
-                .maybeSingle();
-            if (reg?.email) {
-                await cancelEventTempLicense(supabaseAdmin, reg.email, reg.event_id);
-            }
-        }
-
-        return json(200, {
-            retried: true,
-            status: 'processed',
-            paystack_reference: gatewayRef,
-            amount_rands: amountRands,
-            cash: true,
-        });
-    }
-
-    if (!gatewayRef) {
-        return json(400, { error: 'Could not resolve Paystack gateway reference' });
-    }
-
-    const { secrets, configError } = resolvePaystackVerifySecrets(payment as Record<string, unknown>);
-    if (secrets.length === 0) {
-        return json(500, { error: configError || 'Paystack not configured' });
-    }
-
-    // Parent checkout may already be partially refunded (entry fee), which
-    // Paystack often reports as status "reversed" even when balance remains.
-    // Locate the transaction, then attempt the remaining refund.
-    let gatewayAmountCents: number | null = null;
-    let gatewayStatus = 'unknown';
-    let gatewayFound = false;
-    for (const secret of secrets) {
-        try {
-            const inspectRes = await fetch(
-                `https://api.paystack.co/transaction/verify/${encodeURIComponent(gatewayRef)}`,
-                { headers: { Authorization: `Bearer ${secret}` } },
-            );
-            const inspectBody = await inspectRes.json();
-            if (inspectBody?.data?.reference || inspectBody?.data?.id != null) {
-                gatewayFound = true;
-                gatewayStatus = String(inspectBody.data.status || 'unknown');
-                gatewayAmountCents = inspectBody.data.amount != null
-                    ? Number(inspectBody.data.amount)
-                    : null;
-                break;
-            }
-            gatewayStatus = String(inspectBody?.data?.status || inspectBody?.status || gatewayStatus);
-        } catch {
-            /* try next secret */
-        }
-    }
-
-    if (!gatewayFound) {
-        await supabaseAdmin
-            .from('payment_refunds')
-            .update({
-                paystack_reference: gatewayRef,
-                metadata: {
-                    ...prevMeta,
-                    method,
-                    retried_at: new Date().toISOString(),
-                    retried_by: `admin:${callerEmail}`,
-                    ledger_reference: payment.reference,
-                    previous_paystack_reference: refundRow.paystack_reference,
-                    verify_failed: true,
-                    paystack_error: `Transaction not found for ${gatewayRef}`,
-                    gateway_status: gatewayStatus,
-                },
-            })
-            .eq('id', refundRow.id);
-        return json(400, {
-            error: `Paystack transaction not found for ${gatewayRef}`,
-            paystack_reference: gatewayRef,
-            gateway_status: gatewayStatus,
-        });
-    }
-
-    const secret = getPaystackSecretForPayment(payment as Record<string, unknown>);
-    const result = await paystackRefund(secret, gatewayRef, toPaystackCents(amountRands));
-
-    // Fully consumed on gateway — settle ledger without inventing a second refund.
-    const fullyGone = !result.ok && /fully\s+(reversed|refunded)|no\s+refundable|already\s+refunded/i.test(result.message || '');
-    if (fullyGone) {
-        await supabaseAdmin
-            .from('payment_refunds')
-            .update({
-                paystack_reference: gatewayRef,
-                status: 'processed',
-                processed_at: new Date().toISOString(),
-                metadata: {
-                    ...prevMeta,
-                    method,
-                    retried_at: new Date().toISOString(),
-                    retried_by: `admin:${callerEmail}`,
-                    ledger_reference: payment.reference,
-                    previous_paystack_reference: refundRow.paystack_reference,
-                    settled_without_paystack_call: true,
-                    settle_reason: 'no_refundable_balance_on_gateway',
-                    gateway_status: gatewayStatus,
-                    gateway_amount_cents: gatewayAmountCents,
-                    paystack_error: result.message,
-                },
-            })
-            .eq('id', refundRow.id);
-        return json(200, {
-            retried: true,
-            status: 'processed',
-            settled_without_paystack_call: true,
-            settle_reason: 'no_refundable_balance_on_gateway',
-            paystack_reference: gatewayRef,
-            amount_rands: amountRands,
-            gateway_amount_cents: gatewayAmountCents,
-            ledger_reference: payment.reference,
-            paystack_message: result.message,
-        });
-    }
-
-    await supabaseAdmin
-        .from('payment_refunds')
-        .update({
-            paystack_reference: gatewayRef,
-            paystack_refund_id: result.refundId,
-            status: result.ok ? 'processing' : 'failed',
-            metadata: {
-                ...prevMeta,
-                method,
-                retried_at: new Date().toISOString(),
-                retried_by: `admin:${callerEmail}`,
-                ledger_reference: payment.reference,
-                previous_paystack_reference: refundRow.paystack_reference,
-                gateway_status: gatewayStatus,
-                gateway_amount_cents: gatewayAmountCents,
-                ...(isLedgerSplitPayment(payment as PaymentRow)
-                    ? { ledger_split_parent: gatewayRef }
-                    : {}),
-                ...(result.ok ? { paystack_error: null } : { paystack_error: result.message }),
-            },
-        })
-        .eq('id', refundRow.id);
-
-    if (!result.ok) {
-        console.error('retry_failed Paystack refund failed:', gatewayRef, result.message);
-        return json(502, {
-            retried: false,
-            error: result.message,
-            paystack_reference: gatewayRef,
-            amount_rands: amountRands,
-            gateway_status: gatewayStatus,
-            gateway_amount_cents: gatewayAmountCents,
-        });
-    }
-
-    if (refundRow.event_registration_id) {
-        const { data: reg } = await supabaseAdmin
-            .from('event_registrations')
-            .select('id, email, event_id, refund_amount')
-            .eq('id', refundRow.event_registration_id)
-            .maybeSingle();
-        if (reg) {
-            if (coverType === 'license' && reg.email) {
-                await cancelEventTempLicense(supabaseAdmin, reg.email, reg.event_id);
-            }
-            const nextRefunded = roundRands(Number(reg.refund_amount || 0) + amountRands);
-            await supabaseAdmin
-                .from('event_registrations')
-                .update({
-                    refund_amount: nextRefunded,
-                    payment_status: 'refunded',
-                })
-                .eq('id', reg.id);
-        }
-    }
-
-    console.log(
-        `retry_failed ok: ${refundRow.id} ledger=${payment.reference} → paystack=${gatewayRef} R${amountRands}`,
-    );
-
-    return json(200, {
-        retried: true,
-        status: 'processing',
-        paystack_reference: gatewayRef,
-        paystack_refund_id: result.refundId,
-        amount_rands: amountRands,
-        gateway_status: gatewayStatus,
-        gateway_amount_cents: gatewayAmountCents,
-        ledger_reference: payment.reference,
-    });
-}
-
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
@@ -1081,6 +828,7 @@ serve(async (req: Request) => {
 
         const {
             registration_id,
+            reviewed_registration_id,
             action,
             event_id,
             skip_paystack,
@@ -1093,6 +841,7 @@ serve(async (req: Request) => {
             division_id,
         } = await req.json() as {
             registration_id?: string;
+            reviewed_registration_id?: string;
             action?: Action;
             event_id?: string;
             skip_paystack?: boolean;
@@ -1104,49 +853,32 @@ serve(async (req: Request) => {
             cancellation_reason?: string;
             division_id?: string;
         };
-        if (!action) return json(400, { error: 'Missing action' });
+        if (!action || !supportedActions.has(action)) return json(400, { error: 'Unsupported action' });
 
         const supabaseAdmin = createClient(supabaseUrl, serviceKey);
         const bearer = authHeader.replace(/^Bearer\s+/i, '').trim();
-        // Prefer JWT role claim — edge SUPABASE_SERVICE_ROLE_KEY can differ in
-        // format from the dashboard api-keys value even for the same project.
-        let isServiceRole = !!serviceKey && bearer === serviceKey;
-        if (!isServiceRole && bearer.split('.').length === 3) {
-            try {
-                const payload = JSON.parse(atob(bearer.split('.')[1]!));
-                isServiceRole = payload?.role === 'service_role';
-            } catch {
-                /* ignore */
-            }
-        }
-
-        // Service-role callers may retry failed refunds (ops / one-off reprocess).
-        // All other actions still require a logged-in user.
+        const review = action === 'reviewed_retry_failed' || action === 'reconcile_retry';
+        const retryAction = action === 'retry_failed' || review;
+        const servicesOwnRetry = retryAction && !!serviceKey && bearer === serviceKey;
         let callerEmail = 'service-role';
         let isAdmin = false;
-        if (isServiceRole && action === 'retry_failed') {
-            isAdmin = true;
-        } else {
-            const supabaseUser = createClient(supabaseUrl, anonKey, {
+        let supabaseUser: SupabaseClient | undefined;
+        if (!servicesOwnRetry) {
+            supabaseUser = createClient(supabaseUrl, anonKey, {
                 global: { headers: { Authorization: authHeader } },
             });
             const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
             if (userError || !user?.email) return json(401, { error: 'Unauthorized' });
             callerEmail = normEmail(user.email);
-            isAdmin = await resolveIsAdmin(supabaseAdmin, user.email);
+            if (!retryAction) isAdmin = await resolveIsAdmin(supabaseAdmin, user.email);
         }
-
-        // retry_failed stays platform-admin / service-role only.
-        if (action === 'retry_failed' && !isAdmin) {
-            return json(403, { error: 'Admin only' });
-        }
-
-        // ===== Retry a failed payment_refunds row (admin / service role) =====
-        if (action === 'retry_failed') {
-            return await handleRetryFailedRefund(supabaseAdmin, {
-                paymentRefundId: payment_refund_id,
-                callerEmail,
-                json,
+        if (retryAction) {
+            if (!await canReviewEventRefund({ bearer, serviceKey, actor: supabaseUser, email: callerEmail })) {
+                return json(403, { error: 'A verified platform administrator is required to review refunds.' });
+            }
+            return await handleReviewedRefundRetry(supabaseAdmin, {
+                refundId: payment_refund_id, registrationId: review ? reviewed_registration_id : registration_id, eventId: event_id, email: callerEmail,
+                review, reconcile: action === 'reconcile_retry', json,
             });
         }
 
