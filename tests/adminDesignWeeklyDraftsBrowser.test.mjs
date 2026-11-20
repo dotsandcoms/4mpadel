@@ -64,7 +64,8 @@ const fixture = String.raw`
 async function click(page, text) {
   try {
     const button = await page.waitForFunction(label => [...document.querySelectorAll('button')]
-      .find(node => !node.disabled && node.getClientRects().length && node.textContent.trim() === label), {polling:50}, text);
+      .find(node => !node.disabled && !node.closest('[inert]') && node.getClientRects().length
+        && node.textContent.trim() === label), {polling:50}, text);
     try { await button.evaluate(node => node.click()); }
     finally { await button.dispose(); }
   } catch (error) {
@@ -149,6 +150,10 @@ test('Calendar saves, resumes, publishes and discards weekly series through the 
     await click(page,'Weekly drafts');
     await wait(() => document.body.textContent.includes('4 weeks'));
     await click(page,'Continue draft');
+    await wait(() => {
+      const title = document.querySelector('.ap-live-event-editor [name=event_name]');
+      return title?.value === 'Friday Social' && !title.closest('[inert]');
+    });
     await click(page,'Date & Venue');
     await page.waitForSelector('[name=weekly_count]', {visible:true});
     assert.equal(await page.$eval('[name=weekly_count]',input=>input.value),'4');
