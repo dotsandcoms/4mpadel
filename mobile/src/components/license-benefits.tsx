@@ -36,7 +36,7 @@ export function LicenseBenefits({ licenseNumber }: { licenseNumber?: string | nu
             source={require('@/assets/images/court-sport.png')}
             accessible
             accessibilityLabel="Court Sport logo"
-            resizeMode="contain"
+            resizeMode="cover"
             style={styles.logo}
           />
         </View>
@@ -78,8 +78,8 @@ const styles = StyleSheet.create({
   section: { gap: 12 },
   heading: { color: brand.premium, fontSize: 20, fontWeight: '600' },
   card: { backgroundColor: brand.elevated, borderRadius: 16, padding: 16, gap: 12 },
-  logoFrame: { width: 216, maxWidth: '100%', aspectRatio: 3.25, overflow: 'hidden', justifyContent: 'center' },
-  logo: { width: '100%', aspectRatio: 16 / 9, flexShrink: 0 },
+  logoFrame: { width: 216, maxWidth: '100%', aspectRatio: 3.25, overflow: 'hidden' },
+  logo: { width: '100%', height: '100%' },
   body: { color: brand.muted, fontSize: 14, lineHeight: 21 },
   discount: { color: brand.premium, fontWeight: '700' },
   numberRow: { borderTopWidth: 1, borderColor: brand.edge, paddingTop: 12, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
