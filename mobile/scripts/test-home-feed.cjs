@@ -129,27 +129,27 @@ for (const [source, expected] of [
   assert.deepEqual(opened, expected);
 });
 
-test('FIP Home shortcuts and news open their destinations inside the app', () => {
+function homeScreenFixture(tab, player) {
   const mod = { exports: {} }, navigated = [], pushed = [];
   const empty = { data: null, loading: false, error: false };
   const feed = Object.fromEntries(['profile', 'following', 'payments', 'schedule', 'matches', 'spotlight', 'happening', 'results', 'media', 'tour', 'fixtures', 'live', 'fip'].map(name => [name, empty]));
   const article = { slug: 'tour-final', title: 'The tour final' };
-  feed.profile = { ...empty, data: { id: 73 } };
+  feed.profile = { ...empty, data: player };
   feed.news = { ...empty, data: [article] };
   let stateIndex = 0;
   const modules = {
-    react: { useState: value => [stateIndex++ === 0 ? 'international' : value, () => {}], useMemo: fn => fn(), useRef: current => ({ current }), useEffect() {} },
+    react: { useState: value => [stateIndex++ === 0 ? tab ?? value : value, () => {}], useMemo: fn => fn(), useRef: current => ({ current }), useEffect() {} },
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
     'react-native': { Platform: { OS: 'ios' }, StyleSheet: { create: styles => styles }, View: 'View', Animated: { FlatList: 'FlatList', Value: class {}, event: () => () => {} }, RefreshControl: 'RefreshControl' },
     'expo-router': { useRouter: () => ({ push: path => pushed.push(path) }), useNavigation: () => ({ navigate: (name, params) => navigated.push({ name, params }) }) },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0 }) },
     '@/hooks/use-tab-scene-padding': { useTabScenePadding: () => 0 },
-    '@/hooks/use-home-feed': { useHomeFeed: () => ({ ...feed, completion: empty, clubArea: empty }) },
+    '@/hooks/use-home-feed': { useHomeFeed: () => ({ ...feed, signedIn: !!player, completion: empty, clubArea: empty }) },
     '@/hooks/use-home-conditions': { useHomeConditions: () => ({ location: null, weather: null }) },
     '@/hooks/use-foreground-clock': { useForegroundClock: () => Date.now() },
     '@/hooks/use-home-banner-dismissal': { useHomeBannerDismissal: () => ({ ready: true, hidden: false, dismiss() {} }) },
     '@/components/guided-tour': { useGuidedTour: () => null, TourTarget: 'TourTarget', ContextualTip: 'ContextualTip' },
-    '@/lib/profile-completion': { missingProfileFields: () => [] },
+    '@/lib/profile-completion': load('src/lib/profile-completion.ts'),
     '@/lib/home': { profileGaps: () => [] },
     '@/lib/home-feed': { homeTourEvents: () => [], homeOfficialFipEvents: () => [] },
     '@/lib/home-tour-presentation': { upcomingTourEvents: () => [] },
@@ -157,12 +157,26 @@ test('FIP Home shortcuts and news open their destinations inside the app', () =>
     '@/theme/tokens': { lightBrand: {} },
   };
   const runtime = modules['react/jsx-runtime'];
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/app/(tabs)/index.tsx', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText,
+    { module: mod, exports: mod.exports, URLSearchParams, require: id => modules[id] || new Proxy({}, { get: (_, key) => key }) });
+  return { screen: mod.exports.default(), runtime, navigated, pushed };
+}
+
+test('Home opens Edit profile for missing player details on the default Following feed', () => {
+  const player = { id: 73, name: 'Example Player', region: null, nationality: null, gender: null, category: 'Open', home_club: 'Club', racket_brand: 'Brand' };
+  const { screen, pushed } = homeScreenFixture(undefined, player);
+  const list = screen.props.children.find(child => child?.type === 'FollowingFeedList');
+  const reminder = list.props.header.props.children.find(child => child?.type === 'ProfileCompletionBanner');
+  assert.deepEqual(Array.from(reminder.props.missing), ['Region', 'Nationality', 'Gender']);
+  reminder.props.onEdit();
+  assert.deepEqual(pushed, ['/edit-profile']);
+});
+
+test('FIP Home shortcuts and news open their destinations inside the app', () => {
+  const { screen, runtime, navigated, pushed } = homeScreenFixture('international', { id: 73 });
   const shortcuts = { exports: {} };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/components/home-shortcuts.tsx', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText,
     { module: shortcuts, exports: shortcuts.exports, require: id => id === 'react/jsx-runtime' ? runtime : { HomeAction: 'HomeAction' } });
-  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/app/(tabs)/index.tsx', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText,
-    { module: mod, exports: mod.exports, URLSearchParams, require: id => modules[id] || new Proxy({}, { get: (_, key) => key }) });
-  const screen = mod.exports.default();
   const list = screen.props.children.find(child => child?.type === 'FlatList');
   const shortcutProps = list.props.renderItem({ item: 'shortcuts' }).props.children.props;
   assert.equal(shortcutProps.source, 'international');
@@ -179,11 +193,11 @@ test('FIP Home shortcuts and news open their destinations inside the app', () =>
   header.props.followers.onPress();
   const news = list.props.renderItem({ item: 'news' });
   assert.equal(news.props.children.type, 'PremierNewsRail');
-  news.props.children.props.onOpen(article.slug);
+  news.props.children.props.onOpen('tour-final');
   news.props.onMore();
   assert.deepEqual(JSON.parse(JSON.stringify(pushed)), [
     { pathname: '/followers', params: { playerId: '73' } },
-    { pathname: '/pro/news', params: { slug: article.slug } },
+    { pathname: '/pro/news', params: { slug: 'tour-final' } },
     { pathname: '/pro/news', params: {} },
   ]);
 });

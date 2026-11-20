@@ -13,6 +13,7 @@ function load(file, modules = {}) {
 }
 
 const registration = load('src/lib/registration.ts');
+const profileCompletion = load('src/lib/profile-completion.ts');
 const preferences = load('src/lib/player-preferences.ts');
 const sponsors = load('src/lib/sponsors.ts');
 const optionalFields = ['ID / passport', 'Mobile number', 'Gender', 'Nationality', 'Region'];
@@ -73,6 +74,7 @@ async function screen({ os = 'ios', saved = null, edit = false, playerOverrides 
     '@/theme/tokens': { lightBrand: {} },
     '@/hooks/use-reduced-motion': { useReducedMotion: () => true },
     '@/lib/registration': registration,
+    '@/lib/profile-completion': profileCompletion,
     '@/lib/player-preferences': preferences,
     '@/lib/sponsors': sponsors,
     '@/lib/supabase': { supabase },
@@ -127,7 +129,11 @@ async function screen({ os = 'ios', saved = null, edit = false, playerOverrides 
 for (const os of ['ios', 'android']) {
   test(`${os}: registration saves with all five personal fields blank`, async () => {
     const h = await screen({ os });
-    for (const label of optionalFields) assert.equal(h.field(`${label} (optional)`).value, '');
+    for (const label of optionalFields) {
+      const field = h.field(`${label} (optional)`);
+      assert.equal(field.value, '');
+      if (field.options) assert.ok(field.options.every(option => option.value !== '' && option.label !== 'Prefer not to say'));
+    }
     h.change('First name', 'Test');
     h.change('Surname', 'Player');
     h.change('Date of birth (required, YYYY-MM-DD)', '20000229');
@@ -139,7 +145,7 @@ for (const os of ['ios', 'android']) {
     h.change('About your game', 'I enjoy padel.');
     h.change('Racket brand', 'Adidas');
     await h.press('I agree to the Terms and Privacy Policy');
-    assert.ok(h.find(h.render(), props => Array.isArray(props.children) && props.children.join('') === 'Profile 100% complete'));
+    assert.ok(h.find(h.render(), props => Array.isArray(props.children) && props.children.join('') === 'Setup 100% complete'));
     await h.press('Save profile');
     assert.deepEqual(h.paths, ['/(tabs)']);
     const [name, payload] = h.requests[0];
@@ -202,23 +208,42 @@ test('first name and surname still validate before advancing', async () => {
   assert.equal(h.drafts.length, 0);
 });
 
-test('restored optional details can be removed before continuing', async () => {
+test('restored choices are preserved and optional contact details can be cleared', async () => {
   const h = await screen({ saved: {
     firstName: 'Test', lastName: 'Player', dateOfBirth: '2000-02-29', playtomicLevel: '3.25', playtomicProofPath:'1/a.jpg', idNumber: 'ID123', contactNumber: '0123456789',
     gender: 'Female', nationality: 'South Africa', region: 'Gauteng',
   } });
-  for (const label of optionalFields) {
+  for (const label of ['ID / passport', 'Mobile number']) {
     const name = `${label} (optional)`;
     assert.ok(h.field(name).value);
-    if (h.field(name).options) {
-      assert.ok(h.field(name).options.some(option => option.value === ''));
-    }
     h.change(name, '');
   }
   await h.press('Continue to padel profile');
-  for (const key of ['idNumber', 'contactNumber', 'gender', 'nationality', 'region']) {
+  for (const key of ['idNumber', 'contactNumber']) {
     assert.equal(h.drafts[0][key], '');
   }
+  assert.equal(h.drafts[0].gender, 'Female');
+  assert.equal(h.drafts[0].nationality, 'South Africa');
+  assert.equal(h.drafts[0].region, 'Gauteng');
+});
+
+test('old placeholder values load as blank in signup and Edit profile', async () => {
+  const placeholder = { gender: 'Prefer not to say', nationality: ' prefer  not to say ', region: ' PREFER NOT TO SAY' };
+  const setup = await screen({ saved: placeholder });
+  const edit = await screen({ edit: true, playerOverrides: placeholder });
+  for (const label of ['Gender', 'Nationality', 'Region']) {
+    for (const field of [setup.field(`${label} (optional)`), edit.field(label)]) {
+      assert.equal(field.value, '');
+      assert.equal(field.placeholder, `Select ${label.toLowerCase()}`);
+      assert.ok(field.options.every(option => option.value !== '' && option.label !== 'Prefer not to say'));
+    }
+  }
+  edit.change('Gender', 'Female');
+  edit.change('Nationality', 'South Africa');
+  edit.change('Region', 'Gauteng');
+  await edit.press('Save changes');
+  const [saved] = edit.updates;
+  assert.deepEqual([saved.gender, saved.nationality, saved.region], ['Female', 'South Africa', 'Gauteng']);
 });
 
 test('profile payload preserves supplied values and normalises whitespace-only details to null', async () => {

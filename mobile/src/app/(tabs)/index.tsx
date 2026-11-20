@@ -173,9 +173,9 @@ export default function HomeScreen() {
 
   const listHeader = <View style={{ flexShrink: 0 }}>
         <HomeIdentity player={feed.profile.data} loading={feed.profile.loading} {...conditions} now={now} onProfile={() => open('/(tabs)/profile')} onRankings={() => open('/rankings?view=Rankings&source=4m')} />
+        {feed.signedIn && <ProfileCompletionBanner missing={profileMissing} onEdit={() => router.push('/edit-profile')} />}
         <TourTarget id="home.feed" onReveal={() => { if (following) revealFollowing.current(); else list.current?.scrollToOffset({ offset: 0, animated: false }); }} style={{ marginBottom: 16, flexShrink: 0 }}><HomeSourcePicker following value={tab} onChange={setTab} /></TourTarget>
         <ContextualTip chapter="home" style={{ marginBottom: 12 }} />
-        {feed.signedIn && <ProfileCompletionBanner missing={profileMissing} onEdit={() => router.push('/edit-profile')} />}
         {!following && banner.ready && !banner.hidden && <HomeActionBanner actions={actionReminders} onReview={() => actionReminders.length > 1 ? open('/notifications') : openPending(actionReminders[0])} onDismiss={banner.dismiss} />}
       </View>;
 

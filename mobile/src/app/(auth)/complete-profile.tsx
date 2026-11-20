@@ -32,6 +32,8 @@ import { SelectField } from '@/components/select-field';
 import { Toast, type ToastKind } from '@/components/toast';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { signOut } from '@/lib/auth';
+import { homeFeedCache } from '@/lib/home-feed-cache';
+import { normalizeProfileSelection } from '@/lib/profile-completion';
 import {
   clearProfileDraft,
   createPlayerProfile,
@@ -207,10 +209,10 @@ export default function CompleteProfileScreen() {
           setPlaytomicNoProfile(saved.playtomicNoProfile === true);
           setPlaytomicExtraction(saved.playtomicExtraction ?? null);
           setContactNumber((v) => v || saved.contactNumber || '');
-          setGender((v) => v || saved.gender || '');
-          setNationality((v) => v || saved.nationality || '');
+          setGender((v) => v || normalizeProfileSelection(saved.gender));
+          setNationality((v) => v || normalizeProfileSelection(saved.nationality));
           setIdNumber((v) => v || saved.idNumber || '');
-          setRegion((v) => v || saved.region || '');
+          setRegion((v) => v || normalizeProfileSelection(saved.region));
           setCategory((v) => v || saved.category || '');
           setClubId((v) => v || saved.clubId || '');
           setCustomClub((v) => v || saved.customClub || '');
@@ -378,6 +380,7 @@ export default function CompleteProfileScreen() {
     setBusy(true);
     try {
       await createPlayerProfile(draft(), clubs);
+      homeFeedCache.invalidate(['profile:', 'profile-completion:']);
       void trackEvent('profile_completed');
       await clearProfileDraft(email);
       router.replace('/(tabs)');
@@ -432,7 +435,7 @@ export default function CompleteProfileScreen() {
               <Text
                 className="text-[12px] font-bold"
                 style={{ color: percent > 0 ? brand.accent : brand.faint }}>
-                Profile {percent}% complete
+                Setup {percent}% complete
               </Text>
             ) : (
               <View />
@@ -490,7 +493,7 @@ export default function CompleteProfileScreen() {
                 </Text>
                 <Text className="mb-6 text-court-muted" style={{ fontSize: 16, lineHeight: 24 }}>
                   Use the same name as your RankedIn profile so we can match your results.
-                  {'\n'}ID / passport, mobile number, gender, nationality and region are optional.
+                  {'\n'}You can add gender, nationality and region later from Home.
                 </Text>
 
                 <SectionLabel first>Identity</SectionLabel>
@@ -576,9 +579,10 @@ export default function CompleteProfileScreen() {
                     <SelectField
                       label="Gender (optional)"
                       value={gender}
+                      placeholder="Select gender"
                       error={errors.gender}
                       valid={!!gender && !errors.gender}
-                      options={[{ label: 'Prefer not to say', value: '' }, ...GENDERS.map((g) => ({ label: g, value: g }))]}
+                      options={GENDERS.map((g) => ({ label: g, value: g }))}
                       onChange={(v) => {
                         setGender(v);
                         clearError('gender');
@@ -589,10 +593,12 @@ export default function CompleteProfileScreen() {
                     <SelectField
                       label="Nationality (optional)"
                       value={nationality}
+                      placeholder="Select nationality"
                       error={errors.nationality}
                       valid={filled(nationality) && !errors.nationality}
                       badge={nationalityBadge}
-                      options={[{ label: 'Prefer not to say', value: '' }, ...nationalityOptions]}
+                      options={nationalityOptions}
+                      searchable
                       onChange={(v) => {
                         setNationality(v);
                         clearError('nationality');
@@ -603,10 +609,11 @@ export default function CompleteProfileScreen() {
                 <SelectField
                   label="Region (optional)"
                   value={region}
+                  placeholder="Select region"
                   error={errors.region}
                   valid={!!region && !errors.region}
                   badge={regionBadge}
-                  options={[{ label: 'Prefer not to say', value: '' }, ...SA_REGIONS.map((r) => ({ label: r, value: r }))]}
+                  options={SA_REGIONS.map((r) => ({ label: r, value: r }))}
                   onChange={(v) => {
                     setRegion(v);
                     clearError('region');
