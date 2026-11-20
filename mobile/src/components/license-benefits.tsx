@@ -4,12 +4,14 @@ import { Link } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 
 import { HomeAction } from '@/components/home-action';
+import type { LicenseBundle } from '@/lib/licenses';
 import { lightBrand as brand } from '@/theme/tokens';
 
 const COURT_SPORT_URL = 'https://www.courtsport.co.za/';
 
-export function LicenseBenefits({ licenseNumber }: { licenseNumber?: string | null }) {
-  const number = licenseNumber?.trim();
+export function LicenseBenefits({ bundle }: { bundle: Pick<LicenseBundle, 'license_number' | 'licenses'> }) {
+  const hasActiveFullLicence = bundle.licenses.some(licence => licence.license_type === 'full' && licence.status === 'active');
+  const number = hasActiveFullLicence ? bundle.license_number?.trim() : undefined;
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   async function copyNumber() {
@@ -41,8 +43,9 @@ export function LicenseBenefits({ licenseNumber }: { licenseNumber?: string | nu
           />
         </View>
         <Text style={styles.body}>
-          SAPA annual licence holders get <Text style={styles.discount}>25% off</Text> at Court Sport.
-          {' '}Enter your licence number at checkout.
+          {hasActiveFullLicence ? 'Your active full SAPA licence gets you ' : 'An active full SAPA licence unlocks '}
+          <Text style={styles.discount}>25% off</Text> at Court Sport.
+          {number ? ' Enter your licence number at checkout.' : ''}
         </Text>
         {number ? (
           <View style={styles.numberRow}>
@@ -56,19 +59,21 @@ export function LicenseBenefits({ licenseNumber }: { licenseNumber?: string | nu
               onPress={() => void copyNumber()}
             />
           </View>
-        ) : licenseNumber !== undefined ? (
-          <Text style={styles.caption}>You’ll get a licence number when your first SAPA licence is issued.</Text>
+        ) : hasActiveFullLicence ? (
+          <Text style={styles.caption}>Your licence number is currently unavailable.</Text>
         ) : null}
-        {copyStatus === 'failed' && (
+        {number && copyStatus === 'failed' && (
           <Text accessibilityRole="alert" style={styles.error}>
             Couldn’t copy the licence number. Select the number to copy it manually.
           </Text>
         )}
-        <Link href={COURT_SPORT_URL} asChild>
-          <Pressable accessibilityRole="link" style={styles.link}>
-            <Text style={styles.linkText}>Visit courtsport.co.za</Text>
-          </Pressable>
-        </Link>
+        {number && (
+          <Link href={COURT_SPORT_URL} asChild>
+            <Pressable accessibilityRole="link" style={styles.link}>
+              <Text style={styles.linkText}>Visit courtsport.co.za</Text>
+            </Pressable>
+          </Link>
+        )}
       </View>
     </View>
   );

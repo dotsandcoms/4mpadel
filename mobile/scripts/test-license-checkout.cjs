@@ -121,11 +121,14 @@ function licenseBenefitsFixture(copy = async () => true) {
   return { Benefit: mod.exports.LicenseBenefits, React, act, create, calls };
 }
 
+const activeBenefitsLicence = { license_type: 'full', status: 'active' };
+const benefitBundle = (number, licenses = [activeBenefitsLicence]) => ({ license_number: number, licenses });
+
 test('Benefits shows the assigned licence number and copies only that number', async () => {
   const { Benefit, React, act, create, calls } = licenseBenefitsFixture();
   let screen;
   try {
-    await act(async () => { screen = create(React.createElement(Benefit, { licenseNumber: 'SAPA00017' })); });
+    await act(async () => { screen = create(React.createElement(Benefit, { bundle: benefitBundle('SAPA00017') })); });
     assert.equal(screen.root.findByType('Image').props.accessibilityLabel, 'Court Sport logo');
     assert.equal(screen.root.findByType('RouterLink').props.href, 'https://www.courtsport.co.za/');
     assert.equal(screen.root.findByProps({ selectable: true }).props.children, 'SAPA00017');
@@ -139,19 +142,41 @@ test('Benefits shows the assigned licence number and copies only that number', a
   }
 });
 
-test('Benefits explains when a number is issued and offers a manual copy fallback', async () => {
+test('Benefits handles an unavailable licence number and offers a manual copy fallback', async () => {
   const { Benefit, React, act, create, calls } = licenseBenefitsFixture(async () => false);
   let screen;
   try {
-    await act(async () => { screen = create(React.createElement(Benefit, { licenseNumber: null })); });
+    await act(async () => { screen = create(React.createElement(Benefit, { bundle: benefitBundle(null) })); });
     assert.equal(screen.root.findAllByType('HomeAction').length, 0);
     assert.ok(screen.root.findAllByType('Text').some(node => node.props.children === '25% off'));
-    assert.ok(screen.root.findAllByType('Text').some(node => String(node.props.children).includes('first SAPA licence is issued')));
-    await act(async () => screen.update(React.createElement(Benefit, { licenseNumber: 'SAPA00017' })));
+    assert.ok(screen.root.findAllByType('Text').some(node => String(node.props.children).includes('licence number is currently unavailable')));
+    await act(async () => screen.update(React.createElement(Benefit, { bundle: benefitBundle('SAPA00017') })));
     await act(async () => screen.root.findByType('HomeAction').props.onPress());
     assert.deepEqual(calls, [['copy', 'SAPA00017']]);
     assert.match(screen.root.findByProps({ accessibilityRole: 'alert' }).props.children, /Select the number/);
     assert.equal(screen.root.findByProps({ selectable: true }).props.children, 'SAPA00017');
+  } finally {
+    if (screen) await act(async () => screen.unmount());
+  }
+});
+
+test('Benefits only reveals redemption controls for an active full licence', async () => {
+  const { Benefit, React, act, create, calls } = licenseBenefitsFixture();
+  let screen;
+  try {
+    await act(async () => { screen = create(React.createElement(Benefit, { bundle: benefitBundle('SAPA00017') })); });
+    for (const licenses of [
+      [],
+      [{ license_type: 'temporary', status: 'active' }],
+      ['expired', 'upcoming', 'revoked'].map(status => ({ license_type: 'full', status })),
+    ]) {
+      await act(async () => screen.update(React.createElement(Benefit, { bundle: benefitBundle('SAPA00017', licenses) })));
+      assert.equal(screen.root.findAllByType('HomeAction').length, 0);
+      assert.equal(screen.root.findAllByType('RouterLink').length, 0);
+      assert.equal(screen.root.findAllByProps({ selectable: true }).length, 0);
+      assert.doesNotMatch(JSON.stringify(screen.toJSON()), /SAPA00017|at checkout/);
+    }
+    assert.deepEqual(calls, []);
   } finally {
     if (screen) await act(async () => screen.unmount());
   }

@@ -74,6 +74,7 @@ export default function LicenseScreen() {
         if ((a.licenseType || 'full') === 'full') setYear(a.licenseYear ?? 2026);
       }
     } catch (e) {
+      setBundle(null);
       setError(e instanceof Error ? e.message : 'Could not load licences.');
     } finally {
       setLoading(false);
@@ -190,7 +191,7 @@ export default function LicenseScreen() {
       {loading && <ActivityIndicator color={loadingBlue} accessibilityLabel="Loading licences" />}
       {profileIssue && <View style={{ gap: 8 }}><Text style={{ color: brand.muted, lineHeight: 21 }}>Missing: {profileIssue.join(', ') || 'player profile details'}.</Text><HomeAction label="Edit profile" onPress={() => router.push('/edit-profile')} /></View>}
       {bundle && <LicenseSummary bundle={bundle} />}
-      <LicenseBenefits key={bundle?.license_number ?? ''} licenseNumber={bundle?.license_number} />
+      {!loading && bundle && <LicenseBenefits key={bundle.license_number ?? ''} bundle={bundle} />}
       <Text accessibilityRole="header" style={{ color: brand.premium, fontSize: 20, fontWeight: '600' }}>Buy or renew an annual licence</Text>
       {previousTemporary && <View style={{ gap: 8 }}><Text style={{ color: brand.muted, fontSize: 14, lineHeight: 21 }}>A previous temporary-licence payment needs a status check. New temporary licences are added when you register and pay for an event.</Text></View>}
       <View style={{ gap: 12 }}>
