@@ -4,6 +4,75 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+function appleAuth({ email, userId = 'original-account', linkError = null }) {
+  const calls = [];
+  const credential = { email, identityToken: 'apple-token', fullName: null };
+  const dependencies = {
+    'react-native': { Platform: { OS: 'ios' } },
+    '@react-native-google-signin/google-signin': { GoogleSignin: { configure() {} } },
+    'expo-apple-authentication': {
+      AppleAuthenticationScope: { FULL_NAME: 0, EMAIL: 1 },
+      signInAsync: async options => { calls.push(['apple', options.nonce]); return credential; },
+    },
+    'expo-crypto': {
+      randomUUID: () => 'raw-nonce',
+      CryptoDigestAlgorithm: { SHA256: 'SHA256' },
+      digestStringAsync: async (_algorithm, value) => 'hashed-' + value,
+    },
+    './analytics': { trackEvent() {} },
+    './signup-source': { recordAppDevice() {} },
+    './supabase': {
+      supabase: { auth: {
+        getUser: async () => ({ data: { user: { id: userId } }, error: null }),
+        signInWithIdToken: async options => { calls.push(['sign-in', options]); return { data: { user: null }, error: null }; },
+        linkIdentity: async options => { calls.push(['link', options]); return { error: linkError }; },
+      } },
+    },
+  };
+  const mod = { exports: {} };
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/auth.ts', 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText, {
+    module: mod, exports: mod.exports, require: name => dependencies[name] ?? {}, process,
+  });
+  return { ...mod.exports, calls };
+}
+
+test('first-time Apple relay users can stop before creating a second Auth account', async () => {
+  const h = appleAuth({ email: 'relay@privaterelay.appleid.com' });
+  await assert.rejects(h.signInWithApple(async () => false), h.AuthCancelled);
+  assert.deepEqual(h.calls.map(call => call[0]), ['apple']);
+  await h.signInWithApple(async () => true);
+  assert.deepEqual(h.calls.map(call => call[0]), ['apple', 'apple', 'sign-in']);
+});
+
+test('Apple with a regular email and returning Apple credentials skip the account prompt', async () => {
+  for (const email of ['player@example.test', null]) {
+    const h = appleAuth({ email });
+    await h.signInWithApple(async () => assert.fail('Unexpected prompt'));
+    assert.deepEqual(h.calls.map(call => call[0]), ['apple', 'sign-in']);
+  }
+});
+
+test('Apple is linked to the signed-in account with the nonce-bound identity token', async () => {
+  const h = appleAuth({ email: null });
+  await h.linkAppleToAccount('original-account');
+  assert.equal(h.calls[0][1], 'hashed-raw-nonce');
+  assert.equal(h.calls[1][0], 'link');
+  assert.equal(h.calls[1][1].provider, 'apple');
+  assert.equal(h.calls[1][1].nonce, 'raw-nonce');
+  assert.equal(h.calls[1][1].token, 'apple-token');
+});
+
+test('Apple linking never signs into a second account if the existing session changes or linking conflicts', async () => {
+  const changed = appleAuth({ email: null, userId: 'different-account' });
+  await assert.rejects(changed.linkAppleToAccount('original-account'), /Sign in to your 4M Padel account/);
+  assert.deepEqual(changed.calls.map(call => call[0]), ['apple']);
+  const conflict = appleAuth({ email: null, linkError: new Error('identity_already_exists') });
+  await assert.rejects(conflict.linkAppleToAccount('original-account'), /identity_already_exists/);
+  assert.deepEqual(conflict.calls.map(call => call[0]), ['apple', 'link']);
+});
+
 function profileLookup(result) {
   const queries = [];
   const query = {

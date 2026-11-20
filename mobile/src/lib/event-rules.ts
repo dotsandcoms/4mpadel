@@ -33,6 +33,11 @@ export function formatMoney(value: number) {
 }
 
 export type EventFilters = { search: string; timing: 'upcoming' | 'past' | 'saved'; city: string; tier: string; status?: 'active' | 'cancelled' | 'all' };
+const eventTierGroups = new Map([
+  ['sapa-pro-tour', new Set(['major', 'super gold', 's gold', 'gold'])],
+  ['silver-bronze', new Set(['silver', 'bronze'])],
+]);
+
 /** Upcoming events run nearest first; completed events run newest first. Undated events stay last. */
 export function compareEventDates(a: Pick<EventDetail, 'id' | 'start_date'>, b: Pick<EventDetail, 'id' | 'start_date'>, past = false) {
   if (!a.start_date || !b.start_date) return a.start_date ? -1 : b.start_date ? 1 : a.id - b.id;
@@ -42,6 +47,7 @@ export function compareEventDates(a: Pick<EventDetail, 'id' | 'start_date'>, b: 
 export function filterEvents(events: EventDetail[], filters: EventFilters, savedIds: number[], now = new Date()) {
   const today = localDay(now);
   const needle = filters.search.trim().toLowerCase();
+  const tierGroup = eventTierGroups.get(filters.tier);
   return events.filter(event => {
     const cancelled = (event.event_status || '').trim().toLowerCase() === 'cancelled';
     if (filters.status === 'cancelled' ? !cancelled : filters.status !== 'all' && cancelled) return false;
@@ -50,7 +56,7 @@ export function filterEvents(events: EventDetail[], filters: EventFilters, saved
     if (filters.timing === 'past' && (!end || end >= today)) return false;
     if (filters.timing === 'upcoming' && end && end < today) return false;
     if (filters.city && event.city !== filters.city) return false;
-    if (filters.tier && event.sapa_status !== filters.tier) return false;
+    if (tierGroup ? !tierGroup.has(event.sapa_status?.trim().toLowerCase() ?? '') : filters.tier && event.sapa_status !== filters.tier) return false;
     return !needle || [event.event_name, event.city, event.venue, event.organiser_name, event.sapa_status,
       event.is_league ? 'league' : 'tournament'].some(value => value?.toLowerCase().includes(needle));
   }).sort((a, b) => {

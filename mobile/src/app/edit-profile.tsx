@@ -1,5 +1,6 @@
 import { ProfileEmailChange } from '@/components/profile-email-change';
 import { homeFeedCache } from '@/lib/home-feed-cache';
+import { normalizeProfileSelection } from '@/lib/profile-completion';
 import { SponsorField } from '@/components/sponsor-field';
 import { parseSponsors, serializeSponsors } from '@/lib/sponsors';
 import { Image } from 'expo-image';
@@ -41,7 +42,7 @@ import {
 } from '@/lib/registration';
 import { supabase } from '@/lib/supabase';
 import { changeProfilePhoto } from '@/lib/profile-photos';
-import { ageFromBirthDate, birthDateError, playtomicDetailsError, profileExtraction, type PlaytomicExtraction, fetchProfileDetails, saveEditedProfileDetails, PROOF_BUCKET } from '@/lib/profile-details';
+import { ageFromBirthDate, birthDateError, formatBirthDateInput, playtomicDetailsError, profileExtraction, type PlaytomicExtraction, fetchProfileDetails, saveEditedProfileDetails, PROOF_BUCKET } from '@/lib/profile-details';
 import { PlaytomicProofField } from '@/components/playtomic-proof-field';
 import { trackEvent } from '@/lib/analytics';
 import { COURT_SIDE_OPTIONS, PLAYING_HAND_OPTIONS, courtSideLabel, playingHandLabel } from '@/lib/player-preferences';
@@ -97,12 +98,12 @@ function formFromPlayer(player: PlayerRow, clubs: ClubRow[]): Form {
   const knownRacket = RACKET_BRANDS.includes(racket as (typeof RACKET_BRANDS)[number]);
   const clubId = clubIdOf(player, clubs);
   return {
-    name: player.name || '', gender: player.gender || '', nationality: player.nationality || '', idNumber: '', sponsors: player.sponsors || '',
+    name: player.name || '', gender: normalizeProfileSelection(player.gender), nationality: normalizeProfileSelection(player.nationality), idNumber: '', sponsors: player.sponsors || '',
     dateOfBirth: '',
     playtomicLevel: '',
     playtomicProofPath: '', playtomicNoProfile: false, playtomicExtraction: null,
     contactNumber: player.contact_number ?? '',
-    region: player.region ?? '',
+    region: normalizeProfileSelection(player.region),
     category: player.category ?? '',
     courtSide: player.court_side ?? '',
     playingHand: player.playing_hand ?? '',
@@ -373,14 +374,14 @@ export default function EditProfileScreen() {
               onPress={() => setExpanded(expanded === 'essentials' ? null : 'essentials')}>
               <ProfileEmailChange key={login.id} email={login.email} userId={login.id} pendingEmail={login.pendingEmail} disabled={saving || photoSaving || proofSaving} onBusyChange={setEmailBusy} onVerified={load} />
               <LiquidField label="Name" value={form.name} error={errors.name} onChangeText={value => patch('name', value)} autoComplete="name" autoCapitalize="words" maxLength={100} />
-              <SelectField label="Gender" value={form.gender} options={[{ label: 'Prefer not to say', value: '' }, ...GENDERS.map(value => ({ label: value, value }))]} onChange={value => patch('gender', value)} />
-              <SelectField label="Nationality" value={form.nationality} options={[{ label: 'Prefer not to say', value: '' }, ...NATIONALITIES.map(value => ({ label: value.label, value: value.value, badge: value.badge }))]} onChange={value => patch('nationality', value)} searchable />
+              <SelectField label="Gender" value={form.gender} placeholder="Select gender" options={GENDERS.map(value => ({ label: value, value }))} onChange={value => patch('gender', value)} />
+              <SelectField label="Nationality" value={form.nationality} placeholder="Select nationality" options={NATIONALITIES.map(value => ({ label: value.label, value: value.value, badge: value.badge }))} onChange={value => patch('nationality', value)} searchable />
               <LiquidField label="ID / passport number" value={form.idNumber} hint="Only you and authorised staff can access this private detail." onChangeText={value => patch('idNumber', value)} maxLength={50} autoCapitalize="characters" />
-              <LiquidField label="Date of birth (YYYY-MM-DD)" value={form.dateOfBirth} placeholder="YYYY-MM-DD" error={errors.dateOfBirth} invalid={!!errors.dateOfBirth} onChangeText={value => patch('dateOfBirth', value)} autoComplete="birthdate-full" autoCapitalize="none" maxLength={10} />
+              <LiquidField label="Date of birth (YYYY-MM-DD)" value={form.dateOfBirth} placeholder="YYYY-MM-DD" error={errors.dateOfBirth} invalid={!!errors.dateOfBirth} onChangeText={value => patch('dateOfBirth', formatBirthDateInput(value))} autoComplete="birthdate-full" keyboardType="number-pad" />
               <LiquidField label="Age (calculated)" value={age == null ? '' : String(age)} editable={false} placeholder="Enter your date of birth" hint="Calculated from your date of birth." />
               <Text style={{ color: brand.muted, fontSize: 12 }}>Your date of birth stays private. Your profile shows your age.</Text>
               <LiquidField label="Mobile number" icon="phone.fill" value={form.contactNumber} error={errors.contactNumber} invalid={!!errors.contactNumber} valid={filled(form.contactNumber) && !errors.contactNumber} onChangeText={(value) => patch('contactNumber', value)} keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" />
-              <SelectField label="Region" value={form.region} error={errors.region} valid={!!form.region && !errors.region} badge={regionBadge} options={[{ label: 'Prefer not to say', value: '' }, ...SA_REGIONS.map((region) => ({ label: region, value: region }))]} onChange={(value) => patch('region', value)} />
+              <SelectField label="Region" value={form.region} placeholder="Select region" error={errors.region} valid={!!form.region && !errors.region} badge={regionBadge} options={SA_REGIONS.map((region) => ({ label: region, value: region }))} onChange={(value) => patch('region', value)} />
               <SelectField label="Category" value={form.category} error={errors.category} valid={!!form.category && !errors.category} options={categoryOptions} onChange={(value) => patch('category', value)} />
               <SelectField label="Court side" value={form.courtSide} valid={!!form.courtSide} options={COURT_SIDE_OPTIONS} onChange={(value) => patch('courtSide', value)} />
               <SelectField label="Playing hand" value={form.playingHand} valid={!!form.playingHand} options={PLAYING_HAND_OPTIONS} onChange={(value) => patch('playingHand', value)} />

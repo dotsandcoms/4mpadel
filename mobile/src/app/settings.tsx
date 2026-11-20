@@ -6,7 +6,7 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Text, View } from 'react-native';
 import { SettingsGroup, SettingsPage, SettingsRow, SETTINGS_BLUE } from '@/components/settings-ui';
 import { ContextualTip } from '@/components/guided-tour';
-import { signOut, sendPasswordReset } from '@/lib/auth';
+import { AuthCancelled, isAppleAvailable, linkAppleToAccount, signOut, sendPasswordReset } from '@/lib/auth';
 import { openLegal } from '@/lib/legal';
 import { supabase } from '@/lib/supabase';
 import { lightBrand as brand } from '@/theme/tokens';
@@ -17,6 +17,7 @@ export default function SettingsScreen() {
   const build = Application.nativeBuildVersion;
   const [account, setAccount] = useState<Account | null>(null);
   const [email, setEmail] = useState('');
+  const [appleAccountId, setAppleAccountId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -24,6 +25,7 @@ export default function SettingsScreen() {
   useFocusEffect(useCallback(() => {
     let active = true;
     setLoading(true); setError('');
+    setAppleAccountId(null);
     (async () => {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError) throw authError;
@@ -33,6 +35,10 @@ export default function SettingsScreen() {
       const { data, error } = await supabase.from('players').select('name,region,racket_brand,home_club,image_url,license_type').eq('email', user.email.toLowerCase()).maybeSingle();
       if (error) throw error;
       if (active) setAccount(data);
+      if (data && user.id && !user.identities?.some(identity => identity.provider === 'apple')) {
+        const available = await isAppleAvailable();
+        if (active && available) setAppleAccountId(user.id);
+      }
     })().catch(() => { if (active) setError('Could not load your account. Please try again.'); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [attempt]));
@@ -49,6 +55,23 @@ export default function SettingsScreen() {
     catch { Alert.alert('Could not send reset link', 'Please try again shortly.'); }
     finally { setBusy(false); }
   }
+  async function linkApple() {
+    if (!appleAccountId || busy) return;
+    setBusy(true);
+    try {
+      await linkAppleToAccount(appleAccountId);
+      setAppleAccountId(null);
+      Alert.alert('Apple linked', 'You can now use Apple to sign in to this profile.');
+    } catch (error) {
+      if (error instanceof AuthCancelled) return;
+      const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+      Alert.alert('Unable to link Apple', code === 'identity_already_exists'
+        ? 'This Apple sign-in is already linked to a 4M Padel account. Open Help & enquiries to get your profiles reviewed.'
+        : 'Please try again. If the problem continues, open Help & enquiries.');
+    } finally {
+      setBusy(false);
+    }
+  }
   return <SettingsPage title="Account & settings">
     {loading ? <ActivityIndicator color={SETTINGS_BLUE} /> : error ? <SettingsRow title="Retry account loading" detail={error} icon="refresh-outline" onPress={() => setAttempt(v => v + 1)} /> : <View style={{ padding: 18, backgroundColor: '#EAF0FF', borderRadius: 22, borderWidth: 1, borderColor: '#DCE4FC' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}><View style={{ flex: 1 }}><Text accessibilityRole="header" style={{ fontSize: 23, fontWeight: '800', color: brand.premium }}>{account?.name || 'Your account'}</Text><Text style={{ fontSize: 13, color: brand.muted, marginTop: 7 }}>{account ? `${account.license_type && account.license_type !== 'none' ? account.license_type + ' SAPA licence' : '4M player account'}` : 'Sign in to manage your profile'}</Text></View>{account?.image_url ? <Image source={{ uri: account.image_url }} style={{ width: 64, height: 64, borderRadius: 32 }} /> : <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 22, fontWeight: '800', color: SETTINGS_BLUE }}>{account?.name?.split(/\s+/).slice(0, 2).map(n => n[0]).join('') || '4M'}</Text></View>}</View>
@@ -58,7 +81,12 @@ export default function SettingsScreen() {
     <SettingsGroup title="Your account" tourId="settings.account">
       {email ? <><SettingsRow tourId="settings.profile" title="Edit profile" detail="Personal details, club and player information" icon="person-outline" onPress={() => router.push('/edit-profile')} /><SettingsRow tourId="settings.entries" title="My entries" detail="Upcoming events and previous tournaments" icon="tennisball-outline" onPress={() => router.push('/my-entries')} /><SettingsRow tourId="settings.payments" title="Payments & refunds" detail="View your transaction history" icon="wallet-outline" onPress={() => router.push('/payments')} /><SettingsRow tourId="settings.licence" title="SAPA licence" detail="View your licence and membership options" icon="ribbon-outline" onPress={() => router.push('/license')} /></> : <SettingsRow title="Sign in" icon="person-outline" onPress={() => router.push('/(auth)/sign-in')} />}
     </SettingsGroup>
-    {email && <SettingsGroup title="Preferences & security"><SettingsRow tourId="settings.notifications" title="Notifications" detail="Player updates, events and reminders" icon="notifications-outline" onPress={() => router.push('/notification-settings')} /><SettingsRow tourId="settings.messaging" title="Messaging" detail="Message requests, blocked players and privacy" icon="chatbubbles-outline" onPress={() => router.push('/settings/messaging')} /><SettingsRow title="Reset password" detail="Send a secure reset link to your account email" icon="lock-closed-outline" disabled={busy} onPress={() => Alert.alert('Reset password?', `Send a reset link to ${email}?`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Send link', onPress: () => void reset() }])} /></SettingsGroup>}
+    {email && <SettingsGroup title="Preferences & security">
+      <SettingsRow tourId="settings.notifications" title="Notifications" detail="Player updates, events and reminders" icon="notifications-outline" onPress={() => router.push('/notification-settings')} />
+      <SettingsRow tourId="settings.messaging" title="Messaging" detail="Message requests, blocked players and privacy" icon="chatbubbles-outline" onPress={() => router.push('/settings/messaging')} />
+      {appleAccountId && <SettingsRow title="Link Apple sign-in" detail="Use Apple to sign in to this profile" icon="logo-apple" disabled={busy} onPress={() => void linkApple()} />}
+      <SettingsRow title="Reset password" detail="Send a secure reset link to your account email" icon="lock-closed-outline" disabled={busy} onPress={() => Alert.alert('Reset password?', `Send a reset link to ${email}?`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Send link', onPress: () => void reset() }])} />
+    </SettingsGroup>}
     <SettingsGroup title="Support"><SettingsRow tourId="settings.help" title="Help & enquiries" detail="Get help with an entry, payment or your account" icon="chatbubble-ellipses-outline" onPress={() => router.push('/help')} /><SettingsRow tourId="settings.guide" title="App tour" detail="Explore guides or replay the introduction" icon="compass-outline" onPress={() => router.push('/app-tour')} /></SettingsGroup>
     <SettingsGroup title="Legal information"><SettingsRow title="Terms of use" icon="document-text-outline" onPress={() => openLegal('terms')} /><SettingsRow title="Privacy policy" icon="shield-checkmark-outline" onPress={() => openLegal('privacy')} /></SettingsGroup>
     {email && <SettingsGroup title="Account actions" tourId="settings.actions"><SettingsRow title="Delete account" detail="Permanently remove your account and personal profile" icon="trash-outline" danger onPress={() => router.push('/delete-account')} /><SettingsRow title="Log out" icon="log-out-outline" danger disabled={busy} onPress={() => Alert.alert('Log out of 4M Padel?', undefined, [{ text: 'Cancel', style: 'cancel' }, { text: 'Log out', onPress: () => void logout() }])} /></SettingsGroup>}

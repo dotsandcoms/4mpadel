@@ -20,7 +20,11 @@ import { currentEmail, fetchCalendarEvents, fetchScheduledIds, setEventScheduled
 import { filterEvents, type EventFilters } from '@/lib/event-rules';
 import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 
-const defaultFilters: EventFilters = { search: '', timing: 'upcoming', city: '', tier: '', status: 'active' };
+const tierOptions = [
+  { value: 'sapa-pro-tour', label: 'SAPA Pro Tour' },
+  { value: 'silver-bronze', label: 'Silver/Bronze' },
+];
+const defaultFilters: EventFilters = { search: '', timing: 'upcoming', city: '', tier: 'sapa-pro-tour', status: 'active' };
 const timings = [{ value: 'upcoming', label: 'Upcoming' }, { value: 'past', label: 'Past' }, { value: 'saved', label: 'My schedule' }];
 const fieldColors = { ...b, soft: b.glass, selection: '#38601833' };
 
@@ -69,7 +73,8 @@ function SouthAfricaCalendar() {
     finally { if (id === request.current) setLoading(false); }
   }, []);
   useFocusEffect(useCallback(() => { void load(); return () => { request.current++; }; }, [load]));
-  const rows = useMemo(() => filterEvents(events, filters, saved).filter(e => eventType === 'All' || (eventType === 'Leagues' ? e.is_league : !e.is_league)), [events, filters, saved, eventType]);
+  const viewingSchedule = filters.timing === 'saved';
+  const rows = useMemo(() => filterEvents(events, { ...filters, tier: viewingSchedule ? '' : filters.tier }, saved).filter(e => eventType === 'All' || (eventType === 'Leagues' ? e.is_league : !e.is_league)), [events, filters, viewingSchedule, saved, eventType]);
   useAnalyticsSearch(filters.search, rows.length, 'events', !loading);
   const cities = useMemo(() => [...new Set(events.map(e => e.city).filter((s): s is string => !!s))].sort(), [events]);
   const toggleSaved = async (id: number) => {
@@ -85,7 +90,10 @@ function SouthAfricaCalendar() {
     void trackEvent('feature_interaction', { feature: 'event_calendar', action: 'filter', selection: value });
     setFilters(f => ({ ...f, timing: value }));
   };
-  const clear = () => { setFilters(defaultFilters); setEventType('All'); };
+  const clear = () => {
+    setFilters(f => ({ ...defaultFilters, timing: f.timing, tier: viewingSchedule ? f.tier : defaultFilters.tier }));
+    setEventType('All');
+  };
   const count = Number(!!filters.city) + Number(eventType !== 'All') + Number(filters.status !== 'active');
   return <View style={{ flex: 1 }}>
     <FlatList ref={list} style={{ flex: 1 }} data={rows} keyExtractor={item => String(item.id)} refreshing={loading && events.length > 0} onRefresh={load}
@@ -98,11 +106,11 @@ function SouthAfricaCalendar() {
         </View>
         <TourTarget id="events.search" onReveal={() => list.current?.scrollToOffset({ offset: 0, animated: false })} style={s.searchBlock}><DiscoverySearch value={filters.search} onChange={search => setFilters(f => ({ ...f, search }))}
           placeholder="Event, city or venue" filterCount={count} onFilters={() => setShowFilters(true)} /></TourTarget>
-        <DiscoveryChoices label="Tier" value={filters.tier} options={['', 'Major', 'Super Gold', 'Gold', 'Silver', 'Bronze'].map(tier => ({ value: tier, label: tier || 'All tiers' }))}
+        {!viewingSchedule && <DiscoveryChoices label="Tier" value={filters.tier} options={tierOptions}
           onChange={tier => {
-            void trackEvent('feature_interaction', { feature: 'event_calendar', action: 'filter', selection: tier ? tier.toLowerCase().replaceAll(' ', '_') : 'all_tiers' });
+            void trackEvent('feature_interaction', { feature: 'event_calendar', action: 'filter', selection: 'specific_tier' });
             setFilters(f => ({ ...f, tier }));
-          }} />
+          }} />}
         <TourTarget id="events.dates" onReveal={() => list.current?.scrollToOffset({ offset: 0, animated: false })} style={s.timing}><NativeSegmentedControl label="Event dates" value={filters.timing} options={timings} onChange={changeTiming} /></TourTarget>
         <View style={s.results}>
           <Text accessibilityLiveRegion="polite" style={s.caption}>{loading && !events.length ? 'Loading events…' : `${rows.length} ${rows.length === 1 ? 'event' : 'events'}${filters.city ? ` · ${filters.city}` : ''}${eventType !== 'All' ? ` · ${eventType}` : ''}`}</Text>
