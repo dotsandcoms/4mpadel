@@ -94,3 +94,63 @@ test('annual app purchases and verification of an older temporary payment still 
   assert.equal(api.calls.length, 3); assert.equal(api.calls[2].body.action, 'verify');
   assert.ok(api.calls.every(call => call.name === 'native-license-checkout'));
 });
+
+function licenseBenefitsFixture(copy = async () => true) {
+  const React = require('react');
+  const { act, create } = require('react-test-renderer');
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  const calls = [];
+  const mod = { exports: {} };
+  const modules = {
+    react: React,
+    'react/jsx-runtime': require('react/jsx-runtime'),
+    'react-native': {
+      AccessibilityInfo: { announceForAccessibility: message => calls.push(['announce', message]) },
+      Pressable: 'Pressable', Text: 'Text', View: 'View', StyleSheet: { create: value => value },
+    },
+    'expo-router': { Link: 'RouterLink' },
+    'expo-clipboard': { setStringAsync: number => { calls.push(['copy', number]); return copy(number); } },
+    '@/components/home-action': { HomeAction: 'HomeAction' },
+    '@/theme/tokens': { lightBrand: {} },
+  };
+  const source = ts.transpileModule(fs.readFileSync('src/components/license-benefits.tsx', 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  vm.runInNewContext(source, { module: mod, exports: mod.exports, require: id => modules[id] });
+  return { Benefit: mod.exports.LicenseBenefits, React, act, create, calls };
+}
+
+test('Benefits shows the assigned licence number and copies only that number', async () => {
+  const { Benefit, React, act, create, calls } = licenseBenefitsFixture();
+  let screen;
+  try {
+    await act(async () => { screen = create(React.createElement(Benefit, { licenseNumber: 'SAPA00017' })); });
+    assert.equal(screen.root.findByType('RouterLink').props.href, 'https://www.courtsport.co.za/');
+    assert.equal(screen.root.findByProps({ selectable: true }).props.children, 'SAPA00017');
+    const copy = screen.root.findByType('HomeAction');
+    assert.equal(copy.props.label, 'Copy number');
+    await act(async () => copy.props.onPress());
+    assert.deepEqual(calls, [['copy', 'SAPA00017'], ['announce', 'SAPA licence number copied.']]);
+    assert.equal(copy.props.label, 'Copied');
+  } finally {
+    if (screen) await act(async () => screen.unmount());
+  }
+});
+
+test('Benefits explains when a number is issued and offers a manual copy fallback', async () => {
+  const { Benefit, React, act, create, calls } = licenseBenefitsFixture(async () => false);
+  let screen;
+  try {
+    await act(async () => { screen = create(React.createElement(Benefit, { licenseNumber: null })); });
+    assert.equal(screen.root.findAllByType('HomeAction').length, 0);
+    assert.ok(screen.root.findAllByType('Text').some(node => node.props.children === '25% off'));
+    assert.ok(screen.root.findAllByType('Text').some(node => String(node.props.children).includes('first SAPA licence is issued')));
+    await act(async () => screen.update(React.createElement(Benefit, { licenseNumber: 'SAPA00017' })));
+    await act(async () => screen.root.findByType('HomeAction').props.onPress());
+    assert.deepEqual(calls, [['copy', 'SAPA00017']]);
+    assert.match(screen.root.findByProps({ accessibilityRole: 'alert' }).props.children, /Select the number/);
+    assert.equal(screen.root.findByProps({ selectable: true }).props.children, 'SAPA00017');
+  } finally {
+    if (screen) await act(async () => screen.unmount());
+  }
+});
