@@ -10,6 +10,10 @@ insert('auth.users',[{id:'00000000-0000-4000-8000-000000000001',email:'admin@exa
 insert('calendar',[d.event],['id','event_name','start_date','end_date','venue','is_manual']);
 insert('tournament_divisions',d.divisions,['id','event_id','name','sort_order','is_active']);
 insert('players',d.players,['id','name','email','license_type','points']);
+const fixtureSeason = Number(d.event.start_date.slice(0, 4));
+insert('annual_licenses', d.players.filter(player => player.license_type === 'full').map(player => ({
+    player_id: player.id, season_year: fixtureSeason, valid_from: fixtureSeason + '-01-01',
+})), ['player_id', 'season_year', 'valid_from']);
 insert('event_registrations',d.registrations,['id','event_id','division_id','full_name','email','partner_name','partner_email','payment_status','status']);
 insert('event_play_days',d.playDays.map(x=>({...x,event_id:d.event.id})),['id','event_id','play_date','start_time','end_time','courts_count','minimum_break_minutes','match_duration_minutes','is_active']);
 insert('draws',d.draws,['id','event_id','division_id','draw_kind','format','status','scoring_rules']);
