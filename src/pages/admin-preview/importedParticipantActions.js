@@ -52,7 +52,3 @@ export async function saveImportedParticipant({client,eventId,expectedUserId,sco
   if(!saved||String(saved.id)!==String(participant.id)||String(saved.event_id)!==String(eventId)||Object.keys(patch).some(key=>saved[key]!==patch[key]))throw new Error('The participant change could not be confirmed. Reload before trying again.');
   return saved;
 }
-
-export const importedHeldAction = action => action==='sync'
-  ? 'Sync is held for review. The current importer makes separate writes and deletes, and can remove participants after a division fetch fails. No RankedIn fetch, import or removal will run here until that failure path is protected.'
-  : 'Payment changes are held for review. The current workflow updates participant flags and financial records separately, and can report success after a partial failure. No payment flag, registration or payment record will change here until that workflow is safely connected.';

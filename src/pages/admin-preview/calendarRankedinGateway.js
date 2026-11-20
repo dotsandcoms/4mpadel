@@ -67,6 +67,17 @@ export function createCalendarRankedinGateway(fetcher = (...args) => fetch(...ar
       const classes = await json('/tournament/GetClassesAndDrawNamesAsync/', { tournamentId: validatedId(id) }, signal);
       return publicRankedinClasses(id, list(classes, 'the tournament classes'));
     },
+    async participantClasses(id, signal) {
+      return list(await json('/tournament/GetPlayersTabAsync', { id: validatedId(id), language: 'en' }, signal), 'participant divisions');
+    },
+    async classParticipants(id, classId, signal) {
+      const payload = await json('/tournament/GetPlayersForClassAsync', {
+        tournamentId: validatedId(id), tournamentClassId: validatedId(classId), language: 'en',
+      }, signal);
+      if (Array.isArray(payload?.Teams) && payload.Teams.length) return payload.Teams;
+      if (Array.isArray(payload?.Participants)) return payload.Participants.map(row => row?.Participant || row);
+      return list(payload?.Teams, 'participants for division ' + classId);
+    },
     async upcoming(id, classes, signal) {
       const payload = await json('/tournament/GetMatchesSectionAsync', {
         Id: validatedId(id), LanguageCode: 'en', IsReadonly: 'true', isFinished: 'false',
