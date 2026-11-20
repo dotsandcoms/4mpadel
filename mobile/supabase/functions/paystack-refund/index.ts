@@ -13,6 +13,8 @@ import {
     cancelEventTempLicense,
     checkRefundEligibility,
     isLedgerSplitPayment,
+    paymentCoversRefundEntry,
+    paymentUsesVerifiedEntryTransfer,
     resolveCanManageEvent,
     resolveIsAdmin,
     resolvePaystackGatewayReference,
@@ -199,6 +201,11 @@ async function resolvePaystackRefundTarget(
     }
 
     const paystackStatus = String(primary.status || '').toLowerCase();
+    if (item.cover_type === 'entry' && paymentUsesVerifiedEntryTransfer(payment, reg)) {
+        return { ok: false, payment_id: item.payment_id, reference: gatewayRef,
+            message: `The original checkout for this transferred entry is not refundable (${paystackStatus}). Review that receipt.` };
+    }
+
     // Demote local success that Paystack never settled — but never demote
     // LIC-* ledger splits or partially-refunded ("reversed") gateway charges.
     if (!ledgerSplit
@@ -221,7 +228,6 @@ async function resolvePaystackRefundTarget(
     }
 
     const regEmail = normEmail(reg.email);
-    const regDivision = String(reg.division || '');
     const parentRef = String(parseMeta(payment.metadata).parent_reference || '').trim();
 
     const candidates = ctx.payments
@@ -237,10 +243,7 @@ async function resolvePaystackRefundTarget(
                     && normEmail(c.email) === regEmail
                     && c.license !== 'full');
             }
-            return covers.some((c: Record<string, unknown>) =>
-                c.type === 'entry'
-                && normEmail(c.email) === regEmail
-                && String(c.division || '') === regDivision);
+            return paymentCoversRefundEntry(p, reg);
         })
         .sort((a, b) => {
             // Parent of a ledger split first, then most recent.

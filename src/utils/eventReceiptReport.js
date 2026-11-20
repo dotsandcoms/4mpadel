@@ -94,8 +94,9 @@ export function buildEventReceiptReport({ registrations = [], divisions = [], re
         }
         let available = receipt.amount;
         const pricingCovers = distinctCovers.length ? distinctCovers : [...targets.values()].map(r => ({ type: 'entry', email: r.email, division: r.division }));
-        const pricingPayment = { ...source, status: 'success', metadata: { ...meta, covers: pricingCovers,
-            original_trx: { ...meta.original_trx, metadata: { ...inner, covers: [] } } } };
+        const pricingPayment = Array.isArray(meta.verified_entry_transfers) && meta.verified_entry_transfers.length ? { ...source, status: 'success' }
+            : { ...source, status: 'success', metadata: { ...meta, covers: pricingCovers,
+                original_trx: { ...meta.original_trx, metadata: { ...inner, covers: [] } } } };
         const shares = [...targets.values()].map(reg => {
             const amount = Math.min(available, Math.max(0, getRegistrationEntryFeePaid(pricingPayment, reg, fee(reg))));
             available = money(available - amount);

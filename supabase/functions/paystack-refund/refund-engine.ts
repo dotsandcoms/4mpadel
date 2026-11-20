@@ -20,6 +20,7 @@ export type Cover = {
     type: string;            // 'entry' | 'license'
     email: string;
     division?: string;
+    division_id?: string | null;
     license?: string;        // 'full' | 'temporary' (for type === 'license')
 };
 
@@ -104,6 +105,44 @@ function coversOf(payment: PaymentRow): Cover[] {
     return Array.isArray(meta.covers) ? (meta.covers as Cover[]) : [];
 }
 
+type VerifiedEntryTransfer = {
+    cover_position: number;
+    event_id: string | number;
+    registration_id: string;
+    email: string;
+    division: string;
+    division_id: string | null;
+};
+
+function refundEntryCover(payment: PaymentRow, registration: RegistrationRow): { cover: Cover; transferred: boolean } | undefined {
+    const aliases = parseMeta(payment.metadata).verified_entry_transfers;
+    const byPosition = new Map<number, VerifiedEntryTransfer>(Array.isArray(aliases)
+        ? aliases.map(alias => [(alias as VerifiedEntryTransfer).cover_position, alias as VerifiedEntryTransfer]) : []);
+    let position = 0;
+    for (const cover of coversOf(payment)) {
+        if (cover.type !== 'entry') continue;
+        const alias = byPosition.get(++position);
+        if (alias) {
+            if (String(alias.event_id) === String(registration.event_id) && alias.registration_id === registration.id
+                && normEmail(alias.email) === normEmail(registration.email)
+                && (cover.division_id ? cover.division_id === alias.division_id : cover.division === alias.division)
+                && (alias.division_id ? alias.division_id === registration.division_id : alias.division === registration.division)) {
+                return { cover, transferred: true };
+            }
+        } else if (normEmail(cover.email) === normEmail(registration.email) && String(cover.division || '') === String(registration.division || '')) {
+            return { cover, transferred: false };
+        }
+    }
+}
+
+export function paymentCoversRefundEntry(payment: PaymentRow, registration: RegistrationRow): boolean {
+    return Boolean(refundEntryCover(payment, registration));
+}
+
+export function paymentUsesVerifiedEntryTransfer(payment: PaymentRow, registration: RegistrationRow): boolean {
+    return refundEntryCover(payment, registration)?.transferred === true;
+}
+
 /**
  * Paystack only knows about the original checkout reference. License splits
  * create ledger-only rows (`LIC-<parent>` with metadata.parent_reference) that
@@ -174,7 +213,6 @@ export function resolveRefundableItems(
 ): RefundableItem[] {
     const refundLicense = options.refundLicense !== false;
     const regEmail = normEmail(registration.email);
-    const regDivision = String(registration.division || '');
 
     // Running total drawn (Rands) per payment: existing non-failed refunds plus
     // items chosen in this call, so an entry + license taken from one
@@ -216,18 +254,12 @@ export function resolveRefundableItems(
     // --- Entry fee: refund once ---
     const entryPayments = successPayments
         .filter(p => parseMeta(p.metadata).source !== 'native_entry_balance')
-        .filter((p) =>
-            coversOf(p).some(
-                (c) =>
-                    c.type === 'entry' &&
-                    normEmail(c.email) === regEmail &&
-                    String(c.division || '') === regDivision,
-            ),
-        )
+        .filter(p => paymentCoversRefundEntry(p, registration))
         .sort(byRoomThenRecent);
 
     for (const p of entryPayments) {
-        const entryFee = roundRands(Number(divisionFeesOf(p)[regDivision] || 0));
+        const cover = refundEntryCover(p, registration)?.cover;
+        const entryFee = roundRands(Number(divisionFeesOf(p)[cover?.division || registration.division] || 0));
         const remaining = remainingOf(p);
         if (entryFee <= 0 || remaining <= 0) continue;
         const amount = Math.min(entryFee, remaining);

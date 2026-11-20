@@ -1,6 +1,6 @@
 import {
     findPaymentForRegistration, getRegistrationEntryFeePaid, isLicensePaymentRow,
-    isCompedEntryPayment, isEntryFeeRefund, normalizePaymentMetadata, paymentStrictlyCoversRegistration,
+    isCompedEntryPayment, isEntryFeeRefund, normalizePaymentMetadata, paymentStrictlyCoversRegistration, hasVerifiedEntryTransfer,
 } from './paymentRegistrationMatch.js';
 import { fetchAllRows } from './fetchAllRows.js';
 
@@ -12,7 +12,7 @@ const fullyRefundedForAnotherRegistration = (payment, reg, refunds) => {
     return Number(payment.amount) > 0 && refunded >= Number(payment.amount) - 0.01;
 };
 
-// Financial reports must not attach an old checkout to a replacement registration.
+// Financial reports need an exact original entry link for a transferred checkout.
 export function findFinancePayment(payments, reg, refunds = []) {
     if (reg.status === 'withdrawn') {
         const refund = refunds.find((r) => r.event_registration_id === reg.id && r.status !== 'failed'
@@ -23,14 +23,19 @@ export function findFinancePayment(payments, reg, refunds = []) {
     const candidates = (payments || []).filter((p) => {
         const meta = normalizePaymentMetadata(p.metadata);
         return p.status === 'success' && !isLicensePaymentRow(p)
-            && (!meta.registration_id || meta.registration_id === reg.id)
+            && (!meta.registration_id || meta.registration_id === reg.id || hasVerifiedEntryTransfer(p, reg))
             && !(Number(meta.unallocated_credit_amount) > 0 && Number(meta.unallocated_credit_amount) >= Number(p.amount))
             // Email + division also match a later re-entry. A fully refunded
             // receipt stays with its original entry, even if the re-entry is pending.
             && !fullyRefundedForAnotherRegistration(p, reg, refunds);
     });
     const latest = (rows) => [...rows].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0] || null;
-    const direct = latest(candidates.filter((p) => normalizePaymentMetadata(p.metadata).registration_id === reg.id));
+    const direct = latest(candidates.filter(p => {
+        const meta = normalizePaymentMetadata(p.metadata);
+        const hasAliasForRegistration = Array.isArray(meta.verified_entry_transfers)
+            && meta.verified_entry_transfers.some(transfer => transfer.registration_id === reg.id);
+        return hasVerifiedEntryTransfer(p, reg) || (meta.registration_id === reg.id && !hasAliasForRegistration);
+    }));
     if (direct) return direct;
     const strict = latest(candidates.filter((p) => paymentStrictlyCoversRegistration(p, reg)));
     if (strict) return strict;

@@ -1,7 +1,7 @@
 import {
     getRegistrationEntryFeePaid, isCompedEntryPayment,
     isExplicitAdminMarkedPayment, isLicensePaymentRow, isLicenseRefund,
-    normalizePaymentMetadata, paymentMatchesRegistration, paymentHasEntryCoverForRegistration, registrationIsCompedEntry, findExpectedEntryPayment,
+    normalizePaymentMetadata, paymentMatchesRegistration, hasVerifiedEntryTransfer, paymentHasEntryCoverForRegistration, registrationIsCompedEntry, findExpectedEntryPayment,
 } from './paymentRegistrationMatch.js';
 import { registrationDivisionKey, resolveRegistrationDivision } from './registrationDivision.js';
 import { findFinancePayment } from './eventFinanceReconciliation.js';
@@ -178,7 +178,7 @@ export function calculateEventSettlement({ event = {}, registrations = [], divis
         const onlyEntryForEmail = invoices.filter(i => norm(i.registration.email) === norm(reg.email)).length === 1;
         const matches = receiptRows.filter(r => r.claims.some(p => {
             const registrationId = normalizePaymentMetadata(p.metadata).registration_id;
-            if (registrationId && registrationId !== reg.id) return false;
+            if (registrationId && registrationId !== reg.id && !hasVerifiedEntryTransfer(p, reg)) return false;
             return paymentMatchesRegistration(p, reg) || (onlyEntryForEmail && paymentHasEntryCoverForRegistration(p, reg, { requireDivision: false }));
         })).sort((a, b) => {
             // A receipt explicitly recorded for this entry takes priority over
