@@ -13,7 +13,7 @@ import { bulkImportedRosterEvents } from './importedParticipantBulkSync.js';
 import ImportedParticipantBulkSyncDialog from './ImportedParticipantBulkSyncDialog.jsx';
 
 const Badge = ({ tone = 'neutral', children }) => <span className={`ap-status ap-status--${tone}`}>{children}</span>;
-export default function EventManagerDashboard({ events, registrations, go, canReadSnapshots = false, client = supabase, session, scopeId = 'all', canBulkSyncRankedin = false, onRefresh }) {
+export default function EventManagerDashboard({ events, registrations, go, canOpenCalendar = false, canReadSnapshots = false, client = supabase, session, scopeId = 'all', canBulkSyncRankedin = false, onRefresh }) {
   const [query, setQuery] = useState('');
   const [phase, setPhase] = useState('Upcoming');
   const [showBronze, setShowBronze] = useState(false);
@@ -66,7 +66,7 @@ export default function EventManagerDashboard({ events, registrations, go, canRe
   return <div className="em-workspace">
     <header className="ap-page-heading"><div><p className="ap-kicker">Operate / Event manager</p><h1>Event manager</h1><p>Teams, registrations, draws and settlement — organised by event.</p></div><div className="ap-heading-actions">
       {canSyncRosters && <button type="button" className="ap-secondary" disabled={!bulkEvents.length} onClick={() => setBulk({ events: bulkEvents, client, userId: session.user.id })}><RefreshCw size={16} /> Bulk sync RankedIn rosters</button>}
-      <button className="ap-secondary" onClick={() => go('calendar')}><CalendarDays size={16} /> Calendar & setup <ArrowRight size={16} /></button>
+      {canOpenCalendar && <button className="ap-secondary" onClick={() => go('calendar')}><CalendarDays size={16} /> Calendar & setup <ArrowRight size={16} /></button>}
     </div></header>
     <div className="em-stats">{stats.map(([title, value, count]) => <button key={title} className="ap-section" data-state={value || 'all'} aria-pressed={phase === value} onClick={() => filter(value)}><span className="em-stat-label">{title}<span className="em-stat-icon" aria-hidden="true">{value === 'In progress' ? <Radio size={20} /> : value === 'Upcoming' ? <CalendarDays size={20} /> : value === 'Completed' ? <CircleCheck size={20} /> : <Layers size={20} />}</span></span><strong>{completionState.loading || completionState.error ? '—' : <AnimatedCount value={count} />}</strong><small>{phase === value ? <>Showing events <Check size={14} /></> : <>View events <ArrowRight size={14} /></>}</small></button>)}</div>
     <section className="ap-section em-guide"><div><h2>Inside each event</h2><p>Open an event to review its overview, players and teams, registrations, draws, income statement and activity log.</p></div><small>Completed is an explicit Event Manager status, independent of calendar dates.</small></section>

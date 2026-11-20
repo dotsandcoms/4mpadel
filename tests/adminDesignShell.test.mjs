@@ -526,6 +526,17 @@ test('draw details show no write entry point for Event Manager without host or d
   assert.equal(await page.$('[role="dialog"] .ap-primary'), null);
 });
 
+test('Event Manager opens Calendar and setup only for accounts with Calendar access', async t => {
+  const coAdmin = await open(t, '/admin-preview/events', 'event-co-admin');
+  await heading(coAdmin, 'Event manager');
+  assert.equal(await coAdmin.$$eval('.em-workspace header button', buttons => buttons.some(button => button.textContent.trim() === 'Calendar & setup')), false);
+
+  const operator = await open(t, '/admin-preview/events');
+  await heading(operator, 'Event manager');
+  await clickText(operator, '.em-workspace header button', 'Calendar & setup');
+  await route(operator, '/admin-preview/calendar');
+});
+
 test('verified platform permission reaches the Players page and its account controls', async t => {
   const page = await open(t, '/admin-preview/players?player=12');
   await page.waitForSelector('dialog[open][aria-label="Player record"]');
