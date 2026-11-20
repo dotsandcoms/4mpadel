@@ -148,6 +148,8 @@ jobs:
           psql -X -q -d fourm_club_lifecycle_test -f tests/adminClubLifecycle.sql
           createdb fourm_club_google_match_test
           psql -X -q -d fourm_club_google_match_test -f tests/adminReviewedClubGoogleMatch.sql
+          createdb fourm_manual_club_google_match_test
+          psql -X -q -d fourm_manual_club_google_match_test -f tests/adminReviewedManualClubGoogleMatch.sql
           createdb fourm_admin_organisation_test
           psql -X -q -d fourm_admin_organisation_test -f tests/adminOrganisationRecords.sql
           createdb fourm_admin_club_group_team_test

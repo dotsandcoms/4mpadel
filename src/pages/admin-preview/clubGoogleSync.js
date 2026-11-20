@@ -14,7 +14,7 @@ export async function loadClubGoogleMatches({ client, scopeId, userId, signal })
   return rows.filter(row => row.id && row.club_id && row.club_id === row.clubs?.id);
 }
 
-export async function reviewClubGoogleMatch({ client, scopeId, userId, row, decision, review, signal }) {
+export async function reviewClubGoogleMatch({ client, scopeId, userId, row, decision, review, candidate, signal }) {
   if (!row?.id || !row.club_id || row.clubs?.id !== row.club_id || !['apply','dismiss'].includes(decision)) {
     throw new Error('Choose a recorded club match.');
   }
@@ -22,12 +22,14 @@ export async function reviewClubGoogleMatch({ client, scopeId, userId, row, deci
     throw new Error('Open a fresh review for the selected club match.');
   }
   await verifyPlatformClubAction(client, scopeId, userId, () => !signal?.aborted);
-  let request = client.rpc('review_club_google_match', {
+  const args = {
     p_action: review ? decision : `review-${decision}`,
     p_club_id: row.club_id,
     p_match_id: row.id,
     p_expected: review?.token || null,
-  });
+    ...(candidate ? {p_candidate:candidate} : {}),
+  };
+  let request = client.rpc(candidate ? 'review_manual_club_google_match' : 'review_club_google_match', args);
   if (signal && request.abortSignal) request = request.abortSignal(signal);
   const { data, error } = await request;
   signal?.throwIfAborted();

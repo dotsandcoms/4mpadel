@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import RecordLoading from './RecordLoading.jsx';
 import SearchableDropdown from '../../components/SearchableDropdown';
+import ClubGoogleManualMatch from './ClubGoogleManualMatch.jsx';
+import { googleMapsReviewLink } from './clubGoogleManual.js';
 import { isGoogleLinked, loadClubGoogleMatches, matchLabels, reviewClubGoogleMatch } from './clubGoogleSync.js';
 
 const labels = {
@@ -10,7 +12,6 @@ const labels = {
   google_rating: 'Google rating', google_ratings_total: 'Google review count',
 };
 const perPage = 12;
-const mapsLink = value => /^https:\/\/(maps\.app\.goo\.gl\/|maps\.google\.com\/|(www\.)?google\.com\/maps([/?]|$))/i.test(value || '') ? value : null;
 const fieldValue = value => value && typeof value === 'object' ? JSON.stringify(value) : String(value ?? 'Not recorded');
 
 export default function ClubGoogleSyncWorkspace({ client, session, scopeId }) {
@@ -37,18 +38,18 @@ export default function ClubGoogleSyncWorkspace({ client, session, scopeId }) {
     setList({ loading: true });
     reload(value => value + 1);
   };
-  const proceed = async (decision, review) => {
+  const proceed = async (decision, review, candidate) => {
     if (actionRequest.current || !selected?.row) return;
     const controller = new AbortController();
     actionRequest.current = controller;
     setBusy(true);
     setSelected(previous => ({ ...previous, error: '' }));
     try {
-      const result = await reviewClubGoogleMatch({ client, scopeId, userId, row: selected.row, decision, review, signal: controller.signal });
+      const result = await reviewClubGoogleMatch({ client, scopeId, userId, row: selected.row, decision, review, candidate, signal: controller.signal });
       if (!review) {
-        setSelected({ row: selected.row, review: result });
+        setSelected({ row: selected.row, review: result, candidate, manual: Boolean(candidate) });
       } else {
-        setFeedback(decision === 'apply' ? 'Google match applied.' : 'Google match dismissed.');
+        setFeedback(candidate?.kind === 'link' ? 'Google Maps link saved.' : decision === 'apply' ? 'Google match applied.' : 'Google match dismissed.');
         refresh();
       }
     } catch (error) {
@@ -83,13 +84,17 @@ export default function ClubGoogleSyncWorkspace({ client, session, scopeId }) {
       {pages > 1 && <nav className="fo-pagination" aria-label="Google match pages"><button className="ap-secondary" disabled={busy || current <= 1} onClick={() => setPage(current-1)}>Previous</button>
         <span>Page {current} of {pages}</span><button className="ap-secondary" disabled={busy || current >= pages} onClick={() => setPage(current+1)}>Next</button></nav>}
     </>}
-    {selected && <section className="ap-section" aria-label="Recorded match review">
+    {selected && <section className="ap-section" aria-label="Google match review">
       <h3>{selected.row.clubs.name}</h3>
       <p>{selected.row.google_name || 'No Google listing recorded'}{selected.row.google_address ? ` · ${selected.row.google_address}` : ''}</p>
-      {mapsLink(selected.row.clubs.google_maps_url) && <a href={selected.row.clubs.google_maps_url} target="_blank" rel="noreferrer">Open Google Maps</a>}
+      {googleMapsReviewLink(selected.row.clubs.google_maps_url) && <a href={selected.row.clubs.google_maps_url} target="_blank" rel="noreferrer">Open Google Maps</a>}
       {selected.error && <p role="alert">{selected.error}</p>}
+      {selected.manual && !selected.review && <ClubGoogleManualMatch key={selected.row.id} client={client}
+        scopeId={scopeId} userId={userId} busy={busy} row={selected.row}
+        onReview={candidate => proceed('apply', null, candidate)} onCancel={() => setSelected({ row: selected.row })} />}
       {selected.review && <>
-        <h4>{selected.review.decision === 'apply' ? 'Review the recorded field changes' : 'Dismiss this Google match?'}</h4>
+        {selected.candidate?.kind === 'place' && <p>{selected.candidate.name}{selected.candidate.address ? ` · ${selected.candidate.address}` : ''}</p>}
+        <h4>{selected.review.decision === 'apply' ? 'Review field changes' : 'Dismiss this Google match?'}</h4>
         {selected.review.decision === 'apply' ? <dl>{Object.entries(selected.review.patch || {}).map(([key,value]) => <div key={key}>
           <dt>{labels[key] || key}</dt><dd><span>Current · {fieldValue(selected.review.before?.[key])}</span>
             <p>Proposed · {fieldValue(value)}</p></dd>
@@ -97,9 +102,10 @@ export default function ClubGoogleSyncWorkspace({ client, session, scopeId }) {
       </>}
       <div className="fo-report-actions"><button className="ap-secondary" disabled={busy} onClick={() => setSelected(null)}>Close review</button>
         {!isGoogleLinked(selected.row.clubs) && selected.row.review_status === 'pending' && (selected.review
-          ? <button className="ap-primary" disabled={busy} onClick={() => proceed(selected.review.decision, selected.review)}>
-            {selected.review.decision === 'apply' ? 'Confirm Google match' : 'Confirm dismissal'}</button>
-          : <>
+          ? <button className="ap-primary" disabled={busy} onClick={() => proceed(selected.review.decision, selected.review, selected.candidate)}>
+            {selected.candidate?.kind === 'link' ? 'Confirm Google Maps link' : selected.review.decision === 'apply' ? 'Confirm Google match' : 'Confirm dismissal'}</button>
+          : !selected.manual && <>
+            <button className="ap-secondary" disabled={busy} onClick={() => setSelected({ row: selected.row, manual: true })}>Find Google match</button>
             <button className="ap-secondary" disabled={busy} onClick={() => proceed('dismiss')}>Review dismissal</button>
             {selected.row.google_place_id && <button className="ap-primary" disabled={busy} onClick={() => proceed('apply')}>Review field changes</button>}
           </>)}
