@@ -85,3 +85,21 @@ test('refund engine uses the immutable reference and matches only the transferre
     assert.deepEqual(resolveRefundableItems(former, [payment], [], { refundLicense: false }), []);
     assert.deepEqual(resolveRefundableItems(replacement, [payment], [{ payment_id: payment.id, amount: 800, status: 'processing' }]), []);
 });
+
+test('two redacted transfers in the same division remain distinct in receipts and refunds', () => {
+    const { email: _privateContact, ...redacted } = payment.metadata.verified_entry_transfers[0];
+    const first = { ...payer, email:'another-replacement@example.invalid', full_name:'Other replacement' };
+    const receipt = { ...payment, metadata: { ...payment.metadata, verified_entry_transfers:[redacted, {
+        registration_id:first.id, event_id:first.event_id, cover_position:1, division:first.division, division_id:first.division_id,
+    }] } };
+    const registrations = [first, replacement].map(row => ({...row, status:'withdrawn', withdrawn_at:'2026-11-01T10:00:00Z'}));
+    const input = { event:{id:101, entry_fee:400}, divisions:[{id:'open',name:'Open',entry_fee:400}], registrations, payments:[receipt] };
+    const report = buildEventReceiptReport({ ...input, settlement:calculateEventSettlement(input) });
+    assert.deepEqual(report.withdrawals.map(row=>[row.name,row.amount]).sort(), [
+        [first.full_name,400], [replacement.full_name,400],
+    ]);
+    assert.equal(resolveRefundableItems(first,[receipt],[])[0]?.refund_amount_rands,400);
+    assert.equal(resolveRefundableItems(replacement,[receipt],[])[0]?.reference,payment.reference);
+    assert.equal(findPaymentForRegistration([receipt],former),null);
+    assert.equal(findPaymentForRegistration([receipt],unrelated),null);
+});

@@ -176,3 +176,25 @@ begin
   assert (select count(*)=1 from public.payments);
   assert (select count(*)=0 from public.payment_refunds);
 end $$;
+
+\ir ../supabase/migrations/20261120113600_redact_verified_transfer_contact.sql
+
+do $$
+declare
+  event_payment constant uuid:='40000000-0000-0000-0000-000000000001';
+  next_slot constant uuid:='20000000-0000-0000-0000-000000000002';
+  recorded_receipt jsonb;
+begin
+  assert (select metadata->'verified_entry_transfers'=jsonb_build_array(jsonb_build_object(
+    'registration_id',next_slot,'event_id',101,'cover_position',2,'division','Open',
+    'division_id','30000000-0000-0000-0000-000000000001')) and not (metadata::text like '%next@example.com%')
+    from public.payments where id=event_payment), 'existing transfer projection redacts the replacement email';
+  assert (select email='next@example.com' from private.verified_payment_entry_transfers where payment_id=event_payment and registration_id=next_slot),
+    'the private authority retains the exact verified contact';
+  select metadata into recorded_receipt from public.payments where id=event_payment;
+  update public.payments set metadata=jsonb_set(metadata,'{verified_entry_transfers,0,email}','"forged@example.com"') where id=event_payment;
+  assert (select metadata=recorded_receipt from public.payments where id=event_payment), 'the projection strips a supplied replacement contact';
+  assert (select sha256(convert_to(private.checkout_cart(p)::text,'UTF8'))=q.cart_hash
+    from public.payments p join private.event_checkout_security_quotes q on q.payment_id=p.id where p.id=event_payment),
+    'redaction preserves the original quote hash';
+end $$;

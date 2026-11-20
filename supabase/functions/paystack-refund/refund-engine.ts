@@ -109,7 +109,7 @@ type VerifiedEntryTransfer = {
     cover_position: number;
     event_id: string | number;
     registration_id: string;
-    email: string;
+    email?: string;
     division: string;
     division_id: string | null;
 };
@@ -117,14 +117,15 @@ type VerifiedEntryTransfer = {
 function refundEntryCover(payment: PaymentRow, registration: RegistrationRow): { cover: Cover; transferred: boolean } | undefined {
     const aliases = parseMeta(payment.metadata).verified_entry_transfers;
     const byPosition = new Map<number, VerifiedEntryTransfer>(Array.isArray(aliases)
-        ? aliases.map(alias => [(alias as VerifiedEntryTransfer).cover_position, alias as VerifiedEntryTransfer]) : []);
+        ? aliases.map(value => [Number(value?.cover_position), value as VerifiedEntryTransfer]) : []);
     let position = 0;
     for (const cover of coversOf(payment)) {
         if (cover.type !== 'entry') continue;
         const alias = byPosition.get(++position);
         if (alias) {
-            if (String(alias.event_id) === String(registration.event_id) && alias.registration_id === registration.id
-                && normEmail(alias.email) === normEmail(registration.email)
+            if (alias.cover_position === position && String(alias.event_id) === String(registration.event_id)
+                && alias.registration_id === registration.id && normEmail(registration.email)
+                && (alias.email === undefined || normEmail(alias.email) === normEmail(registration.email))
                 && (cover.division_id ? cover.division_id === alias.division_id : cover.division === alias.division)
                 && (alias.division_id ? alias.division_id === registration.division_id : alias.division === registration.division)) {
                 return { cover, transferred: true };

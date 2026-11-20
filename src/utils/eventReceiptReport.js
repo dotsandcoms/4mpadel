@@ -76,7 +76,8 @@ export function buildEventReceiptReport({ registrations = [], divisions = [], re
             if (reg) targets.set(reg.id, reg);
         }
         const covers = paymentEntryCoversFor(meta).filter(c => c.type === 'entry');
-        const distinctCovers = [...new Map(covers.map(c => [`${norm(c.email)}::${c.division_id || c.division || ''}`, c])).values()];
+        const distinctCovers = [...new Map(covers.map(c => [c.email || !c.registration_id
+            ? `${norm(c.email)}::${c.division_id || c.division || ''}` : c.registration_id, c])).values()];
         const candidates = distinctCovers.length ? distinctCovers : [{ email: meta.email || meta.registrant_email, division: meta.division, registration_id: meta.registration_id }];
         for (const cover of candidates) {
             const snap = snapshots.find(s => norm(s.email) === norm(cover.email) && (!cover.division || s.division === cover.division));

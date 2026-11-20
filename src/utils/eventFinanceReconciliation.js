@@ -1,6 +1,7 @@
 import {
     findPaymentForRegistration, getRegistrationEntryFeePaid, isLicensePaymentRow,
-    isCompedEntryPayment, isEntryFeeRefund, normalizePaymentMetadata, paymentStrictlyCoversRegistration, hasVerifiedEntryTransfer,
+    isCompedEntryPayment, isEntryFeeRefund, normalizePaymentMetadata, paymentStrictlyCoversRegistration,
+    hasVerifiedEntryTransfer, hasVerifiedPaymentEntryTransfers,
 } from './paymentRegistrationMatch.js';
 import { fetchAllRows } from './fetchAllRows.js';
 
@@ -32,9 +33,8 @@ export function findFinancePayment(payments, reg, refunds = []) {
     const latest = (rows) => [...rows].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0] || null;
     const direct = latest(candidates.filter(p => {
         const meta = normalizePaymentMetadata(p.metadata);
-        const hasAliasForRegistration = Array.isArray(meta.verified_entry_transfers)
-            && meta.verified_entry_transfers.some(transfer => transfer.registration_id === reg.id);
-        return hasVerifiedEntryTransfer(p, reg) || (meta.registration_id === reg.id && !hasAliasForRegistration);
+        return hasVerifiedEntryTransfer(p, reg) || (meta.registration_id === reg.id
+            && (!hasVerifiedPaymentEntryTransfers(p) || paymentStrictlyCoversRegistration(p, reg)));
     }));
     if (direct) return direct;
     const strict = latest(candidates.filter((p) => paymentStrictlyCoversRegistration(p, reg)));

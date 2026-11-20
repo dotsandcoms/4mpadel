@@ -1,19 +1,63 @@
 const norm = (v: unknown) => String(v || '').trim().toLowerCase();
 const cents = (v: unknown) => Math.round(Number(v) * 100);
-/** Entry credit only: never treat a partner's fee, licence or service fee as this player's payment. */
-export function entryBalance(event: any, division: any, reg: any, payments: any[]) {
-  let fee = Number(division?.entry_fee ?? event.entry_fee ?? 0);
-  let original: number | null = null, additions = 0;
-  for (const p of payments) {
-    if (p.status !== 'success' || p.is_test === true) continue;
-    const m = typeof p.metadata === 'string' ? JSON.parse(p.metadata) : p.metadata || {};
-    if (m.source === 'native_entry_balance') {
-      if (m.registration_id === reg.id && m.division === reg.division && m.verified_balance === true) additions += cents(p.amount);
+
+type EntryCover = { type?: string; email?: string; division?: string; event_id?: number | string; registration_id?: string; division_id?: string };
+type EntryTransfer = { cover_position: number; event_id: number | string; registration_id: string; email?: string; division?: string; division_id?: string | null };
+type BalanceRegistration = { id: string; email: string; event_id?: number | string; division: string; division_id?: string | null; payment_status?: string | null };
+type PaymentMetadata = {
+  covers?: EntryCover[];
+  verified_entry_transfers?: EntryTransfer[];
+  division_entry_fees?: Record<string, number | string | null>;
+  source?: string;
+  registration_id?: string;
+  division?: string;
+  verified_balance?: boolean;
+};
+
+function parseMetadata(value: unknown): PaymentMetadata {
+  if (typeof value === 'string') {
+    try { value = JSON.parse(value); } catch { return {}; }
+  }
+  return value && typeof value === 'object' ? value as PaymentMetadata : {};
+}
+
+/** A transferred slot consumes the original cover and retains its recorded price. */
+function findEntryCover(metadata: PaymentMetadata, reg: BalanceRegistration, eventId: unknown, paymentEventId: unknown) {
+  const transfers = Array.isArray(metadata.verified_entry_transfers) ? metadata.verified_entry_transfers : [];
+  const byPosition = new Map(transfers.filter(Boolean).map(transfer => [Number(transfer.cover_position), transfer]));
+  let position = 0;
+  for (const cover of Array.isArray(metadata.covers) ? metadata.covers : []) {
+    if (cover?.type !== 'entry') continue;
+    const transfer = byPosition.get(++position);
+    if (String(cover.event_id ?? paymentEventId ?? eventId) !== String(eventId)) continue;
+    if (transfer) {
+      if (transfer.cover_position === position && reg.id && transfer.registration_id === reg.id
+        && eventId != null && String(transfer.event_id) === String(eventId)
+        && norm(reg.email) && (transfer.email === undefined || norm(transfer.email) === norm(reg.email))
+        && (transfer.division_id ? transfer.division_id === reg.division_id : transfer.division === reg.division)) return cover;
       continue;
     }
-    const covered = (m.covers || []).some((c: any) => c.type === 'entry' && norm(c.email) === norm(reg.email) && c.division === reg.division);
-    if (!covered) continue;
-    const value = m.division_entry_fees?.[reg.division];
+    if ((!cover.registration_id || cover.registration_id === reg.id) && norm(cover.email) === norm(reg.email)
+      && (cover.division_id && reg.division_id ? cover.division_id === reg.division_id : cover.division === reg.division)) return cover;
+  }
+}
+
+/** Entry credit only: never treat a partner's fee, licence or service fee as this player's payment. */
+export function entryBalance(event: any, division: any, reg: BalanceRegistration, payments: any[]) {
+  let fee = Number(division?.entry_fee ?? event.entry_fee ?? 0);
+  let original: number | null = null, additions = 0;
+  const eventId = reg.event_id ?? event.id;
+  for (const payment of payments) {
+    if (payment.status !== 'success' || payment.is_test === true) continue;
+    const metadata = parseMetadata(payment.metadata);
+    if (metadata.source === 'native_entry_balance') {
+      if (metadata.registration_id === reg.id && metadata.division === reg.division && metadata.verified_balance === true
+        && String(payment.event_id ?? eventId) === String(eventId)) additions += cents(payment.amount);
+      continue;
+    }
+    const cover = findEntryCover(metadata, reg, eventId, payment.event_id);
+    if (!cover?.division) continue;
+    const value = metadata.division_entry_fees?.[cover.division];
     if (value != null && Number.isFinite(Number(value)) && Number(value) >= 0) original = Math.max(original ?? 0, cents(value));
   }
   // Expiry of an advertised early-bird offer must not create a retrospective debt.

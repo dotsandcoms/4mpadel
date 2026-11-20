@@ -1,4 +1,5 @@
 import { isEventCheckoutReference } from './eventPaymentReference.js';
+import { hasVerifiedPaymentEntryTransfers, normalizePaymentMetadata } from './paymentRegistrationMatch.js';
 
 const metadataObject = value => {
     if (value && typeof value === 'object' && !Array.isArray(value)) return value;
@@ -43,4 +44,21 @@ export function classifyPaystackTransaction({ reference = '', metadata, matchedL
         licenseType,
         paymentType: licenseType === 'full' ? 'membership' : licenseType === 'temporary' ? 'temp_license' : 'other',
     };
+}
+
+
+export function recordedPaystackReferences(payment) {
+    const metadata = normalizePaymentMetadata(payment?.metadata);
+    return [payment?.reference, metadata.paystack_ref, metadata.original_trx?.id].filter(Boolean);
+}
+
+export async function hasRecordedPaystackEntryTransfer(client, reference, currentPayment) {
+    if (hasVerifiedPaymentEntryTransfers(currentPayment)) return true;
+    const matches = await Promise.all(['metadata->>paystack_ref', 'metadata->original_trx->>id'].map(column =>
+        client.from('payments').select('metadata').eq(column, reference).not('metadata->verified_entry_transfers', 'is', null)
+    ));
+    for (const { error } of matches) {
+        if (error) throw error;
+    }
+    return matches.some(({ data }) => data?.some(hasVerifiedPaymentEntryTransfers));
 }

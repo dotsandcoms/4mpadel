@@ -43,20 +43,24 @@ function getPaymentMetadataLayers(metadata = {}) {
   return { top, inner };
 }
 var verifiedEntryTransfer = /* @__PURE__ */ Symbol("verified entry transfer");
+function hasVerifiedPaymentEntryTransfers(payment) {
+  const transfers = normalizePaymentMetadata(payment?.metadata).verified_entry_transfers;
+  return Array.isArray(transfers) && transfers.length > 0;
+}
 function paymentEntryCoversFor(metadata = {}) {
   const { top, inner } = getPaymentMetadataLayers(metadata);
   const topCovers = Array.isArray(top.covers) ? top.covers : [];
   const innerCovers = Array.isArray(inner.covers) ? inner.covers : [];
   const transfers = Array.isArray(top.verified_entry_transfers) ? top.verified_entry_transfers : [];
   if (!transfers.length) return [...topCovers, ...innerCovers];
-  const byPosition = new Map(transfers.map((transfer) => [transfer.cover_position, transfer]));
-  const originals = [];
+  const byPosition = new Map(transfers.map((transfer) => [Number(transfer?.cover_position), transfer]));
   let entryPosition = 0;
   const projected = topCovers.map((cover) => {
     if (cover?.type !== "entry") return cover;
-    const transfer = byPosition.get(++entryPosition);
-    if (!transfer?.registration_id || !transfer.event_id || !norm(transfer.email) || cover.division_id && String(cover.division_id) !== String(transfer.division_id) || !cover.division_id && cover.division !== transfer.division) return cover;
-    originals.push(cover);
+    const position = ++entryPosition;
+    if (!byPosition.has(position)) return cover;
+    const transfer = byPosition.get(position);
+    if (transfer?.cover_position !== position || !transfer.registration_id || !transfer.event_id || transfer.email !== void 0 && !norm(transfer.email) || cover.division_id && String(cover.division_id) !== String(transfer.division_id) || !cover.division_id && cover.division !== transfer.division) return null;
     return {
       ...cover,
       email: transfer.email,
@@ -65,13 +69,12 @@ function paymentEntryCoversFor(metadata = {}) {
       division_id: transfer.division_id,
       [verifiedEntryTransfer]: { ...transfer, originalEmail: cover.email }
     };
-  });
-  const stillOriginal = (cover) => !originals.some((original) => cover?.type === "entry" && norm(cover.email) === norm(original.email) && (cover.division_id && original.division_id ? cover.division_id === original.division_id : cover.division === original.division) && (!cover.registration_id || !original.registration_id || cover.registration_id === original.registration_id));
-  return [...projected, ...innerCovers.filter(stillOriginal)];
+  }).filter(Boolean);
+  return [...projected, ...innerCovers.filter((cover) => cover && cover.type !== "entry")];
 }
 function verifiedCoverMatches(cover, reg) {
   const transfer = cover?.[verifiedEntryTransfer];
-  return Boolean(transfer && reg?.id && reg.event_id != null && norm(reg.email) === norm(transfer.email) && String(reg.id) === String(transfer.registration_id) && String(reg.event_id) === String(transfer.event_id) && (transfer.division_id ? String(reg.division_id) === String(transfer.division_id) : (reg.division || reg.class_name) === transfer.division));
+  return Boolean(transfer && reg?.id && reg.event_id != null && norm(reg.email) && (transfer.email === void 0 || norm(reg.email) === norm(transfer.email)) && String(reg.id) === String(transfer.registration_id) && String(reg.event_id) === String(transfer.event_id) && (transfer.division_id ? String(reg.division_id) === String(transfer.division_id) : (reg.division || reg.class_name) === transfer.division));
 }
 function hasVerifiedEntryTransfer(payment, reg) {
   return paymentEntryCoversFor(payment?.metadata).some((cover) => verifiedCoverMatches(cover, reg));
@@ -79,7 +82,11 @@ function hasVerifiedEntryTransfer(payment, reg) {
 function directlyMatchesRegistration(meta, reg) {
   if (meta.registration_id !== reg.id) return false;
   const transfers = Array.isArray(meta.verified_entry_transfers) ? meta.verified_entry_transfers : [];
-  return !transfers.some((transfer) => transfer.registration_id === reg.id) || paymentEntryCoversFor(meta).some((cover) => verifiedCoverMatches(cover, reg));
+  if (!transfers.length) return true;
+  if (transfers.some((transfer) => transfer?.registration_id === reg.id)) {
+    return paymentEntryCoversFor(meta).some((cover) => verifiedCoverMatches(cover, reg));
+  }
+  return paymentEntryCoversFor(meta).some((cover) => cover?.type === "entry" && !cover[verifiedEntryTransfer] && (!cover.registration_id || String(cover.registration_id) === String(reg.id)) && norm(cover.email) === norm(reg.email) && (cover.division_id ? String(cover.division_id) === String(reg.division_id) : cover.division === (reg.division || reg.class_name)));
 }
 function paymentEmailsFor(metadata = {}) {
   const { top, inner } = getPaymentMetadataLayers(metadata);
@@ -138,7 +145,7 @@ function paymentMatchesRegistration(payment, reg) {
   const entryCovers = allCovers.filter((cover) => cover.type === "entry");
   const covered = entryCovers.some((cover) => entryCoverMatchesRegistration(cover, reg, meta));
   if (covered) return true;
-  if (entryCovers.length > 0) return false;
+  if (entryCovers.length > 0 || hasVerifiedPaymentEntryTransfers(payment)) return false;
   if (!paymentEmailsFor(meta).has(email)) return false;
   const coversForEmail = allCovers.filter((cover) => norm(cover.email) === email);
   if (coversForEmail.length === 0) return true;
@@ -381,8 +388,7 @@ function findFinancePayment(payments, reg, refunds = []) {
   const latest = (rows) => [...rows].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0] || null;
   const direct = latest(candidates.filter((p) => {
     const meta = normalizePaymentMetadata(p.metadata);
-    const hasAliasForRegistration = Array.isArray(meta.verified_entry_transfers) && meta.verified_entry_transfers.some((transfer) => transfer.registration_id === reg.id);
-    return hasVerifiedEntryTransfer(p, reg) || meta.registration_id === reg.id && !hasAliasForRegistration;
+    return hasVerifiedEntryTransfer(p, reg) || meta.registration_id === reg.id && (!hasVerifiedPaymentEntryTransfers(p) || paymentStrictlyCoversRegistration(p, reg));
   }));
   if (direct) return direct;
   const strict = latest(candidates.filter((p) => paymentStrictlyCoversRegistration(p, reg)));
