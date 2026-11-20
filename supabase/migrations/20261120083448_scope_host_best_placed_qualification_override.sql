@@ -68,7 +68,7 @@ begin
     if jsonb_typeof(reviewed_versions) is distinct from 'object'
         or (select count(*) from jsonb_object_keys(reviewed_versions)) <>
             (select count(*) from public.draw_matches where draw_id=d.id and stage='group')
-        or not exists(select 1 from public.draw_matches where draw_id=d.id and stage='group')
+        or (mode<>'all' and not exists(select 1 from public.draw_matches where draw_id=d.id and stage='group'))
         or exists (
             select 1 from public.draw_matches m
             left join public.draw_groups g on g.id=m.group_id and g.draw_id=d.id
@@ -81,11 +81,15 @@ begin
         ) then
         raise exception 'Finish and review every group result before creating elimination';
     end if;
-    if exists (
+    if (select count(*) from public.draw_groups where draw_id=d.id) is distinct from d.group_count::bigint
+    or exists (
+        select 1 from public.draw_entries e left join public.draw_groups g on g.id=e.group_id and g.draw_id=d.id
+        where e.draw_id=d.id and g.id is null
+    ) or exists (
         select 1 from public.draw_groups g
         cross join lateral (select count(*) n from public.draw_entries e where e.draw_id=d.id and e.group_id=g.id) teams
         cross join lateral (select count(*) n from public.draw_matches m where m.draw_id=d.id and m.group_id=g.id) fixtures
-        where g.draw_id=d.id and (teams.n<2 or fixtures.n<>teams.n*(teams.n-1)/2)
+        where g.draw_id=d.id and (teams.n<(case when mode='all' then 1 else 2 end) or fixtures.n<>teams.n*(teams.n-1)/2)
     ) or exists (
         select 1 from public.draw_matches where draw_id=d.id
         group by group_id,least(entry_one_id,entry_two_id),greatest(entry_one_id,entry_two_id) having count(*)>1
@@ -106,7 +110,7 @@ begin
         perform private.tm_apply_group_qualification(p_event,d.id,expected,reviewed_matches,p_organisation);
     else
         if p_payload->'p_group_results' is distinct from (
-            select jsonb_object_agg(m.id::text,jsonb_build_array(m.group_id,m.entry_one_id,m.entry_two_id,m.winner_entry_id,m.status,m.result_summary))
+            select coalesce(jsonb_object_agg(m.id::text,jsonb_build_array(m.group_id,m.entry_one_id,m.entry_two_id,m.winner_entry_id,m.status,m.result_summary)),'{}'::jsonb)
             from public.draw_matches m where m.draw_id=d.id and m.stage='group'
         ) then
             raise exception 'The reviewed group results changed. Refresh the qualifiers';

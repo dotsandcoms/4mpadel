@@ -188,7 +188,7 @@ before(async () => {
                                 hostTournament.matches[0].updated_at='group-version-2';
                                 return {error:{message:'Finish and review every group result before creating elimination'}};
                             }
-                            if (fields.p_group_versions['qualifying-group-0']!==hostTournament.matches[0].updated_at)
+                            if (hostTournament.matches.some(match => fields.p_group_versions[match.id] !== match.updated_at))
                                 return {error:{message:'Group versions did not match'}};
                             hostTournament.matches.push(...fields.p_matches.map(match=>({...match,draw_id:'host-published-group'})));
                             return {data:{...receipt,drawId:'host-published-group',divisionId:generatorDivision.id}};
@@ -350,18 +350,19 @@ before(async () => {
                     }
                     return <MemoryRouter initialEntries={['/admin-preview/event?event=505&tab=draws']}><HostGeneratorFixture /></MemoryRouter>;
                 }
-                if (['host-ranked-all','host-ranked-best'].includes(kind)) {
+                if (['host-ranked-all','host-ranked-best','host-ranked-singletons'].includes(kind)) {
                     if (!hostTournament.draws.length) {
                         generator.divisions=[generatorDivision];
                         hostTournament.divisions=[generatorDivision];
                         const drawId='host-published-group';
-                        const all=kind==='host-ranked-all';
+                        const singletons=kind==='host-ranked-singletons';
+                        const all=kind!=='host-ranked-best';
                         hostTournament.draws=[{id:drawId,event_id:505,division_id:generatorDivision.id,draw_kind:'main',
                             status:'published',format:'group_knockout',group_count:2,advancers_per_group:all?null:1,
                             updated_at:'published-v1',scoring_rules:{qualification:{mode:all?'all':'best_placed',extras:all?0:1}}}];
-                        hostTournament.entries=[1,2,3,4,5].map(n=>({id:'team-'+n,draw_id:drawId,team_name:'Team '+n,
+                        hostTournament.entries=(singletons?[1,4]:[1,2,3,4,5]).map(n=>({id:'team-'+n,draw_id:drawId,team_name:'Team '+n,
                             group_id:n<4?'ga':'gb',seed_number:n}));
-                        const games=[[1,2,6,1],[1,3,6,2],[2,3,6,0],[4,5,6,4]];
+                        const games=singletons?[]:[[1,2,6,1],[1,3,6,2],[2,3,6,0],[4,5,6,4]];
                         hostTournament.matches=games.map(([one,two],index)=>({id:'qualifying-group-'+index,draw_id:drawId,
                             stage:'group',status:index===1?'retired':'completed',round_label:'Group match',round_number:1,bracket_position:1,
                             group_id:one<4?'ga':'gb',entry_one_id:'team-'+one,entry_two_id:'team-'+two,
@@ -1372,5 +1373,22 @@ test('hosts can review and confirm exactly the eligible best-placed override wit
         const actual = args.p_payload.p_matches.filter(match => match.round_number === 1)
             .flatMap(match => [match.entry_one_id, match.entry_two_id]).filter(Boolean).sort();
         assert.deepEqual(actual, ['team-1', 'team-2', 'team-4']);
+    } finally { await page.close(); }
+});
+
+test('legacy all-team draws can qualify singleton groups without requiring nonexistent matches', async () => {
+    const page = await open('host-ranked-singletons');
+    const panel = 'section[aria-label="Elimination phase"]';
+    try {
+        await clickText(page, 'Draw generator');
+        await clickText(page, 'Review elimination bracket');
+        await page.waitForSelector(panel + ' input[type=checkbox]');
+        await page.$eval(panel + ' input[type=checkbox]', input => input.click());
+        await clickText(page, 'Create elimination phase');
+        await page.waitForFunction(() => document.querySelector('.tm-body [role=status]')?.textContent.includes('Elimination matches created'));
+        const payload = await page.evaluate(() => window.calls.find(([method]) => method === 'tm_host_group_qualification')[1].p_payload);
+        assert.deepEqual(new Set(payload.p_ranked_qualifiers), new Set(['team-1', 'team-4']));
+        assert.deepEqual(payload.p_group_versions, {});
+        assert.equal(payload.p_matches.length, 1);
     } finally { await page.close(); }
 });

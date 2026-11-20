@@ -24,7 +24,7 @@ export default function HostGroupQualification({ data, draw, client, act, busy }
     const extras = Number(rules.qualification?.extras || 0);
     const hasPlate = Array.isArray(rules.plate_mode) ? rules.plate_mode.length > 0 : Boolean(rules.plate_mode && rules.plate_mode !== 'none');
     const extended = (mode !== 'fixed' && !rankedMode) || hasPlate || (rules.playoff_mode || 'none') !== 'none';
-    const resolved = matches.length > 0 && matches.every(match => RESOLVED_GROUP.includes(match.status)
+    const resolved = (matches.length > 0 || mode === 'all') && matches.every(match => RESOLVED_GROUP.includes(match.status)
         && entries.get(match.entry_one_id)?.group_id === match.group_id && entries.get(match.entry_two_id)?.group_id === match.group_id
         && [match.entry_one_id, match.entry_two_id].includes(match.winner_entry_id));
     const latestReview = JSON.stringify([

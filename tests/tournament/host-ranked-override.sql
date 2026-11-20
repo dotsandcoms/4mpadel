@@ -122,3 +122,33 @@ end $$;
 rollback to before_host_override;
 release before_host_override;
 select 'Host best-placed override assertions passed' as result;
+
+savepoint before_singletons;
+insert into tournament_divisions(id,event_id,name) values(pg_temp.host_id(4390),9901,'Single-team groups');
+insert into draws(id,event_id,division_id,draw_kind,format,status,group_count,scoring_rules)
+values(pg_temp.host_id(4391),9901,pg_temp.host_id(4390),'main','group_knockout','published',2,'{"qualification":{"mode":"all"}}');
+insert into draw_groups(id,draw_id,name,display_order) values
+    (pg_temp.host_id(4392),pg_temp.host_id(4391),'Group 1',1),(pg_temp.host_id(4393),pg_temp.host_id(4391),'Group 2',2);
+insert into draw_entries(id,draw_id,group_id,team_name,seed_number,player_one_name,player_two_name) values
+    (pg_temp.host_id(4394),pg_temp.host_id(4391),pg_temp.host_id(4392),'One',1,'First','Partner'),
+    (pg_temp.host_id(4395),pg_temp.host_id(4391),pg_temp.host_id(4393),'Two',2,'Second','Partner');
+insert into host_review
+select 'legacy-singletons',jsonb_build_object('p_draw',d.id,'p_expected',d.updated_at,'p_ranked_qualifiers',q.teams,
+    'p_group_versions','{}'::jsonb,'p_group_results','{}'::jsonb,'p_group_sets','{}'::jsonb,
+    'p_matches',jsonb_build_array(jsonb_build_object('id',pg_temp.host_id(4396),'stage','knockout','key','r1-m1',
+        'round_number',1,'round_code','final','round_label','Final','bracket_position',1,
+        'entry_one_id',q.teams[1],'entry_two_id',q.teams[2])))
+from draws d cross join lateral (select private.tm_rank_group_qualifiers(d.id,'all',null,0,null) teams) q
+where d.id=pg_temp.host_id(4391);
+set role authenticated;
+select set_config('request.jwt.claim.sub',pg_temp.host_id(4)::text,false);
+select pg_temp.ranked_qualify(payload) from host_review where fixture='legacy-singletons';
+reset role;
+do $$ begin
+    if (select count(*) from draw_matches where draw_id=pg_temp.host_id(4391) and stage='knockout')<>1 then
+        raise exception 'Single-team groups must feed one reviewed elimination match';
+    end if;
+end $$;
+rollback to before_singletons;
+release before_singletons;
+select 'Host singleton group assertions passed' as result;
