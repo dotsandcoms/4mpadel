@@ -362,3 +362,44 @@ test('an organisation with a stale broadcast tab cannot load the email audience 
     assert.deepEqual(await page.evaluate(() => [window.emailReads, window.emailCalls]), [[], []]);
   } finally { await page.close(); }
 });
+
+test('Email links selected words in the existing message and keeps appending a separate link available', async t => {
+  const page = await openBroadcast(t);
+  const editor = '[aria-label="Broadcast message"]';
+  const sentence = 'Visit the course notes before play.';
+  await enter(page, 'input[placeholder="Your announcement…"]', 'Fixture announcement');
+  await page.click(editor);
+  await page.keyboard.type(sentence);
+  await page.keyboard.press('Home');
+  for (let index = 0; index < 'Visit the '.length; index++) await page.keyboard.press('ArrowRight');
+  await page.keyboard.down('Shift');
+  for (let index = 0; index < 'course notes'.length; index++) await page.keyboard.press('ArrowRight');
+  await page.keyboard.up('Shift');
+  assert.equal(await page.evaluate(() => document.getSelection().toString()), 'course notes');
+
+  const input = 'input[type="url"]';
+  await page.click(input);
+  await enter(page, input, 'javascript:alert(1)');
+  await click(page, 'Link selected text');
+  await page.waitForFunction(() => document.body.textContent.includes('Enter a valid http or https URL.'));
+  assert.equal(await page.$(editor+' a'), null);
+
+  await enter(page, input, 'https://example.test/course');
+  await click(page, 'Link selected text');
+  await page.waitForSelector(editor+' a[href="https://example.test/course"]');
+  assert.equal(await page.$eval(editor, node => node.textContent), sentence);
+  assert.equal(await page.$eval(editor+' a', node => node.textContent), 'course notes');
+
+  await enter(page, input, 'https://example.test/fixtures');
+  await click(page, 'Add link');
+  await page.waitForSelector(editor+' a[href="https://example.test/fixtures"]');
+  assert.deepEqual(await page.$$eval(editor+' a', anchors => anchors.map(anchor => anchor.textContent)),
+    ['course notes', 'https://example.test/fixtures']);
+
+  await page.evaluate(() => [...document.querySelectorAll('label')].find(label => label.textContent.trim() === 'Include a manual email list').querySelector('input').click());
+  await enter(page, 'label textarea[rows="3"]', 'manual@example.test');
+  await click(page, 'Review broadcast');
+  await page.waitForSelector('.email-broadcast-preview a[href="https://example.test/course"]');
+  assert.equal(await page.$eval('.email-broadcast-preview a', anchor => anchor.textContent), 'course notes');
+  assert.deepEqual(await deliveries(page), []);
+});

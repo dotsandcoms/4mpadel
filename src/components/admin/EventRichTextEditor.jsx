@@ -4,12 +4,13 @@ import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import './EventRichTextEditor.css';
 
 // Shared EventBuilder controls and HTML contract; the preview only changes presentation.
-export default function EventRichTextEditor({ value, onChange, placeholder = 'Type here...', minHeight = 130, theme = 'legacy', label = 'Formatted text' }) {
-  const ref = useRef(null);
+export default function EventRichTextEditor({ value, onChange, placeholder = 'Type here...', minHeight = 130, theme = 'legacy', label = 'Formatted text', contentRef }) {
+  const ownRef = useRef(null);
+  const ref = contentRef ?? ownRef;
   useEffect(() => {
     const html = sanitizeHtml(value || '');
     if (ref.current && ref.current.innerHTML !== html) ref.current.innerHTML = html;
-  }, [value]);
+  }, [value, ref]);
   const emit = () => onChange(ref.current ? sanitizeHtml(ref.current.innerHTML) : '');
   const exec = (command, arg = null) => { ref.current?.focus(); document.execCommand(command, false, arg); emit(); };
   const tools = [[Bold, 'Bold', 'bold'], [Italic, 'Italic', 'italic'], [Underline, 'Underline', 'underline'], [Heading, 'Heading', 'formatBlock', '<h3>'], [List, 'Bullet list', 'insertUnorderedList'], [ListOrdered, 'Numbered list', 'insertOrderedList'], [X, 'Clear formatting', 'removeFormat']];

@@ -1,4 +1,5 @@
 .clubs-full-dialog.pp-dialog { width:min(1120px,calc(100vw - 32px)); max-width:1120px; max-height:calc(100dvh - 32px); padding:0; overflow:auto; overscroll-behavior:contain; }
+.clubs-city-dialog.clubs-full-dialog.pp-dialog { width:min(560px,calc(100vw - 32px)); }
 .clubs-full-dialog .pp-dialog-inner { padding:0; }
 .clubs-full-dialog .pp-dialog-header { padding:24px 28px; margin:0; border-bottom:1px solid var(--ap-border,#d7ddd5); }
 .clubs-full-dialog .pp-dialog-header h2 { font-size:28px; }

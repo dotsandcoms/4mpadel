@@ -3,7 +3,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import RecordLoading from './RecordLoading.jsx';
 import { loadClubDetails, recordedText, safeClubWebsite, clubFlag } from './clubDetailsData.js';
-import { canManageDirectClub, clubDirectoryScope, clubStatusLabel } from './clubsData.js';
+import { canEditClubProfile, canManageDirectClub, clubStatusLabel } from './clubsData.js';
 import ClubMedia from './ClubMedia.jsx';
 import FullClubProfileEditor from './FullClubProfileEditor.jsx';
 import ClubManagement from './ClubManagement.jsx';
@@ -44,8 +44,7 @@ export default function ClubDetails({ club, client, session, permissions, scopeI
   const platform = permissions?.role === 'super_admin' && scopeId === 'all';
   const matchingScope = scopeId === `club:${club.id}`;
   const directManager = matchingScope && canManageDirectClub(permissions, String(club.id));
-  const canEdit = platform || directManager
-    || (matchingScope && permissions?.role !== 'super_admin' && Boolean(clubDirectoryScope(permissions, scopeId)));
+  const canEdit = canEditClubProfile(permissions, scopeId, club.id);
   const data = state.data, website = safeClubWebsite(data?.website_url);
   const decisionBusy = value => { busyRef.current = value; setSaving(value); };
   const refreshDecision = async () => {

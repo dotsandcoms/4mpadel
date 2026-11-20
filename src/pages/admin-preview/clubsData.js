@@ -24,6 +24,12 @@ export function clubDirectoryScope(permissions, scopeId) {
   return canManageDirectClub(permissions, clubId) ? { clubId } : null;
 }
 
+export function canEditClubProfile(permissions, scopeId, clubId) {
+  if (permissions?.role === 'super_admin' && scopeId === 'all') return true;
+  return Boolean(scopeId === `club:${clubId}` && (canManageDirectClub(permissions, String(clubId))
+    || (permissions?.role !== 'super_admin' && clubDirectoryScope(permissions, scopeId))));
+}
+
 export const canReadClubDirectory = (session, permissions, scopeId) =>
   Boolean(session?.user?.id && clubDirectoryScope(permissions, scopeId));
 

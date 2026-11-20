@@ -2,6 +2,7 @@ import SearchableDropdown from "../../components/SearchableDropdown";
 import React, { useEffect, useRef, useState } from 'react';
 import { saveAs } from 'file-saver';
 import ClubDetails from './ClubDetails.jsx';
+import QuickClubCityDialog from './QuickClubCityDialog.jsx';
 import CreateClubDialog from './CreateClubDialog.jsx';
 import ClubGroupsView from './ClubGroupsView.jsx';
 import ClubClaimsQueue from './ClubClaimsQueue.jsx';
@@ -9,7 +10,7 @@ import ClubGoogleSyncWorkspace from './ClubGoogleSyncWorkspace.jsx';
 import { clubClaimLabels, loadClubClaimStatuses } from './clubClaimStatuses.js';
 import { clubsExcel } from './clubsExport.js';
 import { supabase } from '../../supabaseClient';
-import { canReadClubDirectory, loadClubDirectory, clubStatusLabel, filterClubDirectory, clubDirectoryScope, clubDirectorySummary, verifyClubDirectoryManagement } from './clubsData.js';
+import { canEditClubProfile, canReadClubDirectory, loadClubDirectory, clubStatusLabel, filterClubDirectory, clubDirectoryScope, clubDirectorySummary, verifyClubDirectoryManagement } from './clubsData.js';
 import RecordLoading from './RecordLoading.jsx';
 import './FinanceOverview.css';
 import './ClubsWorkspace.css';
@@ -30,6 +31,7 @@ export default function ClubsWorkspace({ session, permissions, scopeId, client =
   const [filters, setFilters] = useState(emptyFilters);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(null);
+  const [cityEdit, setCityEdit] = useState(null);
   const [creating, setCreating] = useState(null);
   const [view, setView] = useState('clubs');
   const [claimRevision, refreshClaims] = useState(0);
@@ -39,7 +41,7 @@ export default function ClubsWorkspace({ session, permissions, scopeId, client =
   const context = `${session?.user?.id}-${permissions?.role}-${scopeId}-${reload}-${refreshRevision}`;
   useEffect(() => {
     const token = { active: allowed }; exportContext.current = token;
-    setSelected(null); setCreating(null); setExporting(false); setExportStatus('');
+    setSelected(null); setCityEdit(null); setCreating(null); setExporting(false); setExportStatus('');
     if (!platform) setView('clubs');
     return () => { token.active = false; };
   }, [context, client, allowed, platform]);
@@ -131,13 +133,19 @@ export default function ClubsWorkspace({ session, permissions, scopeId, client =
         {rows.length > 0 && <p className="fo-note clubs-scroll-hint">Swipe or scroll the table sideways to see location and status details →</p>}
         {rows.length ? <div className="fo-table-scroll" role="region" aria-label="Club directory" tabIndex={0}><table className="fo-detail-table clubs-table"><colgroup>{[32, 23, 18, 13, 14].map(width => <col key={width} style={{ width: `${width}%` }}/>)}</colgroup><thead><tr><th scope="col">Club</th><th scope="col">Location</th><th scope="col">Club status</th><th scope="col">Verification</th><th scope="col">SAPA registration</th></tr></thead><tbody>{rows.slice((current - 1) * 10, current * 10).map(club => <tr key={club.id} className="clubs-open-row" onClick={event => { if (!event.target.closest('button,a,input,select')) setSelected({ club, context }); }}>
           <td><div className="fo-player"><ClubLogo key={`${club.id}-${club.logo_url}`} club={club}/><div className="fo-player-copy"><button className="fo-type-link" aria-label={`View club details for ${club.name || 'Unnamed club'}`} onClick={() => setSelected({ club, context })}>{club.name || 'Unnamed club'} →</button>{club.short_name && club.short_name !== club.name && <small>{club.short_name}</small>}<small>{club.club_type || 'Club type not recorded'}</small></div></div></td>
-          <td>{[club.city, club.province].filter(Boolean).join(', ') || 'Location not recorded'}<small>{club.country || 'Country not recorded'}</small></td>
+          <td>{[club.city, club.province].filter(Boolean).join(', ') || 'Location not recorded'}<small>{club.country || 'Country not recorded'}</small>
+            {canEditClubProfile(permissions, scopeId, club.id) && <button type="button" className="ap-text-button"
+              aria-label={`Edit city for ${club.name || 'club'}`} onClick={() => setCityEdit({ club, context })}>Edit city</button>}
+          </td>
           <td><span className={`ap-status ap-status--${statusTone(club.status)}`}>{clubStatusLabel(club.status)}</span>
             {claimStatuses?.has(club.id) && <small>Claim · {clubClaimLabels[claimStatuses.get(club.id)]}</small>}</td>
           <td>{flagLabel(club.verified, 'Verified', 'Not verified')}</td><td>{flagLabel(club.sapa_registered, 'Registered', 'Not registered')}</td>
         </tr>)}</tbody></table></div> : <div className="clubs-empty"><h2>{all.length ? 'No matching clubs' : 'No clubs available'}</h2><p>{all.length ? 'Try a different search or reset the filters.' : 'No club records were returned for your account.'}</p></div>}
         <nav className="fo-pagination" aria-label="Club pages"><span>{rows.length ? (current - 1) * 10 + 1 : 0}–{Math.min(current * 10, rows.length)} of {rows.length}</span><button className="ap-secondary" disabled={current === 1} onClick={() => setPage(current - 1)}>Previous</button><span>Page {current} of {pages}</span><button className="ap-secondary" disabled={current === pages} onClick={() => setPage(current + 1)}>Next</button></nav>
       </section></>}
+      {cityEdit?.context === context && canEditClubProfile(permissions, scopeId, cityEdit.club.id) &&
+        <QuickClubCityDialog key={cityEdit.club.id} club={cityEdit.club} client={client} scopeId={scopeId} userId={session?.user?.id}
+          onClose={() => setCityEdit(null)} onSaved={record => { updateClub(record); setCityEdit(null); }}/>}
       {selected?.context === context && <ClubDetails key={selected.club.id} club={selected.club} client={client} session={session} permissions={permissions} scopeId={scopeId}
         clubDirectory={all} initialMergeTarget={selected.mergeTarget} onClose={() => { setSelected(null); if (platform) refreshClaims(value => value + 1); }} onUpdated={updateClub} onLifecycleCompleted={() => {
           setSelected(null); setReload(value => value + 1);

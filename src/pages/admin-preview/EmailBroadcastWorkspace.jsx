@@ -13,11 +13,28 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
   const [url, setUrl] = useState(''), [caption, setCaption] = useState('');
   const [sending, setSending] = useState(false), [deliveryStatus, setDeliveryStatus] = useState('');
   const deliveryAttempts = useRef(new Map());
+  const messageEditor = useRef(null), selectedText = useRef(null);
   const latest = useRef(null), pending = useRef(null), guard = useRef(false), reviewRef = useRef(null);
   const userId = session?.user?.id, userEmail = session?.user?.email, allowed = scopeId === 'all' && canReviewBroadcast(permissions);
   latest.current = { client, userId, userEmail, scopeId, draft };
   const change = (key, value) => { setDraft(old => ({ ...old, [key]: value })); setReview(null); setError(''); setDeliveryStatus(''); };
   const changed = JSON.stringify(draft) !== JSON.stringify(empty) || Boolean(url || caption);
+  useEffect(() => {
+    if (!allowed) return;
+    const rememberSelection = () => {
+      const editor = messageEditor.current, selection = document.getSelection();
+      if (!editor || document.activeElement !== editor) return;
+      const range = selection?.rangeCount === 1 ? selection.getRangeAt(0) : null;
+      selectedText.current = range && !range.collapsed && editor.contains(range.startContainer) && editor.contains(range.endContainer)
+        ? { range:range.cloneRange(), html:editor.innerHTML } : null;
+    };
+    document.addEventListener('selectionchange', rememberSelection);
+    return () => {
+      document.removeEventListener('selectionchange', rememberSelection);
+      selectedText.current = null;
+    };
+  }, [allowed,client,userId,userEmail,scopeId]);
+
   useEffect(() => {
     if (!changed) return;
     const warn = event => { event.preventDefault(); event.returnValue = ''; };
@@ -135,6 +152,26 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
       }
     }
   };
+  const linkSelectedText = () => {
+    const href = safeUrl(url);
+    if (!href) { setError('Enter a valid http or https URL.'); return; }
+    const editor = messageEditor.current, saved = selectedText.current, selection = document.getSelection();
+    if (!editor || !saved || !selection || editor.innerHTML !== saved.html || saved.range.collapsed
+      || !editor.contains(saved.range.startContainer) || !editor.contains(saved.range.endContainer)) {
+      setError('Select the words to link in the message.');
+      return;
+    }
+    editor.focus();
+    selection.removeAllRanges();
+    selection.addRange(saved.range);
+    if (!document.execCommand('createLink', false, href)) {
+      setError('Select the words again and retry the link.');
+      return;
+    }
+    selectedText.current = null;
+    change('html', sanitizeHtml(editor.innerHTML));
+    setUrl('');
+  };
   const insertMedia = image => {
     const href = safeUrl(url); if (!href) { setError('Enter a valid http or https URL.'); return; }
     const node = document.createElement(image ? 'img' : 'a');
@@ -152,7 +189,7 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
         {audience.error && <p role="alert">{audience.error} No partial audience is usable.</p>}<button type="button" className="ap-secondary" onClick={() => setRevision(n => n + 1)}>Reload events and audience</button>
       </section>
       <section><h2>Manual recipients</h2><label className="email-broadcast-check"><input type="checkbox" checked={draft.manual} onChange={e => change('manual', e.target.checked)}/>Include a manual email list</label>{draft.manual && <label>Email addresses<textarea rows={3} value={draft.manualText} onChange={e => change('manualText', e.target.value)} placeholder="Comma or newline separated…"/></label>}{manual.invalid.length > 0 && <p role="alert">{manual.invalid.length} invalid address(es). Correct these before review.</p>}</section>
-      <section><h2>Message</h2><label>Subject<input value={draft.subject} onChange={e => change('subject', e.target.value)} placeholder="Your announcement…"/></label><p className="fo-note">The existing broadcast template wraps this content as an “Important Announcement”. The preview below shows the message body, not the final email template.</p><div inert={sending || undefined}><EventRichTextEditor theme="preview" value={draft.html} onChange={html => change('html', html)} label="Broadcast message" minHeight={240}/></div><div className="email-broadcast-urls"><label>Link or image URL<input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…"/></label><label>Link text / image description<input value={caption} onChange={e => setCaption(e.target.value)}/></label><div className="email-broadcast-actions"><button className="ap-secondary" type="button" onClick={() => insertMedia(false)}>Add link</button><button className="ap-secondary" type="button" onClick={() => insertMedia(true)}>Add image preview</button></div></div></section>
+      <section><h2>Message</h2><label>Subject<input value={draft.subject} onChange={e => change('subject', e.target.value)} placeholder="Your announcement…"/></label><p className="fo-note">The existing broadcast template wraps this content as an “Important Announcement”. The preview below shows the message body, not the final email template.</p><div inert={sending || undefined}><EventRichTextEditor contentRef={messageEditor} theme="preview" value={draft.html} onChange={html => change('html', html)} label="Broadcast message" minHeight={240}/></div><div className="email-broadcast-urls"><label>Link or image URL<input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…"/></label><label>Link text / image description<input value={caption} onChange={e => setCaption(e.target.value)}/></label><div className="email-broadcast-actions"><button className="ap-secondary" type="button" onClick={linkSelectedText}>Link selected text</button><button className="ap-secondary" type="button" onClick={() => insertMedia(false)}>Add link</button><button className="ap-secondary" type="button" onClick={() => insertMedia(true)}>Add image preview</button></div></div></section>
     </div><aside className="email-broadcast-stack">
       <section>
         <h2>Audience summary</h2>

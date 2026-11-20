@@ -62,9 +62,9 @@ async function pages(makeQuery) {
   const rows = [];
   for (let offset = 0; ; offset += 500) { const { data, error } = await makeQuery().range(offset, offset + 499); if (error || !Array.isArray(data)) throw new Error('Club editor options could not be loaded.'); rows.push(...data); if (data.length < 500) return rows; }
 }
-async function record(client, id) {
-  const { data, error } = await client.from('clubs').select('*').eq('id', id).single();
-  if (error || !data) throw new Error('The club could not be loaded.');
+async function record(client, id, fields = '*') {
+  const { data, error } = await client.from('clubs').select(fields).eq('id', id).single();
+  if (error || !data || String(data.id) !== String(id)) throw new Error('The club could not be loaded.');
   return data;
 }
 const loadGroups = (client, scopeId, groupId) => {
@@ -98,6 +98,9 @@ export async function saveFullClubProfile({ client, scopeId, expectedUserId, ori
   }
   const patch = fullClubProfilePatch(original, draft, refreshed, { scoped: scopeId !== 'all' });
   if (!Object.keys(patch).length) return { changed: false, record: fresh };
+  return await writeClubProfilePatch(client, scopeId, expectedUserId, original, patch);
+}
+async function writeClubProfilePatch(client, scopeId, expectedUserId, original, patch, fields = '*') {
   await authority(client, scopeId, original.id, expectedUserId);
   const updatedAt = new Date().toISOString();
   let query = client.from('clubs').update({ ...patch, updated_at: updatedAt }).eq('id', original.id);
@@ -105,10 +108,36 @@ export async function saveFullClubProfile({ client, scopeId, expectedUserId, ori
     const value = original[key];
     query = value == null ? query.is(key, null) : query.eq(key, typeof value === 'object' ? JSON.stringify(value) : value);
   }
-  const { data, error } = await query.select('*').single();
-  if (error || !data) throw new Error('Club save could not be confirmed. Reopen before retrying.');
+  const { data, error } = await query.select(fields).single();
+  if (error || !data || String(data.id) !== String(original.id)) {
+    throw new Error('Club save could not be confirmed. Reopen before retrying.');
+  }
   return { changed: true, record: data };
 }
+
+const cityFields = 'id,name,city,updated_at';
+
+export async function loadClubCityEditor(client, scopeId, clubId, expectedUserId) {
+  await authority(client, scopeId, clubId, expectedUserId);
+  return await record(client, clubId, cityFields);
+}
+
+export function clubCityPatch(original, value) {
+  const city = value.trim() || null;
+  return same(city, original.city) ? {} : { city };
+}
+
+export async function saveClubCity({ client, scopeId, expectedUserId, original, city }) {
+  if (!original?.id) throw new Error('Select an existing club.');
+  const fresh = await loadClubCityEditor(client, scopeId, original.id, expectedUserId);
+  if (['name', 'city', 'updated_at'].some(key => !same(original[key], fresh[key]))) {
+    throw new Error('Club details changed since opening. Reopen before saving.');
+  }
+  const patch = clubCityPatch(original, city);
+  if (!Object.keys(patch).length) return { changed: false, record: fresh };
+  return await writeClubProfilePatch(client, scopeId, expectedUserId, original, patch, cityFields);
+}
+
 export async function uploadFullClubImage({ client, scopeId, expectedUserId, original, file, kind }) {
   if (!['logo', 'cover', 'gallery', 'indoor', 'outdoor', 'cafe', 'principal'].includes(kind)) throw new Error('Unknown club image type.');
   if (!file?.type?.startsWith('image/') || !file.size) throw new Error('Choose a non-empty image.');
