@@ -1,10 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { removeAccessGrant, saveAccessGrant } from '../src/pages/admin-preview/permissionsWrites.js';
+import { ACCESS_MODULES, accessDraft, canManageAccess } from '../src/pages/admin-preview/permissionsData.js';
 
 const session = { user: { id: 'platform-fixture', email: 'admin@example.test' } };
 const record = { email: 'ops@example.test', role: 'custom', allowed_tabs: ['calendar'], module_permissions: { calendar: { readOnly: true } } };
 const draft = { ...record, allowed_tabs: ['calendar', 'event-mgmt'], module_permissions: { ...record.module_permissions, 'event-mgmt': { allowedEvents: [42] } } };
+
+test('stored custom Admin Management labels cannot open or grant platform permission management', () => {
+  const older = { ...record, allowed_tabs: ['calendar','admin-mgmt'] };
+  assert.equal(canManageAccess(older), false);
+  assert.equal(canManageAccess({ role:'super_admin' }), true);
+  assert.ok(!ACCESS_MODULES.some(([id]) => id === 'admin-mgmt'));
+  assert.deepEqual(accessDraft(older).allowed_tabs, older.allowed_tabs);
+});
 
 function fixture({ platform = true, current = true } = {}) {
   const calls = [];

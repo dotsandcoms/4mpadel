@@ -7,10 +7,10 @@ export const ACCESS_MODULES = [
   ['tournament-mgmt', 'Tournament Manager (event assignments required)', 'Operations'],
   ['licenses', 'Licences', 'Money'], ['finance', 'Finance', 'Money'], ['gallery', 'Gallery', 'Publishing'],
   ['email-broadcast', 'Email broadcast', 'Publishing'], ['blog', 'Blog', 'Publishing'],
-  ['settings', 'Settings', 'System'], ['admin-mgmt', 'Access & permissions', 'System'],
+  ['settings', 'Settings', 'System'],
 ];
 export const FINANCE_SECTIONS = ['dashboard', 'summary', 'users', 'transactions', 'settings'];
-export const canManageAccess = permissions => permissions?.role === 'super_admin' || permissions?.allowed_tabs?.includes('admin-mgmt');
+export const canManageAccess = permissions => permissions?.role === 'super_admin';
 export const normalEmail = value => String(value || '').trim().toLowerCase();
 const escapeLike = value => value.replace(/[\\%_]/g, '\\$&');
 

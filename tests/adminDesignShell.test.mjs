@@ -18,6 +18,7 @@ const listeners = new Set();
 const result = data => ({ data, error: null });
 const calls = () => window.fixtureCalls;
 const tenant = () => window.fixtureAccount === 'tenant';
+const dashboardOnly = () => window.fixtureAccount === 'dashboard-only';
 const eventCoAdmin = () => window.fixtureAccount === 'event-co-admin';
 const clubAssignee = () => window.fixtureAccount === 'club-event-assignee';
 const clubFixture = () => clubAssignee() || window.fixtureAccount === 'club-no-assignment';
@@ -44,7 +45,7 @@ function query(table) {
   let rows = table === 'organisation_members' ? [
     { role: 'admin', user_email: email, organisation_id: north.id, organisations: north },
     { role: 'owner', user_email: 'other@example.invalid', organisation_id: south.id, organisations: south },
-  ].filter(row => (window.fixtureAccount !== 'players-only' && !communicationsFixture()) || row.user_email !== email)
+  ].filter(row => (window.fixtureAccount !== 'players-only' && !dashboardOnly() && !communicationsFixture()) || row.user_email !== email)
    : table === 'club_members' && clubFixture() ? [{ role: 'admin', user_email: email, clubs: club }]
    : table === 'calendar' || table === 'events' ? [event]
    : table === 'organisations' ? [north, south]
@@ -54,6 +55,7 @@ function query(table) {
    : [];
   if (table === 'admin_sidebar_permissions') {
     if (window.fixtureAccount === 'platform') rows = [{ email, role: 'super_admin' }];
+    else if (dashboardOnly()) rows = [{ email, role: 'custom', allowed_tabs: ['dashboard'] }];
     else if (playerFixture()) rows = [{ email, role: 'custom', allowed_tabs: ['players'] }];
     else if (eventCoAdmin()) rows = [{ email, role: 'custom', allowed_tabs: ['event-mgmt'] }];
     else if (clubAssignee()) rows = [{ email, role: 'custom', allowed_tabs: [], module_permissions: { 'event-mgmt': { allowedEvents: [event.id] } } }];
@@ -237,6 +239,18 @@ async function clickText(page, selector, label, exact = true) {
 }
 
 const destination = (page, label) => clickText(page, '.ap-nav-destination', label);
+
+test('dashboard-only staff never get event navigation or a misleading empty operations report', async t => {
+  const page = await open(t, '/admin-preview/home', 'dashboard-only');
+  await heading(page, 'Good morning, Operator.');
+  const screen = await page.evaluate(() => ({ labels: [...document.querySelectorAll('button')].map(node => node.textContent.trim()),
+    metrics: Boolean(document.querySelector('.ap-metric-rail')), calls: window.fixtureCalls }));
+  assert.equal(screen.metrics, false);
+  assert.ok(!['All events','Review event readiness','View all','Event Manager'].some(label => screen.labels.includes(label)));
+  assert.ok(!screen.calls.some(call => call[0] === 'select' && ['calendar','event_registrations'].includes(call[1])));
+  await destination(page, 'Account security');
+  await route(page, '/admin-preview/security');
+});
 
 test('the published review shell preserves the original five-workspace desktop dashboard layout', async t => {
   const page = await open(t);

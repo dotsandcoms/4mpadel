@@ -183,7 +183,7 @@ export default function AccessWorkspace({ session, permissions, onRefreshPermiss
     const timer = setTimeout(() => searchAccessUsers(client, search, controller.signal).then(rows => { if (!controller.signal.aborted) setUsers({ loading: false, rows, error: '' }); }).catch(error => { if (!controller.signal.aborted) setUsers({ loading: false, rows: [], error: error.message }); }), 300);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [allowed, lookup, search, client]);
-  if (!allowed) return <section className="ap-section ax-block"><ShieldCheck size={28} /><h2>Access management permission is required</h2><p>This workspace is available to super admins and users with the existing admin-management permission.</p></section>;
+  if (!allowed) return <section className="ap-section ax-block"><ShieldCheck size={28} /><h2>Access management requires a super admin</h2></section>;
   const rows = state.rows.filter(row => `${row.email} ${row.profile?.name || ''}`.toLowerCase().includes(query.toLowerCase()) && (role === 'all' || (role === 'super_admin' ? row.role === role : row.role !== 'super_admin')));
   const pages = Math.max(1, Math.ceil(rows.length / pageSize)), current = Math.min(page, pages);
   const pagination = position => <nav className="ax-pagination" aria-label={`Permission record pages ${position}`}>

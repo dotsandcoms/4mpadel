@@ -483,7 +483,9 @@ function AttentionRow({ item, go }) {
   </Motion.button>;
 }
 
-function OperationsHome({ events, registrations, go, userName }) {
+function OperationsHome({ events, registrations, go, userName, canReadEvents }) {
+  if (!canReadEvents) return <PageHeading eyebrow="Operations" title={`Good morning, ${userName}.`}
+    description="Open an assigned workspace from the sidebar." />;
   const failures = registrations.filter((row) => normalizePayment(row) === 'failed');
   const pending = registrations.filter((row) => ['needs_review', 'pending', 'incomplete'].includes(String(row.status || '').toLowerCase()));
   const draftEvent = events.find((event) => !event.is_visible);
@@ -1006,7 +1008,7 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
     events={data.events} eventId={focusEventId} initialRegistrationId={queryParams.get('registration')} fixtureRows={localFixture ? data.registrations : undefined}
     canReadLedger={permissions?.role === 'super_admin' && scope.id === 'all'} canOpenMessages={canOpen('messaging')} canOpenPlayer={canOpen('player')} go={go} />;
   else if (page === 'payment') content = <PaymentException registration={activeRegistration} event={activeEvent} payments={data.payments} go={go} />;
-  else content = <OperationsHome events={data.events} registrations={data.registrations} go={go} userName={userName} />;
+  else content = <OperationsHome events={data.events} registrations={data.registrations} go={go} userName={userName} canReadEvents={mayLoadEvents} />;
 
   return <div className="ap-root">
     <a className="ap-skip" href="#admin-preview-content">Skip to content</a>
