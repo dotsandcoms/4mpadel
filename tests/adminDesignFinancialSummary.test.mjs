@@ -11,9 +11,9 @@ import { buildFinancialSummaryWorkbook, financialSummaryCsv } from '../src/pages
 
 const user = { id: 'synthetic-finance-operator', email: 'operator@example.invalid' };
 const north = { id: 'north', name: 'North Finance', member_role: 'admin' };
-const northEvent = { id: 11, organisation_id: north.id, event_name: 'Home / Open', is_manual: true, entry_fee: 240, start_date: '2035-01-03' };
+const northEvent = { id: 11, organisation_id: north.id, event_name: 'Home / Open', is_manual: true, finance_managed: true, entry_fee: 240, start_date: '2035-01-03' };
 const northLeague = { ...northEvent, id: 12, event_name: 'Home Open', is_manual: false, entry_fee: 123.45, start_date: '2035-01-02' };
-const southEvent = { ...northEvent, id: 21, organisation_id: 'south', event_name: 'South private event' };
+const southEvent = { ...northEvent, id: 21, finance_managed: false, organisation_id: 'south', event_name: 'South private event' };
 const events = [northEvent, northLeague, southEvent];
 const players = [
   { id: 1, name: 'Alice Player', email: 'alice@example.invalid', license_type: 'full', paid_registration: true, approved: true },
@@ -53,7 +53,7 @@ const tenantScope = financialSummaryScope({ role: 'org_owner', orgs: [north] }, 
 const granted = { role: 'custom', allowed_tabs: ['finance'], module_permissions: { finance: { allowedTabs: ['summary'], allowedEvents: [12] } } };
 
 function mockFinance({ platform = false, secret = false, assigned = [], actorActive = true, moveDuringLoad = false, membershipEmail = user.email,
-  allowedTabs = ['summary'] } = {}) {
+  allowedTabs = ['summary'], standalone = false } = {}) {
   const calls = [];
   let moved = false;
   const result = data => ({ data, error: null });
@@ -70,7 +70,9 @@ function mockFinance({ platform = false, secret = false, assigned = [], actorAct
     },
     from(table) {
       let rows = { calendar: moved ? events.map(event => event.id === 12 ? { ...event, organisation_id: 'south' } : event) : events,
-        players, payments, payment_refunds: refunds, organisation_members: [{ organisation_id: 'north', role: 'admin', user_email: membershipEmail }],
+        players, payments, payment_refunds: refunds, organisation_members: standalone ? [] : [
+          { organisation_id: 'north', role: 'admin', user_email: membershipEmail, organisations: { ...north, status: 'approved' } },
+        ],
         admin_sidebar_permissions: [{ ...granted, email: user.email,
           module_permissions: { finance: { allowedTabs, allowedEvents: assigned } } }],
       }[table] || [];
@@ -140,18 +142,35 @@ test('assigned finance verifies its current exact event grants and CSV neutraliz
   const scope = financialSummaryScope(granted, 'all');
   assert.equal(financialSummaryScope({ ...granted, orgs: [north] }, 'all'), null);
   assert.equal(financialSummaryScope({ ...granted, module_permissions: { finance: { allowedTabs: ['events'], allowedEvents: [12] } } }, 'all'), null);
-  const denied = mockFinance({ assigned: [21] });
+  const denied = mockFinance({ assigned: [21], standalone: true });
   await assert.rejects(loadFinancialSummary(fakeOptions(denied, scope)), /assigned events changed/);
   assert.equal(denied.calls.some(([name]) => name === 'calendar'), false);
-  const eventsOnly = mockFinance({ assigned: [12], allowedTabs: ['events'] });
+  const eventsOnly = mockFinance({ assigned: [12], allowedTabs: ['events'], standalone: true });
   await assert.rejects(loadFinancialSummary(fakeOptions(eventsOnly, scope)), /summary access/);
   assert.equal(eventsOnly.calls.some(([name]) => name === 'calendar'), false);
-  const fixture = mockFinance({ assigned: [12] });
+  const fixture = mockFinance({ assigned: [12], standalone: true });
   const data = await loadFinancialSummary(fakeOptions(fixture, scope));
   assert.deepEqual(data.reports.map(row => row.event.id), [12]);
   const csv = financialSummaryCsv('players', [{ ...data.players[0], name: ' \t=cmd', email: 'a,"b"@example.invalid' }]);
   assert.match(csv, /"' \t=cmd","a,""b""@example.invalid"/);
   assert.doesNotMatch(csv, /Alice Player|South private/);
+});
+
+test('a standalone Summary grant without assignments reads only finance-managed events', async () => {
+  const managed = { ...granted, module_permissions: { finance: { allowedTabs: ['summary'] } } };
+  const scope = financialSummaryScope(managed, 'all');
+  assert.equal(scope.mode, 'managed');
+  assert.equal(financialSummaryScope({ ...managed, module_permissions: {
+    finance: { allowedTabs: ['summary'], allowedEvents: ['invalid'] },
+  } }, 'all'), null);
+  const fixture = mockFinance({ standalone: true });
+  const data = await loadFinancialSummary(fakeOptions(fixture, scope));
+  assert.deepEqual(data.reports.map(row => row.event.id), [11, 12]);
+  assert.equal(data.transactions.some(row => [outside.reference, licence.reference].includes(row.reference)), false);
+  assert.ok(fixture.calls.filter(([name]) => name === 'calendar').every(([, query]) => query.finance_managed === true));
+  const tenant = mockFinance();
+  await assert.rejects(loadFinancialSummary(fakeOptions(tenant, scope)), /summary access/);
+  assert.equal(tenant.calls.some(([name]) => name === 'calendar'), false);
 });
 
 const fixturePage = 'http://finance-summary.fixture.invalid/';

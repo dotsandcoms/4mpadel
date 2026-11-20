@@ -3,8 +3,10 @@ import { isEntryFeeRefund, normalizePaymentMetadata } from '../../utils/paymentR
 import { registrationFinanceAmounts } from '../../utils/registrationFinance.js';
 import { financeDate, financeOverview, financeTypeEntries } from './financeOverviewData.js';
 import { readAll } from './playersData.js';
+import { standaloneFinanceSummary } from './access.js';
+import { verifyHostedReviewAccess } from './hostedReviewAccess.js';
 
-const EVENT_FIELDS = 'id,event_name,start_date,organisation_id,is_manual';
+const EVENT_FIELDS = 'id,event_name,start_date,organisation_id,is_manual,finance_managed';
 const PROFILE_FIELDS = 'id,name,email,license_type,paid_registration,approved';
 const PAYMENT_FIELDS = 'id,player_id,event_id,amount,created_at,reference,payment_type,payment_method,status,is_test,metadata';
 const REFUND_FIELDS = 'id,payment_id,event_registration_id,paystack_reference,amount,status,created_at,processed_at,metadata';
@@ -24,14 +26,7 @@ export function financialSummaryScope(permissions, scopeId) {
       return { mode: 'organisation', organisationId, label: organisation?.name || 'Organisation events' };
     }
   }
-  if (scopeId === 'all' && permissions?.role === 'custom' && permissions.allowed_tabs?.includes('finance')
-    && ![permissions.orgs, permissions.clubs, permissions.federations].some(rows => rows?.length)) {
-    const finance = permissions.module_permissions?.finance;
-    if (!finance?.allowedTabs?.includes('summary')) return null;
-    const assigned = eventIds(finance.allowedEvents);
-    if (assigned.length) return { mode: 'assigned', assigned, label: 'Assigned finance events' };
-  }
-  return null;
+  return scopeId === 'all' ? standaloneFinanceSummary(permissions) : null;
 }
 
 export async function verifyFinancialSummaryAccess(client, expectedUserId, scope, signal) {
@@ -41,20 +36,18 @@ export async function verifyFinancialSummaryAccess(client, expectedUserId, scope
   signal?.throwIfAborted();
   const user = auth.data?.user;
   if (auth.error || user?.id !== expectedUserId || !user.email) throw new Error('Sign in again to open Finance reports.');
-  const active = await client.rpc('account_is_active');
-  signal?.throwIfAborted();
-  if (active.error || active.data !== true) throw new Error('An active account is required for Finance reports.');
-  if (scope.mode === 'assigned') {
-    const { data, error } = await client.from('admin_sidebar_permissions').select('email,role,allowed_tabs,module_permissions').eq('email', user.email).maybeSingle();
-    signal?.throwIfAborted();
-    const finance = data?.module_permissions?.finance;
-    const current = new Set(eventIds(finance?.allowedEvents));
-    if (error || data?.email !== user.email || data?.role !== 'custom' || !data?.allowed_tabs?.includes('finance')
-      || !finance?.allowedTabs?.includes('summary') || !scope.assigned.every(value => current.has(value))) {
+  if (scope.mode === 'assigned' || scope.mode === 'managed') {
+    // Recheck whether this is still a standalone account before report access.
+    const { permissions } = await verifyHostedReviewAccess(client, user, signal);
+    const current = standaloneFinanceSummary(permissions);
+    if (scope.mode !== current?.mode || (scope.mode === 'assigned' && !scope.assigned.every(value => current.assigned.includes(value)))) {
       throw new Error('Your Finance summary access or assigned events changed. Reopen this report.');
     }
     return;
   }
+  const active = await client.rpc('account_is_active');
+  signal?.throwIfAborted();
+  if (active.error || active.data !== true) throw new Error('An active account is required for Finance reports.');
   const platform = await client.rpc('is_super_admin', { user_email: user.email });
   signal?.throwIfAborted();
   if (platform.data === true && !platform.error) return;
@@ -113,11 +106,10 @@ export async function loadFinancialSummary({ client, expectedUserId, scope, sign
   const platform = scope.mode === 'platform';
   const [events, global] = await Promise.all([
     scope.mode === 'assigned' ? readBatches(scope.assigned, 50, ids => read('calendar', EVENT_FIELDS, query => query.in('id', ids)))
-      : read('calendar', EVENT_FIELDS, scope.mode === 'organisation' ? query => query.eq('organisation_id', scope.organisationId) : undefined),
+      : read('calendar', EVENT_FIELDS, query => filterFinanceEvents(query, scope)),
     platform ? Promise.all([read('players', PROFILE_FIELDS), read('payments', PAYMENT_FIELDS), read('payment_refunds', REFUND_FIELDS)]) : null,
   ]);
-  if (scope.mode === 'organisation' && events.some(row => row.organisation_id !== scope.organisationId)
-    || scope.mode === 'assigned' && events.some(row => !scope.assigned.includes(Number(row.id)))) {
+  if (events.some(row => !financeScopeIncludes(row, scope))) {
     throw new Error('The calendar returned records outside this Finance workspace.');
   }
   const ids = eventIds(events.map(row => row.id));
@@ -257,12 +249,23 @@ export async function verifyFinancialSummaryScope({ client, expectedUserId, scop
   await verifyFinancialSummaryAccess(client, expectedUserId, scope, signal);
   if (scope.mode === 'platform') return;
   const ids = eventIds(reports.map(report => report.event.id));
-  const visible = await readBatches(ids, 50, batch => readReportRows(client, 'calendar', 'id,organisation_id', signal, query => {
-    const selected = query.in('id', batch);
-    return scope.mode === 'organisation' ? selected.eq('organisation_id', scope.organisationId) : selected;
-  }));
+  const visible = await readBatches(ids, 50, batch => readReportRows(client, 'calendar', 'id,organisation_id,finance_managed', signal,
+    query => filterFinanceEvents(query.in('id', batch), scope)));
   if (visible.length !== ids.length || new Set(visible.map(row => Number(row.id))).size !== ids.length
-    || visible.some(row => !ids.includes(Number(row.id)) || (scope.mode === 'organisation' && row.organisation_id !== scope.organisationId))) {
+    || visible.some(row => !ids.includes(Number(row.id)) || !financeScopeIncludes(row, scope))) {
     throw new Error('The Finance event scope changed. Refresh the report to check your current access.');
   }
+}
+
+function filterFinanceEvents(query, scope) {
+  if (scope.mode === 'organisation') return query.eq('organisation_id', scope.organisationId);
+  if (scope.mode === 'managed') return query.eq('finance_managed', true);
+  return query;
+}
+
+function financeScopeIncludes(event, scope) {
+  if (scope.mode === 'organisation') return event.organisation_id === scope.organisationId;
+  if (scope.mode === 'managed') return event.finance_managed === true;
+  if (scope.mode === 'assigned') return scope.assigned.includes(Number(event.id));
+  return scope.mode === 'platform';
 }

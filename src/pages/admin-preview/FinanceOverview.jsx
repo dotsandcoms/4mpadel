@@ -102,12 +102,12 @@ function ReceiptOverview({session, permissions, scopeId, client = supabase, refr
 
 export default function FinanceOverview(props) {
   const platform = canReadFinanceOverview(props.session, props.permissions, props.scopeId);
-  const summary = Boolean(props.session?.user?.id && financialSummaryScope(props.permissions, props.scopeId));
+  const summary = props.session?.user?.id ? financialSummaryScope(props.permissions, props.scopeId) : null;
   const [selection, setSelection] = useState(null);
   const workspaceProps = { client: supabase, ...props };
   const views = [
     ...(platform ? [['receipts', 'Receipts and refunds']] : []),
-    ['settlements', 'Event settlements'],
+    ...(summary?.mode === 'managed' ? [] : [['settlements', 'Event settlements']]),
     ...(platform ? [['users', 'User ledger'], ['collections', 'Collections']] : []),
     ...(summary ? [['summary', 'Summary report']] : []),
   ];
