@@ -499,8 +499,26 @@ test('Event Overview opens the exact division draw generator and the canonical p
   await route(page, '/admin-preview/tournaments?event=101&workspace=draws&division=north-open-division');
 });
 
-test('the same draw details show no write entry point for an organisation account without the draw grant', async t => {
+test('an organisation admin can open the draw generator for their organisation event', async t => {
   const page = await open(t, '/admin-preview/event?event=101&tab=overview', 'tenant');
+  await page.waitForSelector('button.ap-division-button');
+  await page.$eval('button.ap-division-button', button => button.click());
+  const generator = '[role="dialog"] button.ap-primary';
+  await page.waitForSelector(generator);
+  assert.equal(await page.$eval(generator, button => button.textContent.trim()), 'Draw generator');
+  await page.$eval(generator, button => button.click());
+  await page.waitForFunction(() => {
+    const current = document.querySelector('[data-fixture-route]')?.textContent;
+    if (!current) return false;
+    const { pathname, searchParams } = new URL(current, 'http://fixture.invalid');
+    return pathname === '/admin-preview/event' && searchParams.get('event') === '101'
+      && searchParams.get('action') === 'host-draw' && searchParams.get('workspace') === 'draws'
+      && searchParams.get('division') === 'north-open-division';
+  });
+});
+
+test('draw details show no write entry point for Event Manager without host or draw authority', async t => {
+  const page = await open(t, '/admin-preview/event?event=101&tab=overview', 'event-co-admin');
   await page.waitForSelector('button.ap-division-button');
   await page.$eval('button.ap-division-button', button => button.click());
   await page.waitForSelector('[role="dialog"]');
