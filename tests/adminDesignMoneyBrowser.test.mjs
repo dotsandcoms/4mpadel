@@ -107,6 +107,11 @@ export const supabase = {
         if(name==='get_player_licenses') return {data:{...player,licenses:[licence],payments:fb.mode==='licences-player-history'?licencePaymentHistory:[],history:[]}};
         if(name==='license_sales_overview') return {data:{series:[],total_sold:1,new_full:1,license_years:[{license_year:2026,total_sold:1,new_full:1,ends_on:'2026-12-31',purchase_years:[]}]}};
         if(name==='manage_license'){
+            if (args.p_action==='list' && fb.mode==='licences-register-pages') {
+                const {page,page_size,search} = args.p_input;
+                const offset=page*page_size;
+                return {data:{rows:[{...licence,id:'page-'+page,name:'Fixture row '+(offset+1)}],total:search?115:235,counts:{}}};
+            }
             if(args.p_action==='list')return {data:{rows:[licence],total:1,counts:{},current_counts:{full:1,total:1},reviews:[]}};
             if(args.p_action==='players')return {data:[player]};
             if(args.p_action==='revoke')licence.status='revoked';
@@ -826,5 +831,48 @@ test('a platform organisation-picker refresh preserves the selected event and pa
         await page.waitForSelector(payoutAmountInput);
         assert.equal(await page.$eval(payoutAmountInput,input=>input.value),'105.75');
         assert.equal(await page.$eval(payoutConfirmation,input=>input.checked),false);
+    });
+});
+
+test('licence register jumps to exact numbered pages using the current page size, filters and permissions',async()=>{
+    const pages = 'nav[aria-label="Licence register pages"]';
+    const standalone = {role:'custom',allowed_tabs:['licenses']};
+    const latestList = async page => (await calls(page)).filter(([name,args])=>name==='manage_license'&&args.p_action==='list').at(-1)[1].p_input;
+    const fixtureRow = (page,number) => page.waitForFunction(number=>
+        document.querySelector('[aria-label="Licence register"] tbody button')?.textContent===`Fixture row ${number}`,{},number);
+    const currentPage = page => page.$eval(pages+' [aria-current="page"]',button=>button.getAttribute('aria-label'));
+    await withPage('licences-register-pages',standalone,'all',async page=>{
+        await fixtureRow(page,1);
+        assert.equal(await currentPage(page),'Page 1');
+        assert.equal((await latestList(page)).page_size,50);
+        await page.focus(pages+' button[aria-label="Page 5"]');
+        await page.keyboard.press('Enter');
+        await fixtureRow(page,201);
+        assert.equal(await currentPage(page),'Page 5');
+        assert.equal((await latestList(page)).page,4);
+        assert.equal(await page.$eval(pages+' button[aria-label="Next page"]',button=>button.disabled),true);
+
+        await gatewayDropdown(page,'Rows per page','25');
+        await fixtureRow(page,1);
+        assert.deepEqual([(await latestList(page)).page,(await latestList(page)).page_size],[0,25]);
+        await page.click(pages+' button[aria-label="Page 10"]');
+        await fixtureRow(page,226);
+        await input(page,'input[placeholder="Name, email or licence number…"]','Fixture filter');
+        await fixtureRow(page,1);
+        const first=await latestList(page);
+        assert.deepEqual([first.page,first.page_size,first.search],[0,25,'Fixture filter']);
+        assert.equal(await page.$(pages+' button[aria-label="Page 10"]'),null);
+
+        await page.click(pages+' button[aria-label="Page 5"]');
+        await fixtureRow(page,101);
+        assert.deepEqual(await latestList(page),{...first,page:4});
+        await page.click(pages+' button[aria-label="Page 1"]');
+        await fixtureRow(page,1);
+        assert.deepEqual(await latestList(page),first);
+    });
+    await withPage('licences-register-pages',{...owner,allowed_tabs:['licenses']},'org:our-org',async page=>{
+        await includesText(page,'Platform Licences access is required.');
+        assert.equal(await page.$(pages),null);
+        assert.equal((await calls(page)).some(([name])=>name==='manage_license'),false);
     });
 });

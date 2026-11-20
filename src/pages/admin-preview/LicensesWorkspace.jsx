@@ -10,6 +10,24 @@ import './LicensesWorkspace.css';
 function Field({label,children}){return <label className="lw-field"><span>{label}</span>{children}</label>;}
 function Select({label,value,onChange,options}){return <Field label={label}><SearchableDropdown value={value} onChange={e=>onChange(e.target.value)}>{options.map(([id,title])=><option key={id} value={id}>{title}</option>)}</SearchableDropdown></Field>;}
 function Table({headers,children,label}){return <div className="lw-scroll"><table aria-label={label}><thead><tr>{headers.map((h,i)=><th key={i}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>;}
+function RegisterPageButtons({ page, pageSize, total, loading, onPage }) {
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const visible = [...new Set([0, page - 1, page, page + 1, pages - 1])]
+    .filter(index => index >= 0 && index < pages).sort((a, b) => a - b);
+  return <nav className="lw-actions" aria-label="Licence register pages" aria-busy={loading}>
+    <span>Page {page + 1} of {pages}</span>
+    <button type="button" className="ap-secondary" aria-label="Previous page" disabled={page === 0 || loading}
+      onClick={() => onPage(page - 1)}>Previous</button>
+    {visible.map((index, position) => <React.Fragment key={index}>
+      {position > 0 && index - visible[position - 1] > 1 && <span aria-hidden="true">…</span>}
+      <button type="button" className={page === index ? 'ap-primary' : 'ap-secondary'} aria-label={`Page ${index + 1}`}
+        aria-current={page === index ? 'page' : undefined} disabled={loading} onClick={() => onPage(index)}>{index + 1}</button>
+    </React.Fragment>)}
+    <button type="button" className="ap-secondary" aria-label="Next page" disabled={page + 1 >= pages || loading}
+      onClick={() => onPage(page + 1)}>Next</button>
+  </nav>;
+}
+
 function Status({value}){return <span className={`lw-status lw-status-${value}`}>{value||'Unknown'}</span>;}
 function Purchased({row}){return <>{licenseDate(row.source==='complimentary'?row.granted_on:row.purchased_on)}<small>{row.source==='complimentary'?'Complimentary grant':!row.purchased_on?'Payment match needed':''}</small></>;}
 function download(text,name){const url=URL.createObjectURL(new Blob([text],{type:'text/csv;charset=utf-8;'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);}
@@ -141,7 +159,16 @@ function LicenseWorkspaceContent({session,permissions,scopeId='all',client=supab
   const userId=session?.user?.id,context=JSON.stringify([userId,scopeId,permissions]),identity=useRef({});
   const read=React.useCallback((name,args,signal)=>readLicenseRpc(client,{user:{id:userId}},scopeId,name,args,signal),[client,userId,scopeId]);
   useEffect(()=>{const controller=new AbortController();const token={signal:controller.signal};identity.current=token;setOptions(null);setPlayer(null);setFound([]);setState({loading:true});loadLicenseOptions(client,{user:{id:userId}},scopeId,controller.signal).then(data=>{if(!controller.signal.aborted)setOptions(data);}).catch(e=>{if(!controller.signal.aborted)setState({error:e.message});});return()=>{controller.abort();identity.current={};};},[client,userId,scopeId,context,refreshRevision,retry]);
-  useEffect(()=>{if(!options)return;let live=true;setState({loading:true});const timer=setTimeout(()=>read('manage_license',listLicenseArgs(filters)).then(result=>{if(live)setState({result});}).catch(e=>{if(live)setState({error:e.message});}),200);return()=>{live=false;clearTimeout(timer);};},[read,options,filters]);
+  useEffect(()=>{
+    if (!options) return;
+    let live = true;
+    setState(previous => ({ loading:true, previousTotal:previous.result?.total ?? previous.previousTotal }));
+    const timer = setTimeout(()=>{
+      read('manage_license',listLicenseArgs(filters)).then(result=>{if(live)setState({result});})
+        .catch(error=>{if(live)setState({error:error.message});});
+    },200);
+    return ()=>{live=false;clearTimeout(timer);};
+  },[read,options,filters]);
   useEffect(()=>{setPlayer(null);if(!playerId||!options)return;let live=true;read('get_player_licenses',{p_player_id:Number(playerId)}).then(data=>{if(live)setPlayer(data?{...data,player_id:Number(playerId)}:{error:'Player not found.'});}).catch(e=>{if(live)setPlayer({error:e.message});});return()=>{live=false;};},[playerId,read,options]);
   useEffect(()=>{setFound([]);if(lookup.trim().length<2)return;let live=true;const timer=setTimeout(()=>read('manage_license',{p_action:'players',p_input:{search:lookup.trim()}}).then(rows=>{if(live)setFound(rows||[]);}).catch(e=>{if(live)setState(s=>({...s,error:e.message}));}),250);return()=>{live=false;clearTimeout(timer);};},[lookup,read]);
   useEffect(()=>{setPlayerId(initialPlayerId);},[initialPlayerId]);
@@ -180,7 +207,14 @@ function LicenseWorkspaceContent({session,permissions,scopeId='all',client=supab
     ].map(([key,label,choices])=><Select key={key} label={label} value={filters[key]} onChange={value=>patch({[key]:value})} options={choices}/>)}</div>
     {(filters.purchase_year||filters.renewed_from_year)&&<div className="lw-actions">{filters.renewed_from_year&&<p>Renewed from {filters.renewed_from_year}</p>}<button type="button" className="ap-secondary" onClick={()=>patch({purchase_year:'',renewed_from_year:''})}>Clear purchase filters</button></div>}
     <Table label="Licence register" headers={['Player','Licence','Licence year','Purchased','Coverage','Status','Source']}>{(result?.rows||[]).map(row=><tr key={row.id} onClick={e=>{if(!e.target.closest('button,a'))setPlayerId(row.player_id);}}><td><button className="lw-player" onClick={()=>setPlayerId(row.player_id)}>{row.name}</button><small>{row.email}</small><small>{row.license_number}</small></td><td>{licenseLabel(row)}{row.is_renewal&&<small>{row.renewed_from_year?`Renewed from ${row.renewed_from_year}`:'Full renewal'}</small>}</td><td>{row.season_year||'Not recorded'}</td><td><Purchased row={row}/></td><td>{licenseDate(licenseStartDate(row))}<small>to {licenseDate(row.ends_on)}</small></td><td><Status value={row.status}/></td><td>{licenseSource(row.source)}</td></tr>)}</Table>{!result?.rows?.length&&<p role="status">{state.loading?'Loading register…':'No licences match these filters.'}</p>}
-    <footer className="lw-actions"><span>{result?.total?`${filters.page*filters.page_size+1}–${Math.min((filters.page+1)*filters.page_size,result.total)} of ${result.total}`:'0 licences'}</span><Select label="Rows per page" value={String(filters.page_size)} onChange={pageSize=>patch({page_size:Number(pageSize)})} options={[10,25,50].map(size=>[String(size),String(size)])}/><div className="lw-actions"><button className="ap-secondary" disabled={!filters.page||state.loading} onClick={()=>setFilters(f=>({...f,page:f.page-1}))}>Previous</button><span>Page {filters.page+1}</span><button className="ap-secondary" disabled={!result||(filters.page+1)*filters.page_size>=result.total||state.loading} onClick={()=>setFilters(f=>({...f,page:f.page+1}))}>Next</button></div></footer>
+    <footer className="lw-actions">
+      <span>{result?.total ? `${filters.page * filters.page_size + 1}–${Math.min((filters.page + 1) * filters.page_size, result.total)} of ${result.total}`
+        : state.loading ? 'Loading register…' : '0 licences'}</span>
+      <Select label="Rows per page" value={String(filters.page_size)} onChange={size=>patch({page_size:Number(size)})}
+        options={[10,25,50].map(size=>[String(size),String(size)])}/>
+      <RegisterPageButtons page={filters.page} pageSize={filters.page_size} total={result?.total ?? state.previousTotal ?? 0}
+        loading={Boolean(state.loading)} onPage={page=>setFilters(current=>current.page === page ? current : { ...current, page })}/>
+    </footer>
     <section><h2>Find any player</h2><p>Including players without a licence.</p><Field label="Player name, email or licence number"><input value={lookup} onChange={e=>setLookup(e.target.value)} placeholder="Type at least 2 characters…"/></Field>{found.map(p=><button className="lw-result" key={p.id} onClick={()=>setPlayerId(p.id)}>{p.name}<small>{p.email}</small></button>)}</section>
     {!!result?.reviews?.length&&<details><summary>Payments needing review ({result.reviews.length})</summary>{result.reviews.map((r,i)=><button className="lw-result" key={i} onClick={()=>setPlayerId(r.player_id)}>{r.name}<small>{r.reason}</small></button>)}</details>}
     </>}
