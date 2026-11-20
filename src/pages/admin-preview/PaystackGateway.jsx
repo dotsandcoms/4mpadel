@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { saveAs } from 'file-saver';
 import SearchableDropdown from '../../components/SearchableDropdown';
 import { southAfricanToday } from '../../utils/licenseReporting';
 import { gatewayPageExcel } from './gatewayExport.js';
 import { financeDate } from './financeOverviewData.js';
 import { loadGatewayPage } from './paystackGatewayData.js';
-import { loadGatewayLinks, loadGatewayReceiptTypes, gatewayLinkLabel, gatewayReceiptTypeLabels } from './gatewayLinks.js';
+import { loadGatewayLinks, loadGatewayPayerNames, loadGatewayReceiptTypes, gatewayLinkLabel, gatewayReceiptTypeLabels } from './gatewayLinks.js';
 import { canConfirmGatewayCheckout, canReadPlatformPaystack, confirmGatewayCheckout, loadPlatformGatewayTransactions } from './platformPaystack.js';
 import { financeStatusTone } from './financePresentation.js';
 import { canReviewGatewayBackfill } from './paystackBackfill.js';
@@ -19,7 +19,7 @@ import './FinanceOverview.css';
 const STAGING_URL = 'https://cefmzkwabdqqoagxhekc.supabase.co';
 const PER_PAGE = 10;
 const ago = days => new Date(Date.now() - days * 86400000).toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' });
-const baseFilters = staging => ({ from: staging ? '' : ago(30), to: '', status: '', query: '', receiptType:'' });
+const baseFilters = staging => ({ from: staging ? '' : ago(30), to: '', status: '', query: '', payerName:'', receiptType:'', missingOnly:false });
 
 export default function PaystackGateway({ client, session, permissions, scopeId, refreshRevision = 0 }) {
   const allowed = canReadPlatformPaystack(session, permissions, scopeId);
@@ -31,6 +31,8 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
   const [records, setRecords] = useState(null);
   const [linked, setLinked] = useState(null);
   const [classified, setClassified] = useState(null);
+  const [payerNames, setPayerNames] = useState(null);
+  const [missing, setMissing] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState('');
   const [review, setReview] = useState(null);
@@ -45,7 +47,9 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
   const actor = useMemo(() => ({ user: { id: userId } }), [userId]);
   const permissionsKey = JSON.stringify(permissions ?? null);
   const grant = useMemo(() => JSON.parse(permissionsKey), [permissionsKey]);
-  const { from, to, status, query, receiptType } = filters;
+  const { from, to, status, query, payerName, receiptType, missingOnly } = filters;
+  const canReviewMissing = !staging && mode === 'live' && canSelectGatewayBackfill(actor, grant, scopeId);
+  const missingEnabled = canReviewMissing && missingOnly;
   const stageStatus = staging ? status : '';
   const stagePage = staging ? page : 1;
   const filterKey = JSON.stringify([userId, scopeId, permissionsKey, mode, from, to, stageStatus, stagePage, reload, refreshRevision]);
@@ -64,13 +68,29 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
     return () => controller.abort();
   }, [client, allowed, filterKey, actor, grant, scopeId, mode, from, to, stageStatus, stagePage, staging]);
 
-  const filteredRows = useMemo(() => {
+  const referenceRows = useMemo(() => {
     if (staging || !response?.data) return null;
     const filter = query.trim().toLowerCase();
     return response.data.filter(row => (!status || (status === 'pending' ? row.status !== 'success' : row.status === status))
       && (!filter || [row.reference, row.payerEmail].some(value => String(value).toLowerCase().includes(filter))));
   }, [response, query, staging, status]);
-  const typeKey = JSON.stringify([filterKey, status, query]);
+  const nameKey = JSON.stringify([filterKey, status, query]);
+  const nameFilter = payerName.trim().toLowerCase();
+  const nameEnabled = !staging && Boolean(nameFilter);
+  const nameResult = nameEnabled && payerNames?.key === nameKey ? payerNames : null;
+  useEffect(() => {
+    if (!allowed || !nameEnabled || !referenceRows) return;
+    const controller = new AbortController();
+    loadGatewayPayerNames(client, actor, grant, scopeId, referenceRows, controller.signal)
+      .then(data => { if (!controller.signal.aborted) setPayerNames({ key:nameKey, data }); })
+      .catch(error => { if (!controller.signal.aborted) setPayerNames({ key:nameKey, error:error.message }); });
+    return () => controller.abort();
+  }, [allowed, nameEnabled, nameKey, referenceRows, client, actor, grant, scopeId]);
+  const filteredRows = useMemo(() => {
+    if (!nameEnabled) return referenceRows;
+    return nameResult?.data ? referenceRows?.filter(row => nameResult.data.get(row.reference)?.toLowerCase().includes(nameFilter)) : null;
+  }, [nameEnabled, nameResult, referenceRows, nameFilter]);
+  const typeKey = JSON.stringify([nameKey, nameFilter]);
   const typeEnabled = !staging && Boolean(receiptType);
   const typeResult = typeEnabled && classified?.key === typeKey ? classified : null;
   useEffect(() => {
@@ -81,11 +101,22 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
       .catch(error => { if (!controller.signal.aborted) setClassified({ key:typeKey, error:error.message }); });
     return () => controller.abort();
   }, [allowed, typeEnabled, filteredRows, client, actor, grant, scopeId, typeKey]);
-  const matchingRows = useMemo(() => {
+  const typeRows = useMemo(() => {
     if (!typeEnabled) return filteredRows;
     if (typeResult?.data) return filteredRows?.filter(row => typeResult.data.get(row.reference) === receiptType);
     return null;
   }, [typeEnabled, typeResult, filteredRows, receiptType]);
+  const missingKey = JSON.stringify([typeKey, receiptType]);
+  const missingResult = missingEnabled && missing?.key === missingKey ? missing : null;
+  useEffect(() => {
+    if (!missingEnabled || !typeRows) return;
+    const controller = new AbortController();
+    selectMissingGatewayReceipts(client, actor, grant, scopeId, typeRows, controller.signal)
+      .then(data => { if (!controller.signal.aborted) setMissing({ key:missingKey, data }); })
+      .catch(error => { if (!controller.signal.aborted) setMissing({ key:missingKey, error:error.message }); });
+    return () => controller.abort();
+  }, [missingEnabled, missingKey, typeRows, client, actor, grant, scopeId]);
+  const matchingRows = missingEnabled ? missingResult?.data : typeRows;
   const screen = useMemo(() => {
     if (!response?.data) return null;
     const filter = query.trim().toLowerCase();
@@ -96,20 +127,21 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
     const rows = matchingRows;
     if (!rows) return null;
     const pageCount = Math.ceil(rows.length / PER_PAGE);
-    return { environment: mode, transactions: rows.slice((page - 1) * PER_PAGE, page * PER_PAGE), pagination: {
-      page, perPage: PER_PAGE, total: rows.length, pageCount, hasMore: page < pageCount,
+    const currentPage = Math.min(page, Math.max(1, pageCount));
+    return { environment: mode, transactions: rows.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE), pagination: {
+      page: currentPage, perPage: PER_PAGE, total: rows.length, pageCount, hasMore: currentPage < pageCount,
     } };
   }, [response, query, staging, matchingRows, mode, page]);
-  const resultKey = JSON.stringify([typeKey, receiptType]);
-  const linkKey = JSON.stringify([resultKey, page, screen?.transactions.map(row => row.reference)]);
+  const resultKey = JSON.stringify([missingKey, missingEnabled]);
+  const linkKey = JSON.stringify([resultKey, screen?.pagination.page, screen?.transactions.map(row => row.reference)]);
   useEffect(() => {
-    if (!allowed || !screen) return;
+    if (!allowed || missingEnabled || !screen) return;
     const controller = new AbortController();
     loadGatewayLinks(client, actor, grant, scopeId, screen.transactions, controller.signal)
       .then(transactions => { if (!controller.signal.aborted) setLinked({ key: linkKey, data: { ...screen, transactions } }); })
       .catch(error => { if (!controller.signal.aborted) setLinked({ key: linkKey, error: error.message }); });
     return () => controller.abort();
-  }, [client, allowed, linkKey, screen, actor, grant, scopeId]);
+  }, [client, allowed, linkKey, screen, actor, grant, scopeId, missingEnabled]);
   useEffect(() => {
     const controller = new AbortController();
     lifetime.current = controller.signal;
@@ -122,14 +154,18 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
   }, [resultKey, client, allowed]);
   if (!allowed) return <section className="ap-section"><h2>Paystack gateway</h2><p>Platform Paystack access is required.</p></section>;
 
-  const result = linked?.key === linkKey ? linked : null;
+  const result = missingEnabled && screen ? { data:screen } : linked?.key === linkKey ? linked : null;
   const data = result?.data;
+  const activePage = data?.pagination.page || 1;
+  const pageCount = Math.max(1, data?.pagination.pageCount || 0);
+  const visiblePages = [...new Set([1, activePage - 1, activePage, activePage + 1, pageCount])]
+    .filter(number => number >= 1 && number <= pageCount).sort((a, b) => a - b);
   const eligible = (data?.transactions || []).filter(canConfirmGatewayCheckout);
   const backfillReview = backfill && (backfill.bulk ? backfill.key === resultKey : backfill.key === linkKey) ? backfill : null;
   const bulkLookup = selection?.key === resultKey ? selection : null;
   const backfillBusy = Boolean(recordingKey && recordingKey === backfillReview?.key);
   const trackRecording = busy => setRecordingKey(previous => busy ? backfillReview.key : previous === backfillReview.key ? null : previous);
-  const canLookup = !staging && mode === 'live' && canSelectGatewayBackfill(actor, grant, scopeId)
+  const canLookup = canReviewMissing
     && (!receiptType || receiptType === 'other') && matchingRows?.some(row => row.status === 'success');
   const openBackfill = rows => { setReview(null); setBackfill({ key:linkKey, rows }); };
   async function reviewAllMissing() {
@@ -149,10 +185,18 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
       if (!controller.signal.aborted) setSelection({ key:resultKey, error:failure.message });
     }
   }
-  const error = response?.error || typeResult?.error || result?.error;
+  const error = response?.error || nameResult?.error || typeResult?.error || missingResult?.error || result?.error;
   const loading = !error && (!response || !result);
-  const update = (name, value) => { setFilters(current => ({ ...current, [name]: value })); setPage(1); setReview(null); setNotice(''); };
-  const setRange = bounds => { setFilters(current => ({ ...current, ...bounds })); setPage(1); setNotice(''); };
+  const update = (name, value) => {
+    if (filters[name] !== value) setMissing(null);
+    if (filters[name] !== value && (['query', 'status'].includes(name) || (name === 'payerName' && !value.trim()))) setPayerNames(null);
+    setFilters(current => ({ ...current, [name]: value })); setPage(1); setReview(null); setNotice('');
+  };
+  const setRange = bounds => {
+    if (bounds.from !== from || bounds.to !== to) { setMissing(null); setPayerNames(null); }
+    setFilters(current => ({ ...current, ...bounds })); setPage(1); setReview(null); setNotice('');
+  };
+  const goToPage = number => { setPage(number); setReview(null); };
   async function exportPage() {
     const signal = lifetime.current;
     if (exporting || !data?.transactions.length || signal?.aborted) return;
@@ -160,7 +204,7 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
     try {
       const buffer = await gatewayPageExcel(data, filters);
       if (signal.aborted) return;
-      saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `4m-paystack-${mode}-page-${page}.xlsx`);
+      saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `4m-paystack-${mode}-page-${activePage}.xlsx`);
       setNotice(`Excel prepared with ${data.transactions.length} transactions from this page.`);
     } catch (failure) { if (!signal.aborted) setNotice(failure.message); }
     finally { if (!signal.aborted) setExporting(false); }
@@ -204,7 +248,7 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
     <fieldset disabled={backfillBusy} style={{ border:0, padding:0, margin:0, minWidth:0 }}>
     <div className="fo-ledger-filters">
       {!staging && <label className="fo-status-filter">Environment<SearchableDropdown value={mode} onChange={event => {
-        setMode(event.target.value); setPage(1); setReview(null); setAction(null); setNotice(''); setExporting(false);
+        setMode(event.target.value); update('missingOnly', false); setAction(null); setExporting(false);
       }} disabled={action?.busy || backfillBusy}><option value="live">Live</option><option value="test">Test</option></SearchableDropdown></label>}
       <DatePicker label="Start date" value={from} onChange={value => update('from', value)} />
       <DatePicker label="End date" value={to} onChange={value => update('to', value)} />
@@ -212,9 +256,12 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
       {!staging && <label className="fo-status-filter">Receipt type<SearchableDropdown aria-label="Receipt type" value={receiptType}
         onChange={event => update('receiptType', event.target.value)}><option value="">All receipt types</option>
         {Object.entries(gatewayReceiptTypeLabels).map(([value,label]) => <option value={value} key={value}>{label}</option>)}</SearchableDropdown></label>}
-      <button className="ap-secondary" onClick={() => { setFilters(baseFilters(staging)); setPage(1); setReview(null); }}>Reset filters</button>
+      {canReviewMissing && <label className="lw-check"><input type="checkbox" checked={missingEnabled}
+        disabled={action?.busy} onChange={event => update('missingOnly', event.target.checked)} />Missing in 4M</label>}
+      <button className="ap-secondary" onClick={() => { setMissing(null); setPayerNames(null); setFilters(baseFilters(staging)); setPage(1); setReview(null); }}>Reset filters</button>
     </div>
     <div className="fo-ledger-filters"><label className="fo-search"><input aria-label="Search gateway transactions" value={query} onChange={event => update('query', event.target.value)} placeholder={staging ? 'Search references on this page…' : 'Search reference or payer…'} /></label>
+      {!staging && <label className="fo-search"><input aria-label="Search payer name" value={payerName} onChange={event => update('payerName', event.target.value)} placeholder="Search linked 4M payer name…" /></label>}
       {!staging && <div className="fo-report-actions" aria-label="Common date ranges">
         <button className="ap-secondary" onClick={() => setRange({ from: ago(30), to: southAfricanToday() })}>Last 30 days</button>
         <button className="ap-secondary" onClick={() => setRange({ from: ago(90), to: southAfricanToday() })}>Last 90 days</button>
@@ -249,9 +296,17 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
               onClick={() => openBackfill([row])}>Review missing receipt</button> : <small>—</small>}</td>}
         </tr>)}</tbody></table></div>
       {!data.transactions.length && <p>No gateway transactions match these filters.</p>}
-      <nav className="fo-pagination" aria-label="Gateway pages"><span>Page {page} of {Math.max(1, data.pagination.pageCount)}</span>
-        <button className="ap-secondary" disabled={page === 1 || action?.busy || backfillBusy || Boolean(backfillReview)} onClick={() => { setPage(n => n - 1); setReview(null); }}>Previous</button>
-        <button className="ap-secondary" disabled={!data.pagination.hasMore || action?.busy || backfillBusy || Boolean(backfillReview)} onClick={() => { setPage(n => n + 1); setReview(null); }}>Next</button>
+      <nav className="fo-pagination" aria-label="Gateway pages"><span>Page {activePage} of {pageCount}</span>
+        <button type="button" className="ap-secondary" disabled={activePage === 1 || action?.busy || bulkLookup?.busy || Boolean(backfillReview)}
+          onClick={() => goToPage(activePage - 1)}>Previous</button>
+        {pageCount > 1 && visiblePages.map((number, index) => <Fragment key={number}>
+          {index > 0 && number - visiblePages[index - 1] > 1 && <span aria-hidden="true">…</span>}
+          <button type="button" className={number === activePage ? 'ap-primary' : 'ap-secondary'} aria-label={`Page ${number}`}
+            aria-current={number === activePage ? 'page' : undefined} disabled={action?.busy || bulkLookup?.busy || Boolean(backfillReview)}
+            onClick={() => goToPage(number)}>{number}</button>
+        </Fragment>)}
+        <button type="button" className="ap-secondary" disabled={!data.pagination.hasMore || action?.busy || bulkLookup?.busy || Boolean(backfillReview)}
+          onClick={() => goToPage(activePage + 1)}>Next</button>
       </nav>
     </>}
   </section>;

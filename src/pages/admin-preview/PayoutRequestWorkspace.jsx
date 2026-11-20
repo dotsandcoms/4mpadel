@@ -137,6 +137,7 @@ function OrganisationPayouts({ client, session, organisationId, revision, select
   const requestKey = `${revision}:${refresh}`;
   const answer = reply?.requestKey === requestKey ? reply : null;
   const data = answer?.data;
+  const revealedRequest = data?.requests.find(request => request.id === revealed?.requestId && request.status === 'pending');
   const uncertain = data?.events.some(event => String(event.id) === String(selectedEventId)) ? unconfirmedAttempt : null;
   useEffect(() => {
     const controller = new AbortController();
@@ -202,7 +203,7 @@ function OrganisationPayouts({ client, session, organisationId, revision, select
       const result = await submitPayoutAction(client, session, organisationId, action, signal);
       if (signal.aborted) return;
       if (action.kind === 'reveal') {
-        if (epoch === revealEpoch.current && !document.hidden) setRevealed(result);
+        if (epoch === revealEpoch.current && !document.hidden) setRevealed({ requestId:action.input.request_id, details:result });
       } else {
         if (action.kind === 'request') {
           onAttemptChange(action.input.event_id, null);
@@ -242,7 +243,7 @@ function OrganisationPayouts({ client, session, organisationId, revision, select
       {!editing && !action && <p className="fo-note">Banking details are private. Existing requests retain the destination confirmed when they were submitted.</p>}
       {action && <div className="lw-review">
         <h3>{['record_interim','remove_interim'].includes(action.kind) ? 'Review recorded payout' : `Verify to ${action.purpose}`}</h3>
-        {action.kind === 'resolve' && action.input.status === 'paid' && <p>Only continue once the bank transfer has completed.</p>}
+        {action.kind === 'resolve' && action.input.status === 'paid' && <p>Continue once the bank transfer has completed. This records {rand(action.request.amount)} in the payout ledger for {action.request.event_name}. Use this request as the payout record for the transfer.</p>}
         {action.kind === 'request' && <p>Request {rand(action.input.amount)} to {action.destination} for manual processing.</p>}
         {['record_interim','remove_interim'].includes(action.kind) ? <>
           <p>{action.kind === 'record_interim' ? 'Record this completed bank payment' : 'Remove this recorded payment'} · {rand(action.input.amount)}</p>
@@ -266,15 +267,16 @@ function OrganisationPayouts({ client, session, organisationId, revision, select
       uncertain={uncertain} locked={busy} />}
     <section className="lw-editor"><header className="lw-actions"><div><h2>Payout requests</h2><p>4M processes bank transfers manually.</p></div>
       <button className="ap-secondary" disabled={Boolean(action) || busy} onClick={() => { setRevealed(null); setRefresh(n => n + 1); }}>Refresh requests</button></header>
-      {revealed && <div className="lw-review" data-private="true"><header className="lw-actions"><h3>Confidential payout destination</h3><button className="ap-secondary" onClick={() => setRevealed(null)}>Hide account details</button></header>
+      {revealedRequest && <div className="lw-review" data-private="true"><header className="lw-actions"><h3>Confidential payout destination</h3><button className="ap-secondary" onClick={() => setRevealed(null)}>Hide account details</button></header>
+        <p>{revealedRequest.event_name} · {rand(revealedRequest.amount)} · Account ending {revealedRequest.last_four}</p>
         <dl>{[['Bank','bank_name'],['Account holder','account_holder'],['Account number','account_number'],['Branch code','branch_code'],['Account type','account_type']].map(([label, key]) => (
-          <div key={key}><dt>{label}</dt><dd>{revealed[key]}</dd></div>
+          <div key={key}><dt>{label}</dt><dd>{revealed.details[key]}</dd></div>
         ))}</dl><p>These details hide after 60 seconds.</p></div>}
       <div className="fo-table-scroll"><table className="fo-detail-table" aria-label="Organiser payout requests"><thead><tr><th>Event</th><th>Requested</th><th>Amount</th><th>Destination</th><th>Status</th>{data.canProcess && <th>Actions</th>}</tr></thead>
-        <tbody>{data.requests.map(request => <tr key={request.id}><td>{request.event_name}</td><td>{financeDate(request.created_at)}</td><td>{rand(request.amount)}</td><td>Ending {request.last_four}{request.account_changed && <small>Account changed</small>}</td><td>{request.status}</td>
+        <tbody>{data.requests.map(request => <tr key={request.id}><td>{request.event_name}</td><td>{financeDate(request.created_at)}</td><td>{rand(request.amount)}</td><td>Ending {request.last_four}{request.account_changed && request.status === 'pending' && <small>The saved account changed or was removed. This request still uses its original banking details. Confirm the account with the organisation before paying, or cancel the request and ask the organisation to submit it again.</small>}</td><td>{request.status}</td>
           {data.canProcess && <td>{request.status === 'pending' && <div className="fo-report-actions">
             <button className="ap-secondary" disabled={Boolean(action) || busy} onClick={() => review({ kind: 'reveal', purpose: 'view banking details', input: { request_id: request.id } })}>Reveal</button>
-            <button className="ap-secondary" disabled={Boolean(action) || busy} onClick={() => review({ kind: 'resolve', purpose: 'mark this payout paid', input: { request_id: request.id, status: 'paid' } })}>Mark paid</button>
+            <button className="ap-secondary" disabled={Boolean(action) || busy} onClick={() => review({ kind: 'resolve', purpose: 'mark this payout paid', request, input: { request_id: request.id, status: 'paid' } })}>Mark paid</button>
             <button className="ap-secondary" disabled={Boolean(action) || busy} onClick={() => review({ kind: 'resolve', purpose: 'cancel this payout request', input: { request_id: request.id, status: 'cancelled' } })}>Cancel request</button>
           </div>}</td>}</tr>)}</tbody></table></div>
       {!data.requests.length && <p>No payout requests yet.</p>}

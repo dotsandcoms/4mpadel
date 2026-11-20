@@ -36,12 +36,21 @@ const licencePaymentHistory = [
 
 const request = {id:'existing-payout',event_id:14,event_name:event.event_name,amount:200,last_four:'0155',status:'pending',created_at:'2026-08-05T10:00:00Z'};
 let banking = { saved:true, bank_name:'Fixture Bank', last_four:'0155', version:'account-version' }, requests = fb.mode === 'payout-admin' ? [request] : [];
+if (fb.mode==='payout-changed-account') {
+    banking={...banking,last_four:'0277',version:'replacement-account'};
+    requests=[{...request,account_changed:true},{...request,id:'other-payout',event_name:'Another event',amount:280,last_four:'0277'}];
+}
 if (fb.mode==='payout-use-max-unbanked') banking={saved:false};
 let requestCalls = 0;
 const platform = fb.permissions.role === 'super_admin';
 const ledgerScopeTest = fb.mode.startsWith('finance-ledger-');
-const gatewayBulk = fb.mode === 'gateway-bulk';
+const gatewayMissing = fb.mode === 'gateway-missing';
+const gatewayBulk = fb.mode === 'gateway-bulk' || gatewayMissing;
 const gatewayTypes = fb.mode === 'gateway-types';
+const gatewayNames = fb.mode === 'gateway-names';
+const payerProfile = {id:8,name:'Named fixture payer',email:'payer+name@example.invalid'};
+const gatewayAliases = {'metadata->>client_reference':'client_reference','metadata->>paystack_ref':'paystack_reference',
+    'metadata->>parent_reference':'parent_reference','metadata->original_trx->>id':'original_gateway_reference'};
 const typedRefs = ['full', 'temporary', ...Array.from({length:9},(_,index)=>'other-'+index),'full-alias','ambiguous','missing'];
 const typeRef = label => 'type-fixture-'+label;
 const typedGatewayRows = typedRefs.map(label=>({id:typeRef(label),user:player.email,amount:'R 650.00',
@@ -58,6 +67,22 @@ if (ledgerScopeTest) {
     tables.payments.push(failed,otherPayment,{...otherPayment,id:'other-pay-same-player',player_id:5,reference:'outside-for-same-player'});
 }
 if (gatewayBulk) tables.payments.push({...pay,id:'linked-bulk',reference:'bulk-linked'});
+if (gatewayMissing) tables.payments.push(
+    {...pay,id:'bulk-split',reference:'LIC-bulk-linked',parent_reference:'bulk-linked',payment_type:'temp_license'},
+    {...pay,id:'bulk-legacy',reference:'legacy-payment-reference',original_gateway_reference:'bulk-legacy'},
+    {...pay,id:'bulk-exact-alias',reference:'related-payment-reference',paystack_reference:'bulk-exact-alias'},
+    {...pay,id:'bulk-ambiguous-1',reference:'bulk-ambiguous'},
+    {...pay,id:'bulk-ambiguous-2',reference:'other-payment-reference',client_reference:'bulk-ambiguous'},
+);
+if (gatewayNames) {
+    tables.admin_sidebar_permissions = [{...fb.permissions,email:actor.email}];
+    tables.payments.push(
+        {...pay,id:'names-verified',reference:'recorded-payer',player_id:payerProfile.id,players:payerProfile},
+        {...pay,id:'names-mismatch',reference:'different-exact-email',player_id:payerProfile.id,players:payerProfile},
+        {...pay,id:'names-ambiguous-1',reference:'ambiguous-named-receipt',player_id:payerProfile.id,players:payerProfile},
+        {...pay,id:'names-ambiguous-2',reference:'other-names-receipt',client_reference:'ambiguous-named-receipt',player_id:payerProfile.id,players:payerProfile},
+    );
+}
 if (gatewayTypes) tables.payments.push(
     {...pay,id:'full-kind',reference:typeRef('full'),payment_type:'full_license',amount:650},
     {...pay,id:'temp-kind',reference:typeRef('temporary'),payment_type:'temporary_license',amount:650},
@@ -80,13 +105,20 @@ function select(table) {
             counters.push(['type-projection',fields,filters]);
             if (fb.failClassification) return {error:new Error('Fixture type lookup failed')};
         }
+        if (gatewayMissing && table==='payments' && fields.includes('checkout_source:') && fb.failLedgerLookup) {
+            return {error:new Error('Fixture ledger lookup failed')};
+        }
+        if (gatewayNames && table==='payments' && fields.includes('players!payments_player_id_fkey(name,email)')) {
+            counters.push(['name-projection',fields,filters]);
+            if (fb.failPayerLookup) return {error:new Error('Fixture payer lookup failed')};
+        }
         if(update && table==='calendar') counters.push(['update',table,result.map(r=>r.id),update]);
         if(remove) tables[table]=tables[table].filter(row=>!result.includes(row));
         if(update) for(const row of result) Object.assign(row,update);
         return {data: structuredClone(mode==='single'?result[0]||null:result.slice(from,to+1))};
     };
     return { select(value){fields=value;return this}, ilike(key,value){predicates.push(row=>String(row[key]||'').toLowerCase()===value.toLowerCase());return this}, eq(key,value){filters.push(['eq',key,value]);predicates.push(row=>(row[key] !== null && typeof row[key] === 'object' ? JSON.stringify(row[key]) : String(row[key]))===String(value));return this}, neq(key,value){predicates.push(row=>row[key]!==value);return this},
-        in(key,ids){filters.push(['in',key,ids]);predicates.push(row=>ids.includes(key === 'metadata->>client_reference' ? row.client_reference : row[key]));return this}, is(key,val){predicates.push(row=>row[key]===val);return this},
+        in(key,ids){filters.push(['in',key,ids]);predicates.push(row=>ids.includes(row[gatewayAliases[key] || key]));return this}, is(key,val){predicates.push(row=>row[key]===val);return this},
         order(){return this}, limit(){return this}, abortSignal(){return this},
         update(value){update=value;return this}, delete(){remove=true;return this},
         range(start,end){counters.push(['table',table]);if(ledgerScopeTest)counters.push(['filtered-read',table,filters]);from=start;to=end;return this}, async single(){counters.push(['event',table]);return execute('single')},
@@ -101,6 +133,8 @@ export const supabase = {
     from:select,
     async rpc(name,args) {
         counters.push([name,args]);
+        if(name==='is_super_admin' && gatewayMissing) return {data:platform && !fb.revokeGateway};
+        if(name==='is_super_admin' && gatewayNames) return {data:platform && !fb.revokeGateway};
         if(name==='is_super_admin' && ledgerScopeTest) return {data:platform};
         if(name==='account_is_active') return {data:true};
         if(name==='can_manage_licenses' || name==='is_organisation_admin' || name==='is_super_admin') return {data:true};
@@ -158,6 +192,15 @@ export const supabase = {
                 {id:'bulk-failed',user:player.email,amount:'R 45.00',status:'Failed',rawDate:pay.created_at,is_test:false},
                 {id:'different-customer',user:player.email,amount:'R 45.00',status:'Success',rawDate:pay.created_at,is_test:false},
             ] : []),
+            ...(gatewayMissing ? ['bulk-legacy','bulk-exact-alias','bulk-ambiguous'].map(id=>({id,user:player.email,
+                amount:'R 600.00',status:'Success',rawDate:pay.created_at,is_test:false})) : []),
+            ...(gatewayNames ? [
+                ...Array.from({length:10},(_,i)=>({id:'before-payer-'+i,user:player.email})),
+                {id:'recorded-payer',user:' PAYER+NAME@example.invalid '},
+                {id:'different-exact-email',user:'different+name@example.invalid'},
+                {id:'ambiguous-named-receipt',user:payerProfile.email},
+                {id:'unmatched-same-payer-email',user:payerProfile.email},
+            ].map(row=>({...row,amount:'R 600.00',status:'Success',rawDate:pay.created_at,is_test:false})) : []),
         ]}};
         if(name==='confirm-manual-payment')return {data:{processed:true}};
         if(name==='admin-paystack-backfill') {
@@ -335,6 +378,30 @@ test('platform payout reveal and resolution stay behind fresh authenticator acti
         await click(page,'Mark paid');await verifyMfa(page);await includesText(page,'Payout status updated.');
         assert.ok((await calls(page)).some(([name,args])=>name==='organisation_banking'&&args.p_action==='resolve'&&args.p_data.status==='paid'));
         await click(page,'Remove saved account');await verifyMfa(page);await includesText(page,'No payout account saved');
+    });
+});
+
+test('a changed payout account retains the selected request destination and shows the ledger effect before payment is marked',async()=>{
+    await withPage('payout-changed-account',platform,'org:our-org',async page=>{
+        const selected = 'table[aria-label="Organiser payout requests"] tbody tr:first-child';
+        await includesText(page,'This request still uses its original banking details.');
+        assert.match(await page.$eval(selected,node=>node.innerText),/Ending 0155.*Confirm the account with the organisation before paying/s);
+        await click(page,'Reveal',selected+' button');
+        await verifyMfa(page);
+        await includesText(page,'Confidential payout destination');
+        const destination = await page.$eval('div[data-private="true"]',node=>node.innerText);
+        assert.match(destination,/Our fixture event.*Account ending 0155/s);
+        assert.match(destination,/0000000155/);
+        assert.doesNotMatch(destination,/Another event|0277/);
+        await click(page,'Mark paid',selected+' button');
+        await includesText(page,'in the payout ledger for Our fixture event');
+        await includesText(page,'Use this request as the payout record for the transfer.');
+        assert.equal(await page.$('div[data-private="true"]'),null);
+        assert.equal((await calls(page)).some(([name,args])=>name==='organisation_banking'&&args.p_action==='resolve'),false);
+        await verifyMfa(page);
+        await includesText(page,'Payout status updated.');
+        const actions = (await calls(page)).filter(([name,args])=>name==='organisation_banking'&&['reveal','resolve'].includes(args.p_action));
+        assert.deepEqual(actions.map(([,args])=>[args.p_action,args.p_data.request_id]),[['reveal','existing-payout'],['resolve','existing-payout']]);
     });
 });
 
@@ -540,6 +607,86 @@ test('bulk recovery writes only checked receipt evidence and can review later ba
     });
 });
 
+test('gateway Missing in 4M matches the full search, jumps to exact pages and stops when ledger evidence or authority is unavailable',async()=>{
+    const table = '[aria-label="Paystack gateway transactions"]';
+    const check = 'input[type="checkbox"]';
+    const search = 'input[aria-label="Search gateway transactions"]';
+    const pages = 'nav[aria-label="Gateway pages"]';
+    await withPage('gateway-missing',platform,'all',async page=>{
+        await click(page,'Paystack gateway');
+        await input(page,search,'bulk-');
+        await includesText(page,'17 matching live transactions');
+        await click(page,'Missing in 4M','label:has('+check+')');
+        await includesText(page,'12 matching live transactions');
+        assert.equal(await page.$eval(pages+' [aria-current="page"]',button=>button.textContent),'1');
+        await page.focus(pages+' button[aria-label="Page 2"]');
+        await page.keyboard.press('Enter');
+        await includesText(page,'Page 2 of 2');
+        const last = await page.$eval(table+' tbody',tbody=>tbody.innerText);
+        assert.match(last,/bulk-11.*bulk-12/s);
+        assert.doesNotMatch(last,/bulk-(01|linked|failed|legacy|exact-alias|ambiguous)/);
+        await input(page,search,'bulk-12');
+        await includesText(page,'1 matching live transactions');
+        assert.match(await page.$eval(table+' tbody',tbody=>tbody.innerText),/bulk-12/);
+        await page.evaluate(()=>{window.fixture.failLedgerLookup=true});
+        await click(page,'Refresh gateway');
+        await includesText(page,'4M ledger matches could not be checked for every result.');
+        assert.equal(await page.$(table),null);
+        await page.evaluate(()=>{window.fixture.failLedgerLookup=false;window.fixture.revokeGateway=true});
+        await click(page,'Try again');
+        await includesText(page,'Platform Finance access could not be verified.');
+        assert.equal(await page.$(table),null);
+        assert.equal((await calls(page)).some(([name])=>name==='admin-paystack-backfill'),false);
+    });
+    await withPage('gateway-missing',{role:'custom',allowed_tabs:['finance'],module_permissions:{finance:{allowedTabs:['transactions']}}},'all',async page=>{
+        await includesText(page,'unmatched-reference');
+        assert.equal(await page.$(check),null);
+        assert.equal((await calls(page)).some(([name])=>name==='admin-paystack-backfill'),false);
+    });
+});
+
+test('gateway payer name matches only an exact authorised payer profile across pages and fails closed on a new name lookup',async()=>{
+    const table = '[aria-label="Paystack gateway transactions"]';
+    const name = 'input[aria-label="Search payer name"]';
+    const search = 'input[aria-label="Search gateway transactions"]';
+    await withPage('gateway-names',platform,'all',async page=>{
+        await click(page,'Paystack gateway');
+        await includesText(page,'16 matching live transactions');
+        assert.doesNotMatch(await page.$eval(table+' tbody',body=>body.innerText),/recorded-payer/);
+        assert.equal((await calls(page)).some(([operation])=>operation==='name-projection'),false);
+
+        await input(page,name,'Fixture Payer');
+        await includesText(page,'1 matching live transactions');
+        const result = await page.$eval(table+' tbody',body=>body.innerText);
+        assert.match(result,/recorded-payer.*Named fixture payer/s);
+        assert.doesNotMatch(result,/different-exact-email|ambiguous-named-receipt|unmatched-same-payer-email/);
+        assert.equal((await calls(page)).some(([operation])=>operation==='name-projection'),true);
+
+        await page.evaluate(()=>{window.fixture.failPayerLookup=true});
+        await click(page,'Refresh gateway');
+        await includesText(page,'Payer names could not be verified.');
+        assert.equal(await page.$(table),null);
+        await input(page,name,'');
+        await input(page,search,'payer+name@example.invalid');
+        await includesText(page,'3 matching live transactions');
+        assert.match(await page.$eval(table+' tbody',body=>body.innerText),/unmatched-same-payer-email/);
+        await input(page,search,'different-exact-email');
+        await includesText(page,'1 matching live transactions');
+        assert.match(await page.$eval(table+' tbody',body=>body.innerText),/different-exact-email/);
+        assert.equal((await calls(page)).some(([operation])=>operation==='admin-paystack-backfill'),false);
+    });
+    await withPage('gateway-names',{role:'custom',allowed_tabs:['finance'],module_permissions:{finance:{allowedTabs:['transactions']}}},'all',async page=>{
+        await input(page,name,'Fixture Payer');
+        await includesText(page,'1 matching live transactions');
+        assert.match(await page.$eval(table+' tbody',body=>body.innerText),/recorded-payer/);
+    });
+    await withPage('gateway-names',owner,'org:our-org',async page=>{
+        await includesText(page,'Recorded payments require platform super-admin access.');
+        assert.equal(await page.$(name),null);
+        assert.equal((await calls(page)).some(([operation])=>operation==='name-projection'),false);
+    });
+});
+
 const financeLedgerGrant = (events = [14]) => ({
     role:'custom', allowed_tabs:['finance'], module_permissions:{finance:{allowedTabs:['users'],allowedEvents:events}},
 });
@@ -641,8 +788,9 @@ test('gateway receipt type filters exact stored licence types across pages and k
         const selections = (await calls(page)).filter(([name])=>name==='type-projection');
         assert.ok(selections.length);
         for (const [,fields,filters] of selections) {
-            assert.equal(fields,'id,reference,is_test,payment_method,payment_type,client_reference:metadata->>client_reference');
-            assert.ok(filters.some(([operator,key,ids])=>operator==='in'&&['reference','metadata->>client_reference'].includes(key)
+            assert.equal(fields,'id,is_test,payment_method,payment_type,reference,client_reference:metadata->>client_reference,paystack_reference:metadata->>paystack_ref,parent_reference:metadata->>parent_reference,original_gateway_reference:metadata->original_trx->>id');
+            assert.ok(filters.some(([operator,key,ids])=>operator==='in'&&['reference','metadata->>client_reference','metadata->>paystack_ref',
+                'metadata->>parent_reference','metadata->original_trx->>id'].includes(key)
                 &&ids.every(id=>id.startsWith('type-fixture-'))));
         }
         assert.equal((await calls(page)).some(([name])=>name==='admin-paystack-backfill'),false);
