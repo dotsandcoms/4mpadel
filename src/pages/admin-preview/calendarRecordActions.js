@@ -67,13 +67,9 @@ export async function saveCalendarRecordAction({ client, event, action, gateway,
     throw new Error('This event changed. Reopen it before continuing.');
   }
   const value = column === 'is_visible' ? fresh.is_visible === false : fresh.finance_managed !== true;
-  const series = action === 'visibility' && fresh.is_weekly && fresh.series_id;
-  const change = tab.update({ [column]: value });
-  if (series) query = change.eq('series_id', fresh.series_id).eq('is_weekly', true);
-  else {
-    query = change.eq('id', event.id);
-    query = fresh[column] == null ? query.is(column, null) : query.eq(column, fresh[column]);
-  }
+  if (action === 'visibility' && fresh.is_weekly && fresh.series_id) throw new Error('Review the weekly series before changing its visibility.');
+  query = tab.update({ [column]: value }).eq('id', event.id);
+  query = fresh[column] == null ? query.is(column, null) : query.eq(column, fresh[column]);
   onAttempt();
   const { data, error } = await query.select('id');
   if (error || !data?.some(row => String(row.id) === String(event.id))) throw error || new Error('Could not verify the event change.');

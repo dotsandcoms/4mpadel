@@ -11,6 +11,7 @@ import {
 import CancelEventButton from './CancelEventButton';
 import CancelEventDialog from './CancelEventDialog';
 import { supabase } from '../../supabaseClient';
+import { reviewedWeeklyMembers, scopeWeeklyOccurrence } from '../../utils/calendarWeeklySeries.js';
 import { uploadToGallery, uploadEventAsset } from '../../utils/eventMedia';
 import { useClubs } from '../../hooks/useClubs';
 import { useAdminPermissions } from '../../hooks/useAdminPermissions';
@@ -741,7 +742,7 @@ const ageFromDivisionName = (name) => {
     return '';
 };
 
-const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisation = null, renderEditor, beforeSave, theme }) => {
+const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisation = null, renderEditor, beforeSave, theme, reviewedWeeklySeries }) => {
     const previewTheme = theme === 'preview';
     const guardedEditor = Boolean(renderEditor || previewTheme);
     const previewWriteFailed = useRef(false);
@@ -1220,25 +1221,28 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             entry_fee: ev.entry_fee != null && ev.entry_fee !== '' ? String(ev.entry_fee) : '',
         });
         if (ev.is_weekly && ev.series_id) {
-            const { data: siblings, error: seriesErr } = await supabase
-                .from('calendar')
-                .select('id, start_date, slug, event_name, registration_access')
-                .eq('series_id', ev.series_id)
-                .eq('is_weekly', true)
-                .order('start_date', { ascending: true });
-            if (seriesErr) {
-                if (guardedEditor) throw seriesErr;
-                console.error('[EventBuilder] load series siblings failed:', seriesErr.message);
-                setSeriesSiblings([]);
+            let list;
+            if (reviewedWeeklySeries) {
+                list = reviewedWeeklyMembers(ev, reviewedWeeklySeries, { editable: true });
             } else {
-                const list = siblings || [];
-                setSeriesSiblings(list);
-                setForm((prev) => ({
-                    ...prev,
-                    weekly_count: Math.max(2, list.length || 8),
-                    series_id: ev.series_id,
-                }));
+                const { data, error } = await supabase
+                    .from('calendar')
+                    .select('id, start_date, slug, event_name, registration_access')
+                    .eq('series_id', ev.series_id)
+                    .eq('is_weekly', true)
+                    .order('start_date', { ascending: true });
+                if (error) {
+                    if (guardedEditor) throw error;
+                    console.error('[EventBuilder] load series siblings failed:', error.message);
+                }
+                list = data || [];
             }
+            setSeriesSiblings(list);
+            setForm(prev => ({
+                ...prev,
+                weekly_count: Math.max(2, list.length || 8),
+                series_id: ev.series_id,
+            }));
         } else {
             setSeriesSiblings([]);
         }
@@ -2428,7 +2432,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             return 1;
         }
 
-        let siblings = seriesSiblings;
+        let siblings = reviewedWeeklySeries
+            ? reviewedWeeklyMembers(editedEvent, reviewedWeeklySeries, { editable: true })
+            : seriesSiblings;
         if (!siblings.length) {
             const { data, error } = await supabase
                 .from('calendar')
@@ -2455,6 +2461,15 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
         for (let j = 0; j < siblings.length; j += 1) {
             const sibling = siblings[j];
+            if (reviewedWeeklySeries) {
+                await checkpoint();
+                const { data: current, error } = await scopeWeeklyOccurrence(
+                    supabase.from('calendar').select('id,registration_access'), sibling,
+                ).single();
+                if (error || !current || current.registration_access !== sibling.registration_access) {
+                    throw new Error('A reviewed weekly occurrence changed. Close and reopen the series.');
+                }
+            }
             await persistAccessCode(sibling.id, sibling.registration_access === 'code', checkpoint);
             const weekOffsetDays = (j - editIdx) * 7;
             const occurrenceDate = addDaysToDate(form.start_date, weekOffsetDays);
@@ -2477,11 +2492,14 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             delete instancePayload.slug;
 
             await checkpoint();
-            const { error } = await supabase
-                .from('calendar')
-                .update(instancePayload)
-                .eq('id', sibling.id);
-            if (error) throw error;
+            const update = supabase.from('calendar').update(instancePayload);
+            if (reviewedWeeklySeries) {
+                const { data, error } = await scopeWeeklyOccurrence(update, sibling).select('id').single();
+                if (error || String(data?.id) !== String(sibling.id)) throw error || new Error('Could not verify the updated weekly occurrence.');
+            } else {
+                const { error } = await update.eq('id', sibling.id);
+                if (error) throw error;
+            }
         }
         setSeriesSiblings(siblings.map((event) => ({
             ...event, registration_access: form.require_access_code ? 'code' : 'public',
@@ -2543,7 +2561,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 if (form.is_weekly) {
                     payload.series_id = payload.series_id || activeEvent.series_id || form.series_id || null;
                     const updatedCount = await persistWeeklySeriesUpdate(payload, {
-                        id: activeEvent.id,
+                        ...activeEvent,
                         start_date: activeEvent.start_date || form.start_date,
                         series_id: payload.series_id,
                     }, checkpoint);

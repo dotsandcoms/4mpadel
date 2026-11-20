@@ -1,3 +1,5 @@
+import { reviewedWeeklyMembers } from '../../utils/calendarWeeklySeries.js';
+
 // Read-only preflight for the existing EventBuilder save engine. This is an
 // optimistic conflict check, not a substitute for database RLS or a transaction.
 function canonical(value) {
@@ -32,24 +34,18 @@ export function hasPendingDivisionAmendment(event) {
       draft[key] != null && (!Array.isArray(draft[key]) || draft[key].length > 0));
 }
 
-export async function loadEventAdvancedSnapshot(client, eventId) {
+export async function loadEventAdvancedSnapshot(client, eventId, authorizeWeekly) {
   const { data: event, error } = await client.from('calendar').select('*').eq('id', eventId).single();
   if (error || !event) throw new Error('The event could not be loaded. Close and try again.');
   assertEditable(event);
+  if (event.is_weekly && event.series_id) await authorizeWeekly?.();
   const divisions = await readRows(() => client.from('tournament_divisions').select('*').eq('event_id', eventId).order('id'));
   const siblings = event.is_weekly && event.series_id
     ? await readRows(() => client.from('calendar').select('*').eq('series_id', event.series_id).eq('is_weekly', true).order('id')) : [];
   // Weekly saves do not persist divisions, but keep complete sibling snapshots
   // so concurrent content, schedule, visibility and sanction edits are detected.
-  if (event.is_weekly && event.series_id && !siblings.some(row => String(row.id) === String(event.id))) {
-    throw new Error('The weekly series changed while loading. Close and try again.');
-  }
-  // The legacy cascade writes every sibling. Do not let a normal series edit
-  // overwrite a cancellation or turn an imported occurrence into a manual one.
-  if (siblings.some(row => row.event_status === 'cancelled' || !row.is_manual)) {
-    throw new Error('This weekly series contains cancelled or imported occurrences. Review the series before editing all occurrences.');
-  }
-  return clone({ event, divisions, siblings });
+  const reviewed = event.is_weekly && event.series_id ? reviewedWeeklyMembers(event, siblings, { editable: true }) : [];
+  return clone({ event, divisions, siblings: reviewed });
 }
 
 function assertRowsUnchanged(original, current, label) {

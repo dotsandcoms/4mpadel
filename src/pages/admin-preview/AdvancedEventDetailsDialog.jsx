@@ -6,6 +6,8 @@ import { hasPendingDivisionAmendment, loadEventAdvancedSnapshot, verifyEventAdva
 import RecordLoading from './RecordLoading';
 import './EventDetailsDialog.css';
 import { eventContinuation } from './eventContinuation';
+import { isLinkedWeeklyEvent, verifyWeeklyOwnerUnchanged } from '../../utils/calendarWeeklySeries.js';
+import { verifyCalendarPlatformActor } from './calendarRecordActions.js';
 
 // The exact live tabs, fields and workflow, presented with the preview theme.
 export default function AdvancedEventDetailsDialog({ event, onClose, client = supabase, session, scopeId = 'all', load = loadEventAdvancedSnapshot, verify = verifyEventAdvancedAccess, Builder = EventBuilder }) {
@@ -21,7 +23,9 @@ export default function AdvancedEventDetailsDialog({ event, onClose, client = su
       if (scopeId !== 'all') throw new Error('Event setup requires the all-workspaces scope.');
       const { data, error: authError } = await client.auth.getUser();
       if (authError || !data?.user?.id || (session?.user?.id && session.user.id !== data.user.id)) throw new Error('Sign in again before editing this event.');
-      const value = await load(client, event.id);
+      const value = await load(client, event.id, () => verifyCalendarPlatformActor({
+        client, expectedUserId: session?.user?.id, scopeId, isCurrent: () => current,
+      }));
       if (current) setSnapshot({ ...value, actorId: data.user.id, contextToken: token });
     })().catch(err => { if (current) setError(err.message); });
     return () => { current = false; live.current = null; };
@@ -32,6 +36,13 @@ export default function AdvancedEventDetailsDialog({ event, onClose, client = su
       if (!snapshot.contextToken || live.current !== snapshot.contextToken) throw new Error('The editor context changed. Close and reopen this event.');
     };
     assertCurrent();
+    if (isLinkedWeeklyEvent(snapshot.event)) {
+      await verifyCalendarPlatformActor({ client, expectedUserId: snapshot.actorId, scopeId, isCurrent: () => live.current === snapshot.contextToken });
+      if (context.form && (context.form.is_weekly !== true || context.form.series_id !== snapshot.event.series_id)) {
+        throw new Error('Weekly series settings cannot detach an occurrence.');
+      }
+      verifyWeeklyOwnerUnchanged(snapshot.event, context.payload);
+    }
     const verified = await verify({ client, original: snapshot.event, divisions: snapshot.divisions, siblings: snapshot.siblings, expectedUserId: snapshot.actorId, scopeId, checkDivisions: true, checkSiblings: Boolean(snapshot.event.is_weekly && snapshot.event.series_id) });
     assertCurrent();
     if ((context.event && String(context.event.id) !== String(snapshot.event.id)) || (context.form?.series_id && context.form.series_id !== snapshot.event.series_id)) throw new Error('The amendment changes the event or series identity. Close and review it before saving.');
@@ -53,7 +64,7 @@ export default function AdvancedEventDetailsDialog({ event, onClose, client = su
       </> : <p>A host organisation or federation is required to review this amendment.</p>}
     </EditorFrame>;
   }
-  return <Builder isOpen theme="preview" editingEvent={snapshot.event} beforeSave={beforeSave}
+  return <Builder isOpen theme="preview" editingEvent={snapshot.event} reviewedWeeklySeries={isLinkedWeeklyEvent(snapshot.event) ? snapshot.siblings : undefined} beforeSave={beforeSave}
     onClose={() => onClose({ refresh: attempted.current })}
     onSaved={async () => { attempted.current = true; try { const next = await load(client, event.id); if (live.current === snapshot.contextToken) setSnapshot({ ...next, actorId: snapshot.actorId, contextToken: snapshot.contextToken }); } catch { if (live.current === snapshot.contextToken) onClose({ refresh: true }); } }}/ >;
 }
