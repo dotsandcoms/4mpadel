@@ -1,6 +1,6 @@
 import SearchableDropdown from "../../components/SearchableDropdown";
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, CalendarDays, ChevronRight, Search, Layers, Radio, CircleCheck, Check } from 'lucide-react';
+import { ArrowRight, CalendarDays, ChevronRight, Search, Layers, Radio, CircleCheck, Check, RefreshCw } from 'lucide-react';
 import { AnimatedCount } from './PlayersWorkspace';
 import { dateLabel } from './playersData';
 import { tierTone } from './calendarData';
@@ -9,9 +9,11 @@ import './EventManagerDashboard.css';
 import { supabase } from '../../supabaseClient';
 import { loadEventSnapshots } from './eventSnapshots';
 import { loadManagedEventCompletions, managedEventStage } from './eventManagementCompletion.js';
+import { bulkImportedRosterEvents } from './importedParticipantBulkSync.js';
+import ImportedParticipantBulkSyncDialog from './ImportedParticipantBulkSyncDialog.jsx';
 
 const Badge = ({ tone = 'neutral', children }) => <span className={`ap-status ap-status--${tone}`}>{children}</span>;
-export default function EventManagerDashboard({ events, registrations, go, canReadSnapshots = false, client = supabase, session, scopeId = 'all' }) {
+export default function EventManagerDashboard({ events, registrations, go, canReadSnapshots = false, client = supabase, session, scopeId = 'all', canBulkSyncRankedin = false, onRefresh }) {
   const [query, setQuery] = useState('');
   const [phase, setPhase] = useState('Upcoming');
   const [showBronze, setShowBronze] = useState(false);
@@ -19,6 +21,7 @@ export default function EventManagerDashboard({ events, registrations, go, canRe
   const list = useRef(null);
   const [snapshotState, setSnapshotState] = useState({ key: '', data: {}, error: null });
   const [retry, setRetry] = useState(0);
+  const [bulk, setBulk] = useState(null);
   const [completionState, setCompletionState] = useState({ loading: true, map: new Map() });
   const listedEvents = useMemo(() => canReadSnapshots ? events.filter(event => eventManagerListed(event, showBronze)) : events, [canReadSnapshots, events, showBronze]);
   useEffect(() => {
@@ -42,6 +45,9 @@ export default function EventManagerDashboard({ events, registrations, go, canRe
   const filtered = (completionState.loading || completionState.error ? [] : managedEvents).filter(event => (!phase || stage(event) === phase)
     && [event.event_name, event.venue, event.city, event.organisations?.name, event.organiser_name].some(value => String(value || '').toLowerCase().includes(query.toLowerCase())))
     .sort(compareEventDates);
+  const canSyncRosters = canBulkSyncRankedin && scopeId === 'all' && Boolean(session?.user?.id);
+  const bulkEvents = canSyncRosters ? bulkImportedRosterEvents(filtered) : [];
+  const bulkOpen = canSyncRosters && bulk && bulk.client === client && bulk.userId === session?.user?.id;
   const pages = Math.max(1, Math.ceil(filtered.length / 50));
   const current = Math.min(page, pages);
   const pageEvents = filtered.slice((current - 1) * 50, current * 50);
@@ -58,7 +64,10 @@ export default function EventManagerDashboard({ events, registrations, go, canRe
   const filter = value => { setPhase(value); setPage(1); if (list.current) list.current.scrollTop = 0; };
   const stats = [['All events', '', listedEvents.length], ['In progress', 'In progress', managedEvents.filter(e => stage(e) === 'In progress').length], ['Upcoming', 'Upcoming', managedEvents.filter(e => stage(e) === 'Upcoming').length], ['Completed', 'Completed', managedEvents.filter(e => stage(e) === 'Completed').length]];
   return <div className="em-workspace">
-    <header className="ap-page-heading"><div><p className="ap-kicker">Operate / Event manager</p><h1>Event manager</h1><p>Teams, registrations, draws and settlement — organised by event.</p></div><button className="ap-secondary" onClick={() => go('calendar')}><CalendarDays size={16} /> Calendar & setup <ArrowRight size={16} /></button></header>
+    <header className="ap-page-heading"><div><p className="ap-kicker">Operate / Event manager</p><h1>Event manager</h1><p>Teams, registrations, draws and settlement — organised by event.</p></div><div className="ap-heading-actions">
+      {canSyncRosters && <button type="button" className="ap-secondary" disabled={!bulkEvents.length} onClick={() => setBulk({ events: bulkEvents, client, userId: session.user.id })}><RefreshCw size={16} /> Bulk sync RankedIn rosters</button>}
+      <button className="ap-secondary" onClick={() => go('calendar')}><CalendarDays size={16} /> Calendar & setup <ArrowRight size={16} /></button>
+    </div></header>
     <div className="em-stats">{stats.map(([title, value, count]) => <button key={title} className="ap-section" data-state={value || 'all'} aria-pressed={phase === value} onClick={() => filter(value)}><span className="em-stat-label">{title}<span className="em-stat-icon" aria-hidden="true">{value === 'In progress' ? <Radio size={20} /> : value === 'Upcoming' ? <CalendarDays size={20} /> : value === 'Completed' ? <CircleCheck size={20} /> : <Layers size={20} />}</span></span><strong>{completionState.loading || completionState.error ? '—' : <AnimatedCount value={count} />}</strong><small>{phase === value ? <>Showing events <Check size={14} /></> : <>View events <ArrowRight size={14} /></>}</small></button>)}</div>
     <section className="ap-section em-guide"><div><h2>Inside each event</h2><p>Open an event to review its overview, players and teams, registrations, draws, income statement and activity log.</p></div><small>Completed is an explicit Event Manager status, independent of calendar dates.</small></section>
     <div className="ap-filter-bar"><label className="ap-filter-search"><Search size={17} /><span className="ap-visually-hidden">Search events</span><input value={query} onChange={e => { setQuery(e.target.value); setPage(1); }} placeholder="Search event, organiser, venue or city" /></label><label>Event status <SearchableDropdown value={phase} onChange={e => filter(e.target.value)}><option value="">All statuses</option>{['Upcoming', 'In progress', 'Awaiting completion', 'Completed', 'Active'].map(value => <option key={value}>{value}</option>)}</SearchableDropdown></label></div>
@@ -81,5 +90,7 @@ export default function EventManagerDashboard({ events, registrations, go, canRe
       </tr>;
     })}</tbody></table>{!filtered.length && <div className="em-guide"><h2>{completionState.loading ? 'Loading event status…' : completionState.error ? 'Event status unavailable' : 'No matching events'}</h2><button className="ap-secondary" onClick={() => { setQuery(''); filter(''); }}>Clear filters</button></div>}</div>
     <nav className="ap-pagination" aria-label="Event pages"><span>{filtered.length ? (current - 1) * 50 + 1 : 0}–{Math.min(current * 50, filtered.length)} of {filtered.length} events</span><div><button className="ap-secondary" disabled={current === 1} onClick={() => { setPage(current - 1); list.current.scrollTop = 0; }}>Previous</button><span>Page {current} of {pages}</span><button className="ap-secondary" disabled={current === pages} onClick={() => { setPage(current + 1); list.current.scrollTop = 0; }}>Next</button></div></nav>
+    {bulkOpen && <ImportedParticipantBulkSyncDialog client={client} session={session} scopeId={scopeId} events={bulk.events}
+      onClose={outcome => { setBulk(null); if (outcome?.refresh) { setRetry(value => value + 1); onRefresh?.(); } }} />}
   </div>;
 }
