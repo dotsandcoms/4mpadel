@@ -3,6 +3,12 @@
     "name": "FourM Padel",
     "slug": "4m-padel",
     "version": "1.0.3",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3ed962c3-654a-4a9c-8586-3ee01cd6cb10"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "fourmpadel",
