@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canOpenOrganisationHostEvents, loadOrganisationHosts, loadOrganisationHostEditor, verifyOrganisationHostBuilder,
+import { canOpenOrganisationHostEvents, loadOrganisationHosts, loadOrganisationHostEditor, reloadSavedOrganisationHostEvent, verifyOrganisationHostBuilder,
   verifyOrganisationHostEdit } from '../src/pages/admin-preview/organisationHostEvents.js';
 
 const host = { id: 'host', name: 'Approved host', status: 'approved' };
@@ -76,4 +76,22 @@ test('host editing checks exact venue, preserved ownership, latest division set 
   await assert.rejects(verifyOrganisationHostEdit({ ...operation, client: fixture({ eventRows: [{ ...event, event_name:'Changed by another admin' }] }), snapshot, context }), /changed/);
   await verifyOrganisationHostEdit({ ...operation, client, snapshot, context: { ...context, operation: 'upload-sponsor', payload: null } });
   await assert.rejects(verifyOrganisationHostEdit({ ...operation, client, snapshot, context: { ...context, operation: 'upload', asset: 'other' } }), /quick-event poster or sponsor/);
+});
+
+test('continuing after a host draft requires the verified saved event and current organisation', async () => {
+  const row = { ...event, event_name: 'Saved draft', is_visible: false };
+  const client = fixture({ eventRows: [row] });
+  const args = { ...operation, client, savedId: 11 };
+  const first = await reloadSavedOrganisationHostEvent(args);
+  assert.deepEqual(first, { event: row, divisions: [division], siblings: [] });
+  assert.deepEqual(client.logs[0], ['admin_organisation_host_builder', { p_organisation_id: 'host', p_event_id: 11 }]);
+  const second = await reloadSavedOrganisationHostEvent({ ...args, previous: first });
+  assert.deepEqual(second, first);
+  const requestCount = client.logs.length;
+  await assert.rejects(reloadSavedOrganisationHostEvent({ ...args, previous: first, savedId: 12 }), /saved event could not be confirmed/);
+  assert.equal(client.logs.length, requestCount);
+  await assert.rejects(reloadSavedOrganisationHostEvent({ ...args, client: fixture({ denied: true }) }), /revoked/);
+  await assert.rejects(reloadSavedOrganisationHostEvent({ ...args, client: fixture({ eventRows: [{ ...row, organisation_id: 'foreign' }] }) }), /could not be loaded/);
+  await assert.rejects(reloadSavedOrganisationHostEvent({ ...args, previous: first,
+    client: fixture({ eventRows: [{ ...row, club_id: 'different' }] }) }), /event or its host changed/);
 });

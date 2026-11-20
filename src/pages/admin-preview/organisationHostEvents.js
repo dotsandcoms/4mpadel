@@ -60,6 +60,20 @@ export async function loadOrganisationHostEditor({ client, event, organisationId
   return { capability, snapshot };
 }
 
+export async function reloadSavedOrganisationHostEvent({ client, organisationId, savedId, previous, ...access }) {
+  const id = eventId(savedId);
+  if (!id || (previous && !sameId(previous.event.id, id))) throw new Error('The saved event could not be confirmed.');
+  await verifyOrganisationHostBuilder({ client, organisationId, ...access,
+    event: { id, organisation_id: organisationId, is_manual: true } });
+  const snapshot = await loadEventAdvancedSnapshot(client, id, undefined, organisationId);
+  const event = snapshot.event;
+  if (!access.isCurrent() || !sameId(event.id, id) || !sameId(event.organisation_id, organisationId) || event.is_quick_event === true
+    || (previous && !sameId(event.club_id, previous.event.club_id))) {
+    throw new Error('The saved event or its host changed. Close and reopen its details.');
+  }
+  return snapshot;
+}
+
 export async function verifyOrganisationHostEdit({ client, organisationId, snapshot, context, ...access }) {
   const event = snapshot?.event;
   if (!sameId(context.event?.id, event?.id)) throw new Error('The event editor changed. Reopen its details.');

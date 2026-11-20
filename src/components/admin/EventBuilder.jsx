@@ -11,6 +11,7 @@ import {
 import CancelEventButton from './CancelEventButton';
 import CancelEventDialog from './CancelEventDialog';
 import { supabase } from '../../supabaseClient';
+import { FOURM_PUBLIC_ORIGIN } from '../../constants/site.js';
 import { reviewedWeeklyMembers, scopeWeeklyOccurrence } from '../../utils/calendarWeeklySeries.js';
 import { uploadToGallery, uploadEventAsset } from '../../utils/eventMedia';
 import { uploadOrganisationEventAttachment } from '../../utils/organisationEventAttachments.js';
@@ -743,7 +744,7 @@ const ageFromDivisionName = (name) => {
     return '';
 };
 
-const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisation = null, organisationClubs, renderEditor, beforeSave, theme, reviewedWeeklySeries }) => {
+const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisation = null, organisationClubs, renderEditor, beforeSave, theme, reviewedWeeklySeries, reloadSavedEvent }) => {
     const previewTheme = theme === 'preview';
     const organisationBound = previewTheme && Boolean(organisation?.id);
     const guardedEditor = Boolean(renderEditor || previewTheme);
@@ -2225,6 +2226,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 payload.featured_event = false;
                 payload.show_in_recent_results = false;
             }
+            if (organisationBound) {
+                if (mode === 'draft') payload.is_visible = activeEvent?.is_visible === true;
+                else if (!isWeekly) payload.is_visible = true;
+            }
         } else {
             payload.organisation_id = form.organisation_id || null;
             if (!isEditing) {
@@ -2606,7 +2611,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                         series_id: payload.series_id,
                     }, checkpoint);
                     eventId = activeEvent.id;
-                    setWorkingEvent((prev) => ({
+                    const savedEvent = await reloadSavedEvent?.(eventId);
+                    setWorkingEvent((prev) => savedEvent || ({
                         ...(prev || activeEvent || {}),
                         id: eventId,
                         event_name: payload.event_name,
@@ -2693,7 +2699,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                     }
                 }
                 eventId = createdIds[0];
-                setWorkingEvent({
+                const savedEvent = await reloadSavedEvent?.(eventId);
+                setWorkingEvent(savedEvent || {
                     id: eventId,
                     event_name: payload.event_name,
                     slug: payload.slug,
@@ -2728,7 +2735,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             }
 
             // Stay in edit mode for this session and sync division IDs so the next save updates rows.
-            setWorkingEvent((prev) => ({
+            const savedEvent = await reloadSavedEvent?.(eventId);
+            setWorkingEvent((prev) => savedEvent || ({
                 ...(prev || activeEvent || {}),
                 id: eventId,
                 event_name: payload.event_name,
@@ -2829,6 +2837,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     if (!isOpen) return null;
 
     const namedDivisions = divisions.filter((d) => d.name.trim());
+    const publicEventLink = `${previewTheme ? FOURM_PUBLIC_ORIGIN : window.location.origin}/calendar/${encodeURIComponent(activeEvent?.slug || form.slug || slugify(form.event_name) || 'event')}`;
     const reviewIssues = renderEditor || step === 6 ? getReviewIssues() : { errors: [], warnings: [] };
 
     // One headless engine, two presentations. All transformations, validation,
@@ -5288,8 +5297,15 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                 <div className="rounded-xl border border-white/10 bg-black/20 p-4">
                                     <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Event link</p>
                                     <div className="mt-2 flex items-center gap-2">
-                                        <code className="min-w-0 flex-1 truncate rounded-lg bg-black/30 px-3 py-2 text-xs text-gray-300">{`${window.location.origin}/calendar/${form.slug || slugify(form.event_name) || 'event'}`}</code>
-                                        <button type="button" onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/calendar/${form.slug || slugify(form.event_name) || 'event'}`).then(() => toast.success('Event link copied'))} aria-label="Copy event link" className="rounded-lg border border-white/10 p-2.5 text-gray-300 hover:border-padel-green/40 hover:text-padel-green"><Copy size={16} /></button>
+                                        <code className="min-w-0 flex-1 truncate rounded-lg bg-black/30 px-3 py-2 text-xs text-gray-300">{publicEventLink}</code>
+                                        <button type="button" onClick={async () => {
+                                            try {
+                                                await navigator.clipboard.writeText(publicEventLink);
+                                                toast.success('Event link copied');
+                                            } catch {
+                                                toast.error('Select the event link to copy it.');
+                                            }
+                                        }} aria-label="Copy event link" className="rounded-lg border border-white/10 p-2.5 text-gray-300 hover:border-padel-green/40 hover:text-padel-green"><Copy size={16} /></button>
                                     </div>
                                 </div>
 
@@ -5366,7 +5382,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                         className="bg-padel-green text-black px-5 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors disabled:opacity-50"
                                     >
                                         {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                                        {saving ? 'Saving...' : form.sanction_requested ? 'Submit for approval' : isEditing ? 'Update event' : 'Publish event'}
+                                        {saving ? 'Saving...' : form.sanction_requested ? 'Submit for approval'
+                                            : isEditing && !(organisationBound && activeEvent.is_visible === false && (!form.is_weekly || form.is_visible)) ? 'Update event' : 'Publish event'}
                                     </button>
                                 </>
                             )}

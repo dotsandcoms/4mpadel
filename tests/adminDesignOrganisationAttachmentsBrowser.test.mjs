@@ -11,33 +11,47 @@ const contents = String.raw`
   import { createRoot } from 'react-dom/client';
   import EventBuilder from './src/components/admin/EventBuilder.jsx';
   import QuickEventBuilder from './src/components/admin/QuickEventBuilder.jsx';
+  import OrganisationHostEventEditor from './src/pages/admin-preview/OrganisationHostEventEditor.jsx';
   import { supabase } from './src/supabaseClient';
   import './src/pages/AdminPreview.css';
 
-  const host={id:'11111111-1111-1111-1111-111111111111',name:'Fixture Organisation'};
-  const division={id:'own-division',event_id:41,name:'Open',format:'Americano',entry_fee:0};
+  const host={id:'11111111-1111-1111-1111-111111111111',name:'Fixture Organisation',status:'approved'};
+  const division={id:'own-division',event_id:41,name:'Open',gender:'Mixed',format:'Americano',entry_fee:0};
   window.requests=[];
   window.saved=[];
   window.toasts=[];
-  window.renderBuilder=quick=>{
+  window.renderBuilder=(quick,continuing)=>{
     const actual={id:41,event_name:'Fixture Tournament',organisation_id:host.id,organiser_name:host.name,
       club_id:null,is_manual:true,is_quick_event:quick,event_status:'active',start_date:'2035-03-09',end_date:'2035-03-09',
-      start_time:'09:00',end_time:'11:00',registration_closes_at:'2035-03-07T12:00:00Z',
+      start_time:'09:00',end_time:'11:00',registration_opens_at:'2035-03-01T12:00:00Z',registration_closes_at:'2035-03-07T12:00:00Z',
       venue:'Fixture pavilion',venues:['Fixture pavilion'],city:'Fixture city',slug:'fixture-tournament',payment_method:'free',
-      registration_access:'public',max_players:8,max_teams_capacity:8,
+      registration_access:'public',max_players:8,max_teams_capacity:8,is_visible:!continuing,partner_requirement:'partner_required',
+      organiser_email:'host@example.invalid',contact_details:'Fixture contact',
       ...(quick ? {_quickDivision:division,custom_image_url:'https://stored.fixture.invalid/existing-poster.jpg'} : {}),
     };
     Object.assign(supabase,{
       auth:{getUser:async()=>({data:{user:{id:'fixture',email:'host@example.invalid'}}})},
+      async rpc(name,{p_organisation_id,p_event_id}) {
+        if (name!=='admin_organisation_host_builder'||p_organisation_id!==host.id||p_event_id!==actual.id) {
+          return {error:new Error('The host event could not be verified.')};
+        }
+        return {data:{organisation:{...host},event_id:actual.id,platform:false,clubs:[]}};
+      },
       from(table){
         let rows=table==='calendar'?[actual]:table==='tournament_divisions'?[division]:table==='organisations'?[host]:[];
         let update;
         const q={
           select(){return q;},eq(key,value){rows=rows.filter(row=>row[key]===value);return q;},is(key,value){return q.eq(key,value);},
-          in(){return q;},order(){return q;},limit(){return q;},abortSignal(){return q;},
+          in(){return q;},order(){return q;},limit(){return q;},abortSignal(){return q;},range(){return q;},
           update(value){update=value;return q;},insert(){return q;},
           then(resolve){return Promise.resolve({data:rows}).then(resolve);},
-          single(){if(table==='calendar'&&update&&rows[0])window.saved.push(update);return Promise.resolve({data:rows[0]||null});},
+          single(){
+            if(table==='calendar'&&update&&rows[0]){
+              window.saved.push({id:rows[0].id,...update});
+              Object.assign(rows[0],update);
+            }
+            return Promise.resolve({data:rows[0]||null});
+          },
           maybeSingle(){return q.single();},
         };return q;
       },
@@ -51,15 +65,22 @@ const contents = String.raw`
           url:'https://storage.fixture.invalid/storage/v1/object/public/organisation-event-attachments/organisations/'+org+'/events/'+event+'/'+kind+'/'+window.requests.length+'.'+ext}};
       }},
     });
+    window.changeStoredEvent=()=>{actual.event_name='Changed by another admin';};
+    const root=createRoot(document.getElementById('root'));
+    if (continuing) {
+      root.render(<OrganisationHostEventEditor client={supabase} session={{user:{id:'fixture'}}}
+        scopeId={'org:'+host.id} organisationId={host.id} event={{...actual}} onClose={result=>{window.closed=result;}}/>);
+      return;
+    }
     const Builder=quick?QuickEventBuilder:EventBuilder;
-    createRoot(document.getElementById('root')).render(<Builder isOpen theme="preview" organisation={host} organisationClubs={[]} editingEvent={actual}
+    root.render(<Builder isOpen theme="preview" organisation={host} organisationClubs={[]} editingEvent={actual}
       beforeSave={async()=>({verifyContinuing:async()=>{}})} onClose={()=>{}}/>);
   };
 `;
 
 async function click(page, label) {
   await page.waitForFunction(label => [...document.querySelectorAll('button')]
-    .some(node => !node.disabled && (node.getAttribute('aria-label') || node.textContent).trim() === label), {}, label);
+    .some(node => !node.disabled && (node.getAttribute('aria-label') || node.textContent).trim() === label), {polling:50}, label);
   await page.evaluate(label => [...document.querySelectorAll('button')]
     .find(node => !node.disabled && (node.getAttribute('aria-label') || node.textContent).trim() === label).click(), label);
 }
@@ -74,7 +95,7 @@ async function sendFiles(page, label, files) {
   }, label, files);
 }
 
-test('full and quick host builders upload scoped assets and save removals as event-field changes', async () => {
+test('full and quick host builders save scoped assets and an organisation can publish its saved draft', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), '4m-organisation-assets-'));
   let browser;
   try {
@@ -95,7 +116,7 @@ test('full and quick host builders upload scoped assets and save removals as eve
       } }],
     });
     browser = await puppeteer.launch({ headless:true, protocolTimeout:20000, args:['--no-sandbox'] });
-    const open = async quick => {
+    const open = async (quick, continuing = false) => {
       const page = await browser.newPage();
       page.setDefaultTimeout(8000);
       await page.setRequestInterception(true);
@@ -104,7 +125,7 @@ test('full and quick host builders upload scoped assets and save removals as eve
       await page.goto(fixtureUrl);
       await page.addStyleTag({path:path.join(directory,'fixture.css')});
       await page.addScriptTag({path:outfile});
-      await page.evaluate(quick => { window.confirm = () => true; window.renderBuilder(quick); }, quick);
+      await page.evaluate((quick, continuing) => { window.confirm = () => true; window.renderBuilder(quick, continuing); }, quick, continuing);
       return page;
     };
     const full = await open(false);
@@ -158,6 +179,23 @@ test('full and quick host builders upload scoped assets and save removals as eve
       error.message += '\nQuick builder screen: '+await quick.evaluate(()=>JSON.stringify(window.toasts)+' '+document.body.innerText.slice(-4500));
       throw error;
     } finally { await quick.close(); }
+
+    const continuing = await open(false, true);
+    try {
+      await click(continuing, 'Save draft');
+      await continuing.waitForFunction(() => window.saved.length === 1 && window.toasts.some(([kind]) => kind === 'success'), {polling:50});
+      await click(continuing, 'Review & Publish');
+      await continuing.waitForFunction(() => [...document.querySelectorAll('code')].some(node => node.textContent === 'https://4mpadel.co.za/calendar/fixture-tournament'), {polling:50});
+      await click(continuing, 'Publish event');
+      await continuing.waitForFunction(() => window.saved.length === 2 && window.toasts.filter(([kind]) => kind === 'success').length === 2, {polling:50});
+      await continuing.evaluate(() => window.changeStoredEvent());
+      await click(continuing, 'Save draft');
+      await continuing.waitForFunction(() => window.toasts.some(([kind,message]) => kind === 'error' && message.includes('changed')), {polling:50});
+      assert.deepEqual(await continuing.evaluate(() => window.saved.map(({id,is_visible})=>[id,is_visible])), [[41,false],[41,true]]);
+    } catch (error) {
+      error.message += '\nContinuing host builder screen: '+await continuing.evaluate(()=>JSON.stringify(window.toasts)+' '+document.body.innerText.slice(-4500));
+      throw error;
+    } finally { await continuing.close(); }
   } finally {
     await browser?.close();
     await rm(directory,{recursive:true,force:true});
