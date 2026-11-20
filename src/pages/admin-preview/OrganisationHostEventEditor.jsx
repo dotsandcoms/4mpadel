@@ -8,7 +8,7 @@ import { hasPendingDivisionAmendment } from './eventAdvancedGuard.js';
 import { loadOrganisationHostEditor, reloadSavedOrganisationHostEvent, verifyOrganisationHostBuilder, verifyOrganisationHostEdit } from './organisationHostEvents.js';
 
 export default function OrganisationHostEventEditor({
-  client, session, scopeId, organisationId, event, quick = false, onClose,
+  client, session, scopeId, organisationId, event, weeklyDraft, quick = false, onClose,
   FullBuilder = EventBuilder, QuickBuilder = QuickEventBuilder,
 }) {
   const [opened, setOpened] = useState(null);
@@ -32,7 +32,7 @@ export default function OrganisationHostEventEditor({
       })
       .catch(problem => { if (isCurrent()) setError(problem.message || 'The event editor could not be opened.'); });
     return () => { if (isCurrent()) live.current = null; };
-  }, [client, organisationId, scopeId, actorId, event]);
+  }, [client, organisationId, scopeId, actorId, event, weeklyDraft?.id]);
 
   const close = () => onClose({ refresh: attempted.current });
   if (!opened) return <EditorFrame event={event || { event_name: 'Organisation host events' }} onClose={close}>
@@ -73,10 +73,11 @@ export default function OrganisationHostEventEditor({
 
   return <Builder isOpen theme="preview" organisation={capability.organisation} organisationClubs={capability.clubs}
     editingEvent={editingEvent} reviewedWeeklySeries={snapshot?.siblings} beforeSave={beforeSave}
-    {...(!useQuick && { reloadSavedEvent })}
-    onSaved={() => {
+    {...(!useQuick && { reloadSavedEvent, allowWeeklyDrafts: true, weeklyDraft })}
+    onSaved={result => {
       saved.current = useQuick;
       attempted.current = true;
+      if (result?.weeklyDraftId) close();
     }}
     onClose={close}/>;
 }

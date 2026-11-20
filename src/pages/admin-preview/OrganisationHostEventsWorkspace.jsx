@@ -5,6 +5,7 @@ import { dateLabel } from './playersData.js';
 import { publicEventUrl } from './calendarData.js';
 import RecordLoading from './RecordLoading.jsx';
 import OrganisationHostEventEditor from './OrganisationHostEventEditor.jsx';
+import WeeklyEventDraftsDialog from './WeeklyEventDraftsDialog.jsx';
 import { loadOrganisationHosts } from './organisationHostEvents.js';
 
 const sanctionStatus = event => {
@@ -41,7 +42,8 @@ export default function OrganisationHostEventsWorkspace({
       <h1>{organisation.name} host events</h1><p>Create and manage events hosted by this organisation.</p></div>
       <div className="ap-heading-actions">
         <button className="ap-secondary" type="button" onClick={onBack}><ChevronLeft size={16}/> Organisations</button>
-        {records && <><button className="ap-secondary" type="button" onClick={() => setEditor({ quick: true })}>Quick event</button>
+        {records && <><button className="ap-secondary" type="button" onClick={() => setEditor({ draftList: true })}>Weekly drafts</button>
+          <button className="ap-secondary" type="button" onClick={() => setEditor({ quick: true })}>Quick event</button>
           <button className="ap-primary" type="button" onClick={() => setEditor({ quick: false })}><Plus size={16}/> Create event</button></>}
       </div>
     </header>
@@ -67,6 +69,8 @@ export default function OrganisationHostEventsWorkspace({
         </tr>;
       })}</tbody>
     </table>{!records.events.length && <p className="of-notice">This organisation has no events.</p>}</section>}
-    {editor && <Editor client={client} session={session} scopeId={scopeId} organisationId={organisationId} {...editor} onClose={close}/>}
+    {editor?.draftList ? <WeeklyEventDraftsDialog key={`${actorId}:${scopeId}:${organisationId}`} client={client} host={organisationId}
+      onOpen={weeklyDraft => setEditor({ weeklyDraft })} onClose={close}/>
+      : editor && <Editor client={client} session={session} scopeId={scopeId} organisationId={organisationId} {...editor} onClose={close}/>}
   </div>;
 }

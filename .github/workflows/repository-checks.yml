@@ -168,6 +168,8 @@ jobs:
           psql -X -q -d fourm_admin_imported_payment_test -f tests/adminReviewedImportedPayments.sql
           createdb fourm_admin_calendar_weekly_series_test
           psql -X -q -d fourm_admin_calendar_weekly_series_test -f tests/adminCalendarWeeklySeries.sql
+          createdb fourm_admin_weekly_event_drafts_test
+          psql -X -q -d fourm_admin_weekly_event_drafts_test -f tests/adminWeeklyEventDrafts.sql
           createdb fourm_imported_calendar_test
           psql -X -q -d fourm_imported_calendar_test -f tests/adminImportedCalendarEditing.sql
           createdb fourm_refund_retry_test

@@ -19,6 +19,8 @@ const fixture = String.raw`
     sanction_status:'approved',start_date:'2035-03-04',venue:'Fixture courts' };
   const events = [event,{...event,id:42,event_name:'Other tenant event',organisation_id:'org-b'},
     {...event,id:43,event_name:'Quick format',is_quick_event:true}];
+  const weekly = {id:'weekly-draft',organisation_id:org.id, name:'Fixture social series', start_date:'2035-03-09', weeks:5,
+    revision:1, fields:{event_name:'Fixture social series',organisation_id:org.id}};
   window.calls = [];
   window.authorised = [];
   window.render = role => {
@@ -29,6 +31,10 @@ const fixture = String.raw`
         window.calls.push([name,args]);
         if (name==='account_is_active') return {data:true};
         if (name==='is_super_admin') return {data:false};
+        if (name==='admin_weekly_event_draft') {
+          if (window.revoked || role==='staff' || args.p_host!==org.id) return {error:{message:'Current organisation owner or admin access is required.'}};
+          return {data:args.p_action==='list'?[weekly]:weekly};
+        }
         if (name==='admin_organisation_host_builder') {
           if (window.revoked || role==='staff') return {error:{message:'Current organisation owner or admin access is required.'}};
           return {data:{organisation:org, event_id:args.p_event_id ?? null, platform:false, clubs:[{id:'club-a',name:'Fixture courts'}]}};
@@ -58,7 +64,7 @@ const fixture = String.raw`
 
 const stubBuilder = type => `
   import { useState } from 'react';
-  export default function Builder({organisation,organisationClubs,editingEvent,beforeSave,onSaved,onClose}) {
+  export default function Builder({organisation,organisationClubs,editingEvent,weeklyDraft,beforeSave,onSaved,onClose}) {
     const [error,setError]=useState('');
     const confirm=async()=>{
       try {
@@ -70,7 +76,7 @@ const stubBuilder = type => `
         onSaved({eventId:editingEvent?.id||45});
       } catch (problem) {setError(problem.message);}
     };
-    return <section><h2>${type} builder</h2><p>{organisation.name}</p>
+    return <section><h2>${type} builder</h2><p>{organisation.name}</p>{weeklyDraft&&<p>Continuing {weeklyDraft.name} for {weeklyDraft.weeks} weeks</p>}
       {error&&<p role="alert">{error}</p>}
       <button onClick={confirm}>Save host event</button><button onClick={onClose}>Close host editor</button></section>;
   }
@@ -116,6 +122,11 @@ test('approved owner reaches the light host builders for the exact organisation 
       await click(owner,'Open host events');
       await owner.waitForFunction(()=>document.body.innerText.includes('Home tournament')&&document.body.innerText.includes('Federation review pending'));
       assert.equal(await owner.evaluate(()=>document.body.innerText.includes('Other tenant event')),false);
+      await click(owner,'Weekly drafts');
+      await click(owner,'Continue draft');
+      await owner.waitForFunction(()=>document.body.innerText.includes('Continuing Fixture social series for 5 weeks'));
+      assert.deepEqual(await owner.evaluate(()=>window.calls.filter(([name])=>name==='admin_weekly_event_draft').map(([,args])=>args.p_host)),['org-a','org-a']);
+      await click(owner,'Close host editor');
       await click(owner,'Create event');
       await owner.waitForFunction(()=>document.body.innerText.includes('Full builder'));
       await click(owner,'Save host event');

@@ -13,6 +13,7 @@ import CancelEventDialog from './CancelEventDialog';
 import { supabase } from '../../supabaseClient';
 import { FOURM_PUBLIC_ORIGIN } from '../../constants/site.js';
 import { reviewedWeeklyMembers, scopeWeeklyOccurrence } from '../../utils/calendarWeeklySeries.js';
+import { weeklyEventDraftRequest } from '../../utils/weeklyEventDrafts.js';
 import { uploadToGallery, uploadEventAsset } from '../../utils/eventMedia';
 import { uploadOrganisationEventAttachment } from '../../utils/organisationEventAttachments.js';
 import { useClubs } from '../../hooks/useClubs';
@@ -744,7 +745,7 @@ const ageFromDivisionName = (name) => {
     return '';
 };
 
-const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDate, organisation = null, organisationClubs, renderEditor, beforeSave, theme, reviewedWeeklySeries, reloadSavedEvent }) => {
+const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDate, organisation = null, organisationClubs, renderEditor, beforeSave, theme, reviewedWeeklySeries, reloadSavedEvent, allowWeeklyDrafts = false, weeklyDraft }) => {
     const previewTheme = theme === 'preview';
     const organisationBound = previewTheme && Boolean(organisation?.id);
     const guardedEditor = Boolean(renderEditor || previewTheme);
@@ -762,6 +763,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDa
     const [workingEvent, setWorkingEvent] = useState(null);
     const activeEvent = workingEvent;
     const isEditing = !!activeEvent?.id;
+    const weeklyDraftId = useRef(null);
+    const privateWeekly = allowWeeklyDrafts && !isEditing;
     const [step, setStep] = useState(1);
     const [form, setForm] = useState(blankForm);
     const [divisions, setDivisions] = useState([emptyDivision()]);
@@ -775,7 +778,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDa
     const [showEventDescription, setShowEventDescription] = useState(false);
     const [saving, setSaving] = useState(false);
     const saveLock = useRef(false);
-    const [loadingExisting, setLoadingExisting] = useState(Boolean(editingEvent));
+    const [loadingExisting, setLoadingExisting] = useState(Boolean(editingEvent || weeklyDraft));
     const [loadError, setLoadError] = useState('');
     const [saveError, setSaveError] = useState('');
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -1045,12 +1048,13 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDa
             return;
         }
         let disposed = false;
+        weeklyDraftId.current = weeklyDraft?.id || null;
         setShowAccessCode(false);
         setAccessCodeError('');
         setSavedAccessCode(null);
         setLoadError('');
         setSaveError('');
-        setLoadingExisting(Boolean(editingEvent));
+        setLoadingExisting(Boolean(editingEvent || weeklyDraft));
         setSeriesSiblings([]);
         setStep(1);
         licenseDefaultTouchedRef.current = false;
@@ -1088,6 +1092,13 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDa
             loadExisting(resolvedEvent, draft?.divisions || null)
                 .catch(error => { if (!disposed) setLoadError(error.message || 'Event setup could not be loaded.'); })
                 .finally(() => { if (!disposed) setLoadingExisting(false); });
+        } else if (weeklyDraft) {
+            setWorkingEvent(null);
+            regCloseTouchedRef.current = true;
+            regOpenTouchedRef.current = true;
+            loadExisting({ ...weeklyDraft.fields, is_weekly: true, weekly_count: weeklyDraft.weeks }, [])
+                .catch(error => { if (!disposed) setLoadError(error.message || 'The weekly draft could not be loaded.'); })
+                .finally(() => { if (!disposed) setLoadingExisting(false); });
         } else {
             setWorkingEvent(null);
             regCloseTouchedRef.current = false;
@@ -1118,7 +1129,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDa
         return () => { disposed = true; coverUploadRef.current = null; };
         // Only re-init when the modal opens or a different event is loaded — not after in-session saves.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen, editingEvent?.id, initialDate]);
+    }, [isOpen, editingEvent?.id, weeklyDraft?.id, initialDate]);
 
     const parsePrizeBreakdownField = (raw) => {
         if (Array.isArray(raw)) return raw;
@@ -1220,7 +1231,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDa
             rankedin_id: ev.rankedin_id ? String(ev.rankedin_id) : '',
             rankedin_url: ev.rankedin_url || '',
             is_weekly: !!ev.is_weekly,
-            weekly_count: 8,
+            weekly_count: ev.weekly_count ?? 8,
             weekly_payment_policy: ev.weekly_payment_policy === 'allow_reserve' ? 'allow_reserve' : 'pay_now',
             series_id: ev.series_id || null,
             entry_fee: ev.entry_fee != null && ev.entry_fee !== '' ? String(ev.entry_fee) : '',
@@ -1307,6 +1318,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDa
      * @param {boolean} enabled
      */
     const setWeeklyMode = (enabled) => {
+        if (!enabled && weeklyDraft) return;
         setForm((prev) => {
             if (!enabled) {
                 if (isEditing) {
@@ -1844,8 +1856,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDa
             if (!form.start_time) { toast.error('Start time is required for weekly events'); return false; }
             if (!isEditing) {
                 const count = Number(form.weekly_count);
-                if (!Number.isFinite(count) || count < 2 || count > 26) {
-                    toast.error('Weekly count must be between 2 and 26');
+                if (!Number.isInteger(count) || count < 2 || count > 26) {
+                    toast.error('Choose a whole number between 2 and 26 weeks');
                     return false;
                 }
             }
@@ -1937,15 +1949,15 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDa
     };
 
     const validateDraft = () => {
-        if (!validateAccessCode()) return false;
+        if (!(privateWeekly && form.is_weekly) && !validateAccessCode()) return false;
         if (!form.event_name.trim()) { toast.error('Event name is required'); return false; }
         if (!form.start_date) { toast.error('Start date is required'); return false; }
         if (form.is_weekly) {
             if (!form.start_time) { toast.error('Start time is required for weekly events'); return false; }
             if (!isEditing) {
                 const count = Number(form.weekly_count);
-                if (!Number.isFinite(count) || count < 2 || count > 26) {
-                    toast.error('Weekly count must be between 2 and 26');
+                if (!Number.isInteger(count) || count < 2 || count > 26) {
+                    toast.error('Choose a whole number between 2 and 26 weeks');
                     return false;
                 }
             }
@@ -1967,6 +1979,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDa
 
     const validatePublish = () => {
         if (!validateDraft()) return false;
+        if (privateWeekly && form.is_weekly && !validateAccessCode()) return false;
         if (!form.registration_opens_at) { toast.error('Registration opens date is required'); return false; }
         if (!form.registration_closes_at) { toast.error('Registration closes date is required'); return false; }
         if (!form.partner_requirement) { toast.error('Partner requirement is required'); return false; }
@@ -2016,8 +2029,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDa
             if (!form.start_time) errors.push('Start time is required for weekly events');
             if (!isEditing) {
                 const count = Number(form.weekly_count);
-                if (!Number.isFinite(count) || count < 2 || count > 26) {
-                    errors.push('Weekly count must be between 2 and 26');
+                if (!Number.isInteger(count) || count < 2 || count > 26) {
+                    errors.push('Choose a whole number between 2 and 26 weeks');
                 }
             }
             const fee = resolveWeeklyEntryFee();
@@ -2583,6 +2596,22 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDa
             const checkpoint = await authorizeMutation('save', payload, mode);
             await checkpoint();
             mutationAttempted = true;
+            if (privateWeekly && form.is_weekly) {
+                const publishing = mode === 'publish';
+                const id = (weeklyDraftId.current ||= crypto.randomUUID());
+                const weeks = Number(form.weekly_count);
+                const revision = weeklyDraft?.revision ?? 0;
+                const saved = await weeklyEventDraftRequest(supabase, publishing ? 'publish' : 'save', {
+                    host: organisation?.id, id, revision, weeks,
+                    fields: { ...payload, entry_fee: resolveWeeklyEntryFee(), is_visible: !!form.is_visible },
+                    code: publishing && form.require_access_code ? form.access_code.trim() : undefined,
+                });
+                toast.success(publishing ? `Created ${saved.published_ids.length} weekly events` : 'Weekly draft saved');
+                const result = { weeklyDraftId: id, eventId: saved.published_ids?.[0], seriesCount: saved.published_ids?.length, mode };
+                onSaved?.(result);
+                if (!onSaved) onClose?.();
+                return { success: true, mutationAttempted: true, ...result };
+            }
             let eventId = activeEvent?.id;
             const applyingPendingAmendment = !!activeEvent?.pending_changes?.payload
                 && ['pending', 'rejected'].includes(activeEvent.pending_changes_status);
@@ -2956,6 +2985,14 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDa
                         {previewTheme && (loadingExisting || loadError || saveError) && <p role="status">{loadError || saveError || 'Loading event settings…'}</p>}
                         {step === 1 && (
                             <div className="space-y-4">
+                                {privateWeekly && <label className="flex items-start gap-3 rounded-xl border border-white/10 p-4">
+                                    <input type="checkbox" className="mt-1 h-5 w-5 accent-padel-green" checked={form.is_weekly}
+                                        disabled={Boolean(weeklyDraft)} onChange={event => setWeeklyMode(event.target.checked)} />
+                                    <span><strong className="block text-sm">Weekly social event</strong>
+                                        <span className="mt-1 block text-xs text-gray-500">{form.is_weekly
+                                            ? 'Drafts are private. Calendar visibility applies when you publish the series.'
+                                            : 'Set up a series of social events on the same day each week.'}</span></span>
+                                </label>}
                                 {isEditing && form.is_weekly && (
                                     <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3">
                                         <p className="text-xs font-bold text-sky-300 flex items-center gap-2">
@@ -3235,33 +3272,33 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDa
                                                     name="organiser_name"
                                                     value={form.organiser_name}
                                                     onChange={(e) => {
-                                                        if (organisation) {
+                                                        if (organisation || weeklyDraft) {
                                                             setForm((prev) => ({ ...prev, organiser_name: e.target.value }));
                                                         } else {
                                                             handleOrganiserNameChange(e.target.value);
                                                         }
                                                     }}
-                                                    onFocus={() => { if (!organisation && !form.organisation_id) setOrgSearchOpen(true); }}
-                                                    placeholder={organisation ? undefined : 'Select an organisation or type a custom name…'}
+                                                    onFocus={() => { if (!organisation && !weeklyDraft && !form.organisation_id) setOrgSearchOpen(true); }}
+                                                    placeholder={organisation || weeklyDraft ? undefined : 'Select an organisation or type a custom name…'}
                                                     autoComplete="off"
                                                     className={inputClass}
-                                                    readOnly={!!organisation}
+                                                    readOnly={!!organisation || Boolean(weeklyDraft && form.organisation_id)}
                                                 />
                                                 {!organisation && form.organisation_id && (
                                                     <div className="mt-1.5 flex items-center justify-between gap-2">
                                                         <p className="text-[11px] text-padel-green font-bold">
                                                             Linked to organisation page
                                                         </p>
-                                                        <button
+                                                        {!weeklyDraft && <button
                                                             type="button"
                                                             onClick={clearOrganisationLink}
                                                             className="text-[10px] font-black uppercase tracking-wider text-gray-500 hover:text-red-400 transition-colors"
                                                         >
                                                             Unlink
-                                                        </button>
+                                                        </button>}
                                                     </div>
                                                 )}
-                                                {!organisation && !form.organisation_id && (
+                                                {!organisation && !weeklyDraft && !form.organisation_id && (
                                                     <p className="text-[11px] text-gray-500 mt-1">
                                                         Pick from the list to link their page, or type a custom organiser name.
                                                     </p>
@@ -3299,6 +3336,17 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDa
                                                     </div>
                                                 )}
                                             </div>
+                                            {form.is_weekly && <>
+                                                <label className={labelClass}>Contact person
+                                                    <input name="contact_details" value={form.contact_details} onChange={handleInput} className={inputClass} />
+                                                </label>
+                                                <label className={labelClass}>Contact email
+                                                    <input type="email" name="organiser_email" value={form.organiser_email} onChange={handleInput} className={inputClass} />
+                                                </label>
+                                                <label className={labelClass}>Contact phone
+                                                    <input type="tel" name="organiser_phone" value={form.organiser_phone} onChange={handleInput} className={inputClass} />
+                                                </label>
+                                            </>}
                                             <div className="md:col-span-2">
                                                 <label className={labelClass}>Organisation Logo</label>
                                                 {(organisation || form.organisation_id) ? (
@@ -3697,7 +3745,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDa
                                             </div>
                                             {accessCodeError && <p id="create-event-access-code-error" role="alert" className="mt-2 text-xs text-red-400">{accessCodeError}</p>}
                                             <p id="create-event-access-code-help" className="mt-2 text-[11px] leading-5 text-gray-500">Use 6–64 characters. The code is case-sensitive and cannot be viewed after closing this editor.</p>
-                                            {form.is_weekly && <p className="mt-1 text-[11px] leading-5 text-gray-500">Access-code changes apply to every weekly event in this series.</p>}
+                                            {form.is_weekly && <p className="mt-1 text-[11px] leading-5 text-gray-500">{privateWeekly
+                                                ? 'Enter the code when you publish. It will apply to every week.'
+                                                : 'Access-code changes apply to every weekly event in this series.'}</p>}
                                             {savedAccessCode && renderSavedAccessCode()}
                                         </div>
                                     )}
@@ -5290,12 +5340,15 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDa
                                     savedAccessCode ? renderSavedAccessCode() : (
                                         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
                                             <p className="text-sm font-bold text-amber-100">Save the access code securely</p>
-                                            <p className="mt-1 text-xs leading-relaxed text-amber-100/80">{hasExistingAccessCode && !form.access_code.trim() ? 'The current access code will be kept.' : 'You can copy the code here after saving. Once this editor closes, you can replace the code by editing the event.'}</p>
+                                            {privateWeekly && form.is_weekly ? <button type="button" className="ap-secondary mt-2"
+                                                disabled={!form.access_code.trim()} onClick={() => copyAccessCode(form.access_code.trim())}>
+                                                <Copy size={14} /> Copy access code
+                                            </button> : <p className="mt-1 text-xs leading-relaxed text-amber-100/80">{hasExistingAccessCode && !form.access_code.trim() ? 'The current access code will be kept.' : 'You can copy the code here after saving. Once this editor closes, you can replace the code by editing the event.'}</p>}
                                         </div>
                                     )
                                 )}
 
-                                <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                {!(privateWeekly && form.is_weekly) && <div className="rounded-xl border border-white/10 bg-black/20 p-4">
                                     <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Event link</p>
                                     <div className="mt-2 flex items-center gap-2">
                                         <code className="min-w-0 flex-1 truncate rounded-lg bg-black/30 px-3 py-2 text-xs text-gray-300">{publicEventLink}</code>
@@ -5308,7 +5361,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDa
                                             }
                                         }} aria-label="Copy event link" className="rounded-lg border border-white/10 p-2.5 text-gray-300 hover:border-padel-green/40 hover:text-padel-green"><Copy size={16} /></button>
                                     </div>
-                                </div>
+                                </div>}
 
                                 {organisation && (
                                     <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl px-4 py-3 text-xs text-padel-green font-semibold">

@@ -38,3 +38,5 @@
 .cw-bulk-rankedin-list label input { width: auto; min-height: 0; }
 .cw-bulk-rankedin-list small { display: block; color: var(--ap-muted); }
 .cw-bulk-rankedin-list li { margin-inline-start: 18px; }
+.cw-weekly-draft { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; padding:14px 0; border-top:1px solid var(--ap-line); }
+.cw-weekly-draft small { display:block; margin-top:4px; color:var(--ap-muted); }
