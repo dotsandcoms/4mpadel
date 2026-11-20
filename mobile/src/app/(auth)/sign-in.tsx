@@ -14,6 +14,7 @@ import {
 } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -87,7 +88,7 @@ export default function SignInScreen() {
   const [passwordTouched, setPasswordTouched] = useState(false);
   const [confirmTouched, setConfirmTouched] = useState(false);
   const [attempted, setAttempted] = useState(false);
-  const [emailOpen, setEmailOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(intent === 'existing-profile');
   const [appleReady, setAppleReady] = useState(false);
   const [toast, setToast] = useState<{ id: number; message: string; kind: ToastKind } | null>(
     null
@@ -103,6 +104,13 @@ export default function SignInScreen() {
   useEffect(() => {
     isAppleAvailable().then(setAppleReady);
   }, []);
+
+  useEffect(() => {
+    if (intent === 'existing-profile') {
+      setMode('signin');
+      setEmailOpen(true);
+    }
+  }, [intent]);
 
   /**
    * One handler for all three providers. A cancelled sheet is a normal user
@@ -190,6 +198,23 @@ export default function SignInScreen() {
     }
     pendingPasswordFocus.current = true;
     setEmailOpen(true);
+  }
+
+  function confirmApplePrivateRelay() {
+    return new Promise<boolean>((resolve) => {
+      Alert.alert(
+        'Already have a 4M Padel profile?',
+        'Sign in the way you usually do, then link Apple in Account & settings.',
+        [
+          { text: 'Use my existing account', style: 'cancel', onPress: () => {
+            setMode('signin');
+            setEmailOpen(true);
+            resolve(false);
+          } },
+          { text: "I'm new to 4M Padel", onPress: () => resolve(true) },
+        ]
+      );
+    });
   }
 
   useEffect(() => {
@@ -314,7 +339,7 @@ export default function SignInScreen() {
           {appleReady ? (
             <FocusRing>
               <PressableScale
-                onPress={() => run('apple', signInWithApple)}
+                onPress={() => run('apple', () => signInWithApple(confirmApplePrivateRelay))}
                 disabled={!!busy}
                 accessibilityRole="button"
                 accessibilityState={{ busy: busy === 'apple', disabled: !!busy }}

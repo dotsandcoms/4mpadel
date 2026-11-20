@@ -1,7 +1,8 @@
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
+import { Ionicons } from '@expo/vector-icons';
 import { type ReactNode, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { HomeAction } from './home-action';
 import { EventArtwork } from './event-artwork';
 import { EventNotificationBell } from './events/follow-tournament';
@@ -9,7 +10,8 @@ import { SwipeCards } from './swipe-cards';
 import { SpotlightCountdown } from './spotlight-countdown';
 import { eventDayParts, eventLocation, firstNameOf, formatEventRange, greetingForNow, resolveFeaturedCta, resolveScheduleEntryCta, type CalendarEvent, type HomePlayer } from '@/lib/home';
 import { type FeedPlayer } from '@/lib/following-feed';
-import { proDate, proRound, type ProMatch, type ProTournament } from '@/lib/pro-padel';
+import type { HomeWeather } from '@/lib/home-weather';
+import { isProFinal, proDate, proRound, type ProMatch, type ProTournament } from '@/lib/pro-padel';
 import { tourMatchesToday } from '@/lib/home-tour-presentation';
 import { tourLevelLabel, tourSource } from '@/lib/home-feed';
 import { playerCountryFlag } from '@/lib/player-hub';
@@ -24,22 +26,47 @@ export function FeedPortrait({ name, uri, size = 40 }: { name: string; uri?: str
   </View>;
 }
 
-export function HomeIdentity({ player, loading, onProfile, onRankings }: { player?: HomePlayer | null; loading: boolean; onProfile: () => void; onRankings: () => void }) {
+const weatherIcons = {
+  Clear: 'sunny-outline', Sunny: 'sunny-outline', 'Partly Cloudy': 'partly-sunny-outline', Overcast: 'cloud-outline',
+  Fog: 'cloud-outline', Rain: 'rainy-outline', Snow: 'snow-outline', Thunderstorm: 'thunderstorm-outline',
+} as const;
+
+export function HomeIdentity({ player, loading, onProfile, onRankings, location, weather, onEnableLocation, now }: {
+  player?: HomePlayer | null; loading: boolean; onProfile: () => void; onRankings: () => void;
+  location: string | null; weather: HomeWeather | null; onEnableLocation?: () => void; now: Date;
+}) {
   const { width, fontScale } = useWindowDimensions();
   const stacked = width < 360 || fontScale > 1.3;
-  return <View style={[s.identity, stacked && { flexDirection: 'column', alignItems: 'stretch' }]}>
-    <Pressable accessibilityRole="button" accessibilityLabel="View my profile" onPress={onProfile} style={[s.identityPerson, stacked && { flex: undefined }]}>
-      <FeedPortrait name={player?.name || 'Player'} uri={player?.image_url} size={48} />
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={s.meta}>{greetingForNow()}</Text>
-        <Text numberOfLines={1} style={s.name}>{loading && !player ? '…' : firstNameOf(player?.name) || 'Your padel'}</Text>
+  const locationContent = <>
+    <Ionicons name="location-outline" color={location ? b.muted : b.accent} size={14} accessible={false} />
+    <Text numberOfLines={2} style={[s.locationText, !location && { color: b.accent }]}>{location || 'Use location'}</Text>
+  </>;
+  const ranking = player && <Pressable accessibilityRole="button" accessibilityLabel={`SAPA rankings. Rank ${player.rank_label || 'unranked'}, ${player.points == null ? 'unavailable' : player.points} points`} onPress={onRankings} style={s.ranking}>
+    <View style={s.stat}><Text style={s.statValue}>{player.rank_label && player.rank_label !== 'Unranked' ? `#${player.rank_label.replace(/^#/, '')}` : '—'}</Text><Text style={s.statLabel}>SAPA rank</Text></View>
+    <View style={s.statDivider} />
+    <View style={s.stat}><Text style={s.statValue}>{player.points == null ? '—' : Number(player.points).toLocaleString('en-ZA')}</Text><Text style={s.statLabel}>Points</Text></View>
+  </Pressable>;
+  return <View style={[s.identity, stacked && s.identityStacked]}>
+    <View style={s.identityLead}>
+      <Pressable accessibilityRole="button" accessibilityLabel="View my profile" onPress={onProfile}>
+        <FeedPortrait name={player?.name || 'Player'} uri={player?.image_url} size={48} />
+      </Pressable>
+      <View style={s.identityDetails}>
+        <Text style={s.meta}>{greetingForNow(now)}</Text>
+        <View style={s.nameRow}>
+          <Pressable accessible={false} onPress={onProfile} style={s.nameButton}>
+            <Text numberOfLines={1} style={s.name}>{loading && !player ? '…' : firstNameOf(player?.name) || 'Your padel'}</Text>
+          </Pressable>
+          {weather && <View accessible accessibilityLabel={`${weather.temp} degrees Celsius, ${weather.condition.toLowerCase()}`} style={s.weather}>
+            <Ionicons name={weather.condition === 'Clear' && !weather.daylight ? 'moon-outline' : weatherIcons[weather.condition]} size={19} color={b.premium} accessible={false} />
+            <Text style={s.weatherTemp}>{weather.temp}°C</Text>
+          </View>}
+        </View>
+        {onEnableLocation ? <Pressable accessibilityRole="button" accessibilityLabel={location ? `${location}. Use device location` : 'Use location'} accessibilityHint="Shows your city and uses an approximate area for local weather" onPress={onEnableLocation} hitSlop={{ bottom: 10 }} style={[s.location, s.locationAction]}>{locationContent}</Pressable>
+          : location && <View style={s.location}>{locationContent}</View>}
       </View>
-    </Pressable>
-    {player && <Pressable accessibilityRole="button" accessibilityLabel={`SAPA rankings. Rank ${player.rank_label || 'unranked'}, ${player.points == null ? 'unavailable' : player.points} points`} onPress={onRankings} style={s.ranking}>
-      <View style={s.stat}><Text style={s.statValue}>{player.rank_label && player.rank_label !== 'Unranked' ? `#${player.rank_label.replace(/^#/, '')}` : '—'}</Text><Text style={s.statLabel}>SAPA rank</Text></View>
-      <View style={s.statDivider} />
-      <View style={s.stat}><Text style={s.statValue}>{player.points == null ? '—' : Number(player.points).toLocaleString('en-ZA')}</Text><Text style={s.statLabel}>Points</Text></View>
-    </Pressable>}
+    </View>
+    {ranking}
   </View>;
 }
 
@@ -66,8 +93,10 @@ function SourceTag({ label, live = false }: { label: string; live?: boolean }) {
 const artwork = (event: CalendarEvent) => event.custom_image_url || event.poster_image_url || event.image_url;
 
 type ScorePlayer = { name: string; photo?: string | null; country?: string | null };
-function ScoreTeam({ players, scores, winner, overlap = false }: { players: ScorePlayer[]; scores: (number | string | null)[]; winner: boolean; overlap?: boolean }) {
-  return <View style={[s.scoreTeam, winner && s.scoreTeamWinner]}>
+function ScoreTeam({ players, scores, winner, final = false, overlap = false }: {
+  players: ScorePlayer[]; scores: (number | string | null)[]; winner: boolean; final?: boolean; overlap?: boolean;
+}) {
+  return <View style={[s.scoreTeam, winner && (final ? s.finalWinner : s.scoreTeamWinner)]}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 140 }}>
       {overlap && <View style={{ flexDirection: 'row', flexShrink: 0 }}>
         {players.slice(0, 2).map((player, index) => <View key={`${player.name}:${index}`} style={{ marginLeft: index ? -8 : 0, borderWidth: 2, borderColor: winner ? b.surface : b.elevated, borderRadius: 20, zIndex: 2 - index }}><FeedPortrait name={player.name} uri={player.photo} size={28} /></View>)}
@@ -176,8 +205,8 @@ export function LocalResults({ events, onOpen, onWinners }: { events: CalendarEv
 }
 
 export function MediaRail({ albums, onOpen }: { albums: MediaAlbum[]; onOpen: (album: MediaAlbum) => void }) {
-  return <FlatList horizontal data={albums.filter(album => !!album.cover_image_url).slice(0, 6)} keyExtractor={album => album.id} showsHorizontalScrollIndicator={false} contentContainerStyle={s.rail} renderItem={({ item: album }) => <Pressable accessibilityRole="button" accessibilityLabel={`Photos, ${album.title}`} onPress={() => onOpen(album)} style={{ width: 232, gap: 8 }}>
-    <EventArtwork uri={album.cover_image_url} style={{ width: 232, height: 144, borderRadius: 12 }} />
+  return <SwipeCards maxCardWidth={232} items={albums.filter(album => !!album.cover_image_url).slice(0, 6)} itemKey={album => album.id} renderCard={album => <Pressable accessibilityRole="button" accessibilityLabel={`Photos, ${album.title}`} onPress={() => onOpen(album)} style={{ gap: 8 }}>
+    <EventArtwork uri={album.cover_image_url} style={{ width: '100%', height: 144, borderRadius: 12 }} />
     <Text numberOfLines={2} style={s.rowTitle}>{album.title}</Text><Text style={s.small}>{album.photographer_name || 'Around the courts'}</Text>
   </Pressable>} />;
 }
@@ -200,17 +229,28 @@ function TourEventHero({ event, onOpen, live = false, matches = [] }: { event: P
   </View>;
 }
 export function TourSpotlight({ events, onOpen }: { events: ProTournament[]; onOpen: (event: ProTournament) => void }) {
-  return <SwipeCards controls items={events} itemKey={event => String(event.id)} renderCard={event => <TourEventHero event={event} onOpen={onOpen} />} />;
+  return <SwipeCards items={events} itemKey={event => String(event.id)} renderCard={event => <TourEventHero event={event} onOpen={onOpen} />} />;
 }
 export function TourLiveRail({ events, matches = [], onOpen }: { events: ProTournament[]; matches?: ProMatch[]; onOpen: (event: ProTournament) => void }) {
-  return <SwipeCards controls items={events.slice(0, 6)} itemKey={event => String(event.id)} renderCard={event => <TourEventHero event={event} matches={matches} live onOpen={onOpen} />} />;
+  return <SwipeCards items={events.slice(0, 6)} itemKey={event => String(event.id)} renderCard={event => <TourEventHero event={event} matches={matches} live onOpen={onOpen} />} />;
 }
 
 function TourResult({ match, current, onOpen }: { match: ProMatch; current: boolean; onOpen: () => void }) {
   const portraits = useHomeResultPortraits(match.teams.flat().map(player => player.id), current);
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${match.tournamentName}, ${proRound(match)}. ${match.teams.map((team, side) => `${team.map(player => player.name).join(' and ')}${match.winner === `team_${side + 1}` ? ', winners' : ''}, ${match.score.map(set => set[side] ?? '–').join(', ')}`).join('. ')}`} onPress={onOpen} style={s.matchCard}>
-    <View style={[s.tagRow, { alignItems: 'flex-start' }]}><Text numberOfLines={2} style={[s.meta, { flex: 1 }]}>{match.tournamentName} · {proRound(match)}</Text><Text style={s.small}>{proDate(match.playedAt)}</Text></View>
-    <View style={{ gap: 4 }}>{match.teams.map((team, side) => <ScoreTeam key={side} players={team.map(player => ({ name: player.name, photo: portraits[player.id]?.photoUrl, country: portraits[player.id]?.nationality || player.nationality }))} scores={match.score.map(set => set[side])} winner={match.winner === `team_${side + 1}`} />)}</View>
+  const final = isProFinal(match);
+  const round = final ? 'Final' : proRound(match);
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${match.tournamentName}, ${round}. ${match.teams.map((team, side) => `${team.map(player => player.name).join(' and ')}${match.winner === `team_${side + 1}` ? ', winners' : ''}, ${match.score.map(set => set[side] ?? '–').join(', ')}`).join('. ')}`} onPress={onOpen} style={[s.matchCard, final && s.finalCard]}>
+    <View style={[s.tagRow, { alignItems: 'flex-start' }]}>
+      <View style={s.matchHeading}>
+        {final && <View style={s.finalBadge}>
+          <SymbolView name={{ ios: 'trophy.fill', android: 'trophy', web: 'trophy' }} size={14} tintColor="#775316" />
+          <Text style={s.finalBadgeText}>Final</Text>
+        </View>}
+        <Text numberOfLines={2} style={final ? s.rowTitle : s.meta}>{match.tournamentName}{final ? '' : ` · ${round}`}</Text>
+      </View>
+      <Text style={s.small}>{proDate(match.playedAt)}</Text>
+    </View>
+    <View style={{ gap: 4 }}>{match.teams.map((team, side) => <ScoreTeam key={side} players={team.map(player => ({ name: player.name, photo: portraits[player.id]?.photoUrl, country: portraits[player.id]?.nationality || player.nationality }))} scores={match.score.map(set => set[side])} winner={match.winner === `team_${side + 1}`} final={final} />)}</View>
     <Text style={[s.date, { fontWeight: '600' }]}>View match →</Text>
   </Pressable>;
 }
@@ -236,14 +276,23 @@ export function TourCalendar({ events, onOpen }: { events: ProTournament[]; onOp
 }
 
 const s = StyleSheet.create({
-  identity: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 16, paddingBottom: 20, flexShrink: 0, minHeight: 88 },
-  identityPerson: { flex: 1, minWidth: 0, flexDirection: 'row', gap: 12, alignItems: 'center', minHeight: 48 },
+  identity: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 14, flexShrink: 0, minHeight: 88 },
+  identityStacked: { flexDirection: 'column', alignItems: 'stretch' },
+  identityLead: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  identityDetails: { flex: 1, minWidth: 0 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
+  location: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  locationAction: { minHeight: 24 },
+  locationText: { flexShrink: 1, fontSize: 11, lineHeight: 15, color: b.muted },
+  weather: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0, marginEnd: 8, paddingStart: 8, borderStartWidth: StyleSheet.hairlineWidth, borderStartColor: b.edge },
+  weatherTemp: { color: b.premium, fontSize: 13, fontWeight: '700' },
   portrait: { flexShrink: 0, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: b.surface, borderWidth: 1, borderColor: '#0000001A' },
+  nameButton: { flexShrink: 1, minWidth: 0 },
   name: { color: b.premium, fontSize: 23, lineHeight: 28, fontWeight: '600', letterSpacing: -.5 },
-  ranking: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderRadius: 12, backgroundColor: b.surface },
-  stat: { alignItems: 'center', gap: 2, paddingHorizontal: 8 },
+  ranking: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4, borderRadius: 12, backgroundColor: b.surface },
+  stat: { alignItems: 'center', gap: 2, paddingHorizontal: 6 },
   statValue: { fontSize: 16, fontWeight: '600', color: b.premium, fontVariant: ['tabular-nums'] },
-  statLabel: { fontSize: 11, color: b.muted },
+  statLabel: { fontSize: 10, color: b.muted },
   statDivider: { width: StyleSheet.hairlineWidth, height: 24, backgroundColor: b.edge },
   section: { marginBottom: 24 },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, marginBottom: 8 },
@@ -263,7 +312,6 @@ const s = StyleSheet.create({
   spotlightName: { fontSize: 16, lineHeight: 21, color: b.premium, fontWeight: '600', letterSpacing: -.2 },
   date: { color: b.accent, fontSize: 13, lineHeight: 18, fontWeight: '500' },
   spotlightFooter: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: b.edge, paddingTop: 4, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  rail: { gap: 12 },
   nowCard: { flexDirection: 'row', gap: 12, padding: 16, borderRadius: 12, backgroundColor: '#08251D', overflow: 'hidden', borderLeftWidth: 3, borderLeftColor: '#D12F3B' },
   rowTitle: { fontSize: 14, lineHeight: 19, fontWeight: '600', color: b.premium },
   followMini: { padding: 10, gap: 4, alignItems: 'center', backgroundColor: b.elevated, borderRadius: 12 },
@@ -281,6 +329,11 @@ const s = StyleSheet.create({
   liveContent: { flex: 1, padding: 20, gap: 16 },
   liveTitle: { color: '#FFFFFF', fontSize: 24, lineHeight: 29, fontWeight: '600', letterSpacing: -.4 },
   matchCard: { padding: 16, gap: 16, backgroundColor: b.elevated, borderRadius: 12 },
+  matchHeading: { flex: 1, minWidth: 0, gap: 6 },
+  finalCard: { borderWidth: 1, borderColor: '#C79C44' },
+  finalBadge: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#FFF0CC', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  finalBadgeText: { fontSize: 12, fontWeight: '700', color: '#775316' },
+  finalWinner: { backgroundColor: '#FFF6DD' },
   scoreTeam: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, padding: 8, borderRadius: 8 },
   scoreTeamWinner: { backgroundColor: b.surface },
   scorePlayer: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 18, color: b.premium },

@@ -4,7 +4,9 @@ import { fetchProfileDetails } from '@/lib/profile-details';
 import { homeFeedCache } from '@/lib/home-feed-cache';
 import { fetchFeatured, fetchHappeningNow, fetchPendingPayments, fetchPlayer, fetchRecentResults, fetchSchedule } from '@/lib/home';
 import { fetchFollowingFeed } from '@/lib/following-feed';
+import { fetchPublicClubArea } from '@/lib/clubs';
 import { fetchMediaAlbums } from '@/lib/media';
+import { fetchPremierNews } from '@/lib/premier-news';
 import { fetchProSnapshot } from '@/lib/pro-padel';
 import { fetchPlayerMatches } from '@/lib/matches';
 import { fetchLiveTournaments } from '@/lib/pro-padel-live';
@@ -62,10 +64,13 @@ export function useHomeFeed(source: HomeSource, enabled = true) {
   }, []);
   const email = owner?.email ?? '';
   const signedIn = owner?.id != null && email !== '';
-  const profile = useHomeResource(owner, screenActive, 'profile:sapa-main-v1', 60000, async () => {
+  const profile = useHomeResource(owner, screenActive, 'profile:sapa-main-v2', 60000, async () => {
     const player = await fetchPlayer(email, true);
     return player ? { ...player, winLoss: null } : null;
   }, signedIn);
+  const clubId = String(profile.data?.club_id ?? ''), clubName = profile.data?.home_club?.trim() ?? '';
+  const clubArea = useHomeResource(owner, screenActive, `home-club-area:${JSON.stringify([clubId, clubName])}`, 300000,
+    () => fetchPublicClubArea(clubId, clubName), signedIn && !!(clubId || clubName));
   const completionPlayerId = profile.data?.id;
   const completion = useHomeResource(owner, screenActive, `profile-completion:${completionPlayerId ?? ''}`, 30000, async () => {
     if (!completionPlayerId) throw new Error('Profile is not ready.');
@@ -82,6 +87,7 @@ export function useHomeFeed(source: HomeSource, enabled = true) {
   const happening = useHomeResource(owner, active, 'happening', 60000, () => fetchHappeningNow(true), local);
   const results = useHomeResource(owner, active, 'results:all-divisions', 180000, () => fetchRecentResults(true), local);
   const media = useHomeResource(owner, active, 'media', 300000, () => fetchMediaAlbums(undefined, 6), local);
+  const news = useHomeResource(owner, active, 'premier-news', 900000, () => fetchPremierNews().then(page => page.articles), !local);
   const tour = useHomeResource(owner, active, 'tour', 120000, () => fetchProSnapshot('tour'), !local);
   const fixtures = useHomeResource(owner, active, 'fixtures', 60000, () => fetchProSnapshot('fixtures'), !local);
   const live = useHomeResource(owner, active, 'live', 60000, fetchLiveTournaments, !local);
@@ -95,8 +101,8 @@ export function useHomeFeed(source: HomeSource, enabled = true) {
     return () => clearInterval(timer);
   }, [active, local, live.refresh]);
   const refresh = async () => {
-    await Promise.allSettled([profile, completion, schedule, payments, following, matches,
-      ...(local ? [spotlight, happening, results, media] : [tour, fixtures, live, fip])].map(resource => resource.refresh(true)));
+    await Promise.allSettled([profile, clubArea, completion, schedule, payments, following, matches,
+      ...(local ? [spotlight, happening, results, media] : [tour, fixtures, live, fip, news])].map(resource => resource.refresh(true)));
   };
-  return { completion, owner, active, signedIn, profile, schedule, payments, following, matches, spotlight, happening, results, media, tour, fixtures, live, fip, tourPresentation, refresh };
+  return { completion, owner, active, signedIn, profile, clubArea, schedule, payments, following, matches, spotlight, happening, results, media, news, tour, fixtures, live, fip, tourPresentation, refresh };
 }

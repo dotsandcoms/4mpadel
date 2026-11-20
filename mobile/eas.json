@@ -4,8 +4,12 @@
   },
   "build": {
     "preview": {
+      "channel": "preview",
       "autoIncrement": true,
       "distribution": "internal",
+      "ios": {
+        "image": "macos-tahoe-26.6-xcode-27.2"
+      },
       "android": {
         "buildType": "apk"
       },
@@ -20,9 +24,13 @@
       }
     },
     "production": {
+      "channel": "production",
       "distribution": "store",
       "environment": "production",
       "autoIncrement": true,
+      "ios": {
+        "image": "macos-tahoe-26.6-xcode-27.2"
+      },
       "android": {
         "buildType": "app-bundle"
       },

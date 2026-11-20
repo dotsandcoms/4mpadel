@@ -98,4 +98,8 @@ export function proDate(value?: string | null, time = false) {
     ...(time ? { hour: '2-digit', minute: '2-digit' } as const : {}) }).format(new Date(value)) + (time ? ' SAST' : '');
 }
 export const proRound = (m: ProMatch) => m.roundName || ({ 1: 'Final', 2: 'Semi-final', 4: 'Quarter-final' }[m.round] ?? `Round of ${m.round * 2}`);
+export function isProFinal(match: Pick<ProMatch, 'round' | 'roundName'>) {
+  const label = match.roundName?.trim();
+  return label ? /^(?:grand\s+)?finals?$/i.test(label) : match.round === 1;
+}
 export const proStatus = (m: ProMatch) => ({ live: 'Live now', finished: 'Final score', retired: 'Retirement', walkover: 'Walkover', bye: 'Bye', ended: 'Unconfirmed score', scheduled: 'Scheduled at last update' }[m.status] ?? 'Result pending');
