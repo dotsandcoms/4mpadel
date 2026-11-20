@@ -7,6 +7,46 @@ end $$;
 \ir ../mobile/tests/paid-registration-checkout.sql
 reset role;
 select set_config('request.jwt.claims','{}',false);
+
+-- The callback returns a fresh finalization only once. The covered entry and
+-- its partner status are written by the database before the worker returns.
+insert into public.calendar(id,event_name,is_manual,is_visible,sanction_status,payment_method,allow_payments,
+  start_date,registration_opens_at,registration_closes_at,entry_fee)
+values(209,'Callback replay fixture',true,true,'approved','platform',true,current_date+3,now()-interval '1 day',now()+interval '2 days',100);
+insert into public.tournament_divisions(id,event_id,name,entry_fee,entry_limit,license_required)
+values('60000000-0000-0000-0000-000000000209',209,'Open',100,8,false);
+insert into public.event_registrations(event_id,division_id,division,email,full_name,registered_by,partner_email,payment_status,payment_method)
+values (209,'60000000-0000-0000-0000-000000000209','Open','actor1@example.test','Original player','actor1@example.test','actor2@example.test','pending','eft'),
+       (209,'60000000-0000-0000-0000-000000000209','Open','actor2@example.test','Partner','actor2@example.test','actor1@example.test','paid','eft');
+set role authenticated;
+select pg_temp.identity(1);
+insert into public.payments(player_id,event_id,amount,status,payment_type,reference,metadata)
+values(1,209,100,'processing','event_entry_fee','verified-callback-replay',
+  '{"source":"manual_event","registrant_email":"actor1@example.test","covers":[{"type":"entry","email":"actor1@example.test","division":"Open"}],"registration_rows":[]}');
+set role service_role;
+select set_config('request.jwt.claims','{"role":"service_role"}',false);
+update public.payments set status='success' where reference='verified-callback-replay';
+select pg_temp.expect((select (public.finalize_paid_event_checkout(id)->>'persisted')::boolean from public.payments
+  where reference='verified-callback-replay'),'fresh callback commits the verified entry');
+select pg_temp.expect((select payment_status='paid' from public.event_registrations where event_id=209 and email='actor1@example.test'),
+  'payment-only callback marks the exact saved entry paid');
+select pg_temp.expect((select partner_payment_status='paid' from public.event_registrations where event_id=209 and email='actor2@example.test'),
+  'the atomic checkout also updates the existing partner mirror');
+reset role;
+select set_config('request.jwt.claims','{}',false);
+update public.event_registrations set email='replacement@example.test' where event_id=209 and email='actor1@example.test';
+update public.event_registrations set partner_email='replacement@example.test' where event_id=209 and email='actor2@example.test';
+insert into public.event_registrations(event_id,division_id,division,email,full_name,registered_by,payment_status,payment_method)
+values(209,'60000000-0000-0000-0000-000000000209','Open','actor1@example.test','Former player re-entry','actor1@example.test','pending','eft');
+set role service_role;
+select set_config('request.jwt.claims','{"role":"service_role"}',false);
+select pg_temp.expect((select not (public.finalize_paid_event_checkout(id)->>'persisted')::boolean from public.payments
+  where reference='verified-callback-replay'),'a repeat callback keeps the existing checkout result');
+select pg_temp.expect((select payment_status='pending' from public.event_registrations where event_id=209 and email='actor1@example.test'),
+  'the former player cannot borrow the paid slot when the provider retries');
+reset role;
+select set_config('request.jwt.claims','{}',false);
+
 alter table public.payments add unique(reference);
 alter table public.native_license_checkouts add column user_id uuid;
 alter table public.annual_licenses add column id uuid default gen_random_uuid();
