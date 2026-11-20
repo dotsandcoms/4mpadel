@@ -12,6 +12,11 @@ const fb = window.fixture;
 const counters = fb.calls;
 const actor = { id:'synthetic-actor', email:'operator@example.invalid' };
 const event = { id:14, event_name:'Our fixture event', organisation_id:'our-org', is_manual:true, start_date:'2026-08-01', end_date:'2026-08-02', finance_managed:true, entry_fee:600, organiser_interim_payments:[] };
+if (fb.mode==='payout-use-max-future') {
+    const future = new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+    event.start_date=future;
+    event.end_date=future;
+}
 const other = { ...event, id:15,event_name:'Other organisation event',organisation_id:'other-org' };
 const player = { id:5, name:'Fixture player', email:'player@example.invalid' };
 const registration = {id:'reg-5',event_id:14,email:player.email,division:'Open',status:'registered',payment_status:'paid'};
@@ -19,8 +24,20 @@ const reference = fb.mode === 'gateway-native' ? 'MOBILE-ROCKETS-CUP-17949878596
 const pay = {id:'p1',event_id:14,player_id:5,reference,checkout_source:'manual_event',created_at:'2026-08-01T12:00:00Z',status:'success',is_test:false,payment_type:'event_entry_fee',payment_method:'paystack',amount:600,currency:'ZAR',metadata:{covers:[{type:'entry',email:player.email,division:'Open'}]},players:player,calendar:event};
 const season = { year:2026,price:650,renewal_price:500,coverage_starts_on:'2026-01-01',sales_open:true };
 const licence = { id:'fixture-licence', player_id:5, name:player.name, email:player.email, season_year:2026, license_type:'full', source:'manual',status:'active', starts_on:'2026-01-01',ends_on:'2026-12-31' };
+const licencePaymentHistory = [
+    { ...pay, id:'history-parent', reference:'REGEV-SPLIT-14', amount:600, checkout_amount:720,
+        bundled:true, split_recorded:true, linked:true, event_name:'Split checkout event' },
+    { ...pay, id:'history-child', reference:'LIC-REGEV-SPLIT-14', parent_reference:'REGEV-SPLIT-14', payment_type:'temp_license',
+        amount:120, bundled:false, linked:true, event_name:'Split checkout event' },
+    { ...pay, id:'history-unknown', reference:'REGEV-OLDER-14', amount:455, checkout_amount:null,
+        bundled:true, event_name:'Older event receipt' },
+    { ...pay, id:'history-attempt', reference:'LIC-FAILED-14', amount:650, bundled:false, status:'failed', payment_type:'full_license' },
+];
+
 const request = {id:'existing-payout',event_id:14,event_name:event.event_name,amount:200,last_four:'0155',status:'pending',created_at:'2026-08-05T10:00:00Z'};
 let banking = { saved:true, bank_name:'Fixture Bank', last_four:'0155', version:'account-version' }, requests = fb.mode === 'payout-admin' ? [request] : [];
+if (fb.mode==='payout-use-max-unbanked') banking={saved:false};
+let requestCalls = 0;
 const platform = fb.permissions.role === 'super_admin';
 const ledgerScopeTest = fb.mode.startsWith('finance-ledger-');
 const gatewayBulk = fb.mode === 'gateway-bulk';
@@ -57,7 +74,8 @@ function select(table) {
     const rows=()=> (table==='admin_sidebar_permissions' && ledgerScopeTest
         ? [{...fb.liveGrant,email:actor.email}] : tables[table] || []).filter(row => predicates.every(fn=>fn(row)));
     const execute=(mode='all')=>{
-        const result=rows();
+        const result=rows().map(row=>table==='calendar'&&row.id===event.id&&fb.interimPaid
+            ? {...row,organiser_interim_payments:[{id:'simultaneous-payout',paid_at:event.start_date,amount:fb.interimPaid}]} : row);
         if (gatewayTypes && table==='payments' && !fields.includes('players!') && fields.includes('client_reference:metadata->>client_reference')) {
             counters.push(['type-projection',fields,filters]);
             if (fb.failClassification) return {error:new Error('Fixture type lookup failed')};
@@ -86,7 +104,7 @@ export const supabase = {
         if(name==='is_super_admin' && ledgerScopeTest) return {data:platform};
         if(name==='account_is_active') return {data:true};
         if(name==='can_manage_licenses' || name==='is_organisation_admin' || name==='is_super_admin') return {data:true};
-        if(name==='get_player_licenses') return {data:{...player,licenses:[licence],payments:[],history:[]}};
+        if(name==='get_player_licenses') return {data:{...player,licenses:[licence],payments:fb.mode==='licences-player-history'?licencePaymentHistory:[],history:[]}};
         if(name==='license_sales_overview') return {data:{series:[],total_sold:1,new_full:1,license_years:[{license_year:2026,total_sold:1,new_full:1,ends_on:'2026-12-31',purchase_years:[]}]}};
         if(name==='manage_license'){
             if(args.p_action==='list')return {data:{rows:[licence],total:1,counts:{},current_counts:{full:1,total:1},reviews:[]}};
@@ -100,9 +118,21 @@ export const supabase = {
         if(name==='organisation_banking'){
             if(args.p_org_id!==event.organisation_id)return {error:{message:'Only organisation owners and admins can access banking.'}};
             switch(args.p_action){
-                case 'summary': return {data:banking};
-                case 'list': return {data:{requests,can_process:platform}};
-                case 'request':requests=[{...request,id:args.p_data.request_id,amount:args.p_data.amount}];return {data:{request_id:args.p_data.request_id}};
+                case 'summary': return {data:fb.updatedBanking || banking};
+                case 'list': {
+                    const current = fb.appearedRequest ? [...requests,fb.appearedRequest] : requests;
+                    return {data:{requests:current.filter(row=>!args.p_data.event_id||row.event_id===args.p_data.event_id),can_process:platform}};
+                }
+                case 'request': {
+                    requestCalls += 1;
+                    const lostResponse = {error:{message:'Synthetic transport interrupted',code:''},status:0};
+                    if (fb.mode==='payout-retry-definite') return {error:{message:'Banking details changed. Refresh and confirm the new account.',code:'P0001'},status:400};
+                    if (fb.mode==='payout-retry-unsaved' && requestCalls===1) return lostResponse;
+                    const bank = fb.updatedBanking || banking;
+                    requests=[{...request,id:args.p_data.request_id,amount:args.p_data.amount,event_id:args.p_data.event_id,last_four:bank.last_four}];
+                    if (fb.mode==='payout-retry-saved' && requestCalls===1) return lostResponse;
+                    return {data:{request_id:args.p_data.request_id}};
+                }
                 case 'remove':banking={saved:false};return {data:banking};
                 case 'save':banking={saved:true,bank_name:args.p_data.bank_name,last_four:'0155',version:'new-version'};return {data:banking};
                 case 'reveal':return {data:{bank_name:'Fixture Bank',account_holder:'Fixture Owner',account_number:'0000000155',branch_code:'000000',account_type:'current'}};
@@ -160,7 +190,11 @@ before(async()=>{
             const linked = mode === 'payout-linked' ? {initialEventId:'14',initialOrganisationId:'our-org'}
                 : mode === 'payout-link-other' ? {initialEventId:'15',initialOrganisationId:'other-org'} : {};
             const Component = mode.startsWith('licences') ? Licences : mode.startsWith('payout') ? Payouts : mode.startsWith('gateway') ? Payments : Finance;
-            createRoot(document.getElementById('root')).render(<MemoryRouter><Component {...linked} client={supabase} session={{user:{id:'synthetic-actor'}}} permissions={permissions} scopeId={scopeId} initialPlayerId={mode==='licences-player'?5:null} /></MemoryRouter>);
+            const root = createRoot(document.getElementById('root'));
+            window.fixture.render = refreshRevision => root.render(<MemoryRouter><Component {...linked} client={supabase}
+                session={{user:{id:'synthetic-actor'}}} permissions={permissions} scopeId={scopeId} refreshRevision={refreshRevision}
+                initialPlayerId={mode.startsWith('licences-player')?5:null} /></MemoryRouter>);
+            window.fixture.render(0);
         `, resolveDir:process.cwd(), loader:'jsx',sourcefile:'synthetic-money.jsx'},
         jsx:'automatic', bundle:true, write:false, format:'iife', loader:{'.css':'empty'}, logLevel:'silent',
         plugins:[{name:'synthetic-finance',setup(builder){
@@ -552,5 +586,245 @@ test('gateway errors do not silently assign stored receipt types',async()=>{
         await page.evaluate(()=>{window.fixture.failClassification=false});
         await click(page,'Try again');
         await includesText(page,'11 matching live transactions');
+    });
+});
+
+test('licence history distinguishes the bundled checkout total, entry portion, and other recorded amounts',async()=>{
+    await withPage('licences-player-history',platform,'all',async page=>{
+        const table = 'table[aria-label="Licence payments"]';
+        await page.waitForSelector(table+' tbody tr');
+        const rows = await page.$$eval(table+' tbody tr', rows=>rows.map(row=>Array.from(row.cells,cell=>cell.innerText)));
+        assert.equal(rows.length,3);
+        assert.match(rows[0][3],/^R\s*720[.,]00/);
+        assert.match(rows[0][3],/Checkout total/);
+        assert.match(rows[0][3],/Event entry portion R\s*600[.,]00/);
+        assert.match(rows[1][3],/^R\s*455[.,]00/);
+        assert.match(rows[1][3],/Recorded event amount/);
+        assert.doesNotMatch(rows[1][3],/Checkout total/);
+        assert.match(rows[2][4],/failed/);
+        await click(page,'Licence allocations',table+' tbody tr:first-child summary');
+        const allocated = await page.$eval(table+' tbody tr:first-child td:nth-child(4) details',details=>details.innerText);
+        assert.match(allocated,/Temporary licence.*R\s*120[.,]00.*success/s);
+        await click(page,'Payment references',table+' tbody tr:first-child summary');
+        const references = await page.$$eval(table+' tbody tr:first-child details[open] code',items=>items.map(item=>item.textContent));
+        assert.deepEqual(references,['REGEV-SPLIT-14','LIC-REGEV-SPLIT-14']);
+        const requests = await calls(page);
+        assert.deepEqual(requests.filter(([name])=>name==='get_player_licenses'),[['get_player_licenses',{p_player_id:5}]]);
+        assert.equal(requests.some(([name,args])=>name==='manage_license'&&!['list','players'].includes(args.p_action)),false);
+    });
+    await withPage('licences-player-history',owner,'org:our-org',async page=>{
+        await includesText(page,'Platform Licences access is required.');
+        assert.equal(await page.$('table[aria-label="Licence payments"]'),null);
+        assert.equal((await calls(page)).some(([name])=>name==='get_player_licenses'),false);
+    });
+});
+
+const payoutAmountInput = 'label.lw-field:has(> input[type="number"]) > input[max]';
+const payoutConfirmation = 'label.lw-check input[type="checkbox"]';
+const payoutRequests = async page => (await calls(page)).filter(([name,args])=>name==='organisation_banking'&&args.p_action==='request');
+async function selectPayoutEvent(page) {
+    await click(page,'Select a manual event');
+    await click(page,'Our fixture event','[role="option"]');
+}
+async function isPayoutReviewDisabled(page) {
+    return page.$$eval('button',buttons=>buttons.find(button=>button.textContent==='Review payout request').disabled);
+}
+async function hasUseMax(page) {
+    return page.$$eval('button',buttons=>buttons.some(button=>button.textContent==='Use max'));
+}
+
+test('payout Use max fills the verified first cap and preserves a manual draft across destination refresh',async()=>{
+    await withPage('payout-use-max-future',owner,'org:our-org',async page=>{
+        await includesText(page,'Request event payout');
+        assert.equal(await hasUseMax(page),false);
+        await selectPayoutEvent(page);
+        await input(page,payoutAmountInput,'169.25');
+        assert.equal(await page.$eval(payoutAmountInput,input=>input.max),'285');
+        await click(page,'Use Fixture Bank','label');
+        assert.equal(await isPayoutReviewDisabled(page),false);
+
+        await page.evaluate(()=>{
+            window.fixture.updatedBanking={saved:true,bank_name:'Replacement Bank',last_four:'0229',version:'replacement-version'};
+        });
+        await click(page,'Refresh requests');
+        await includesText(page,'Replacement Bank');
+        await page.waitForSelector(payoutAmountInput);
+        assert.equal(await page.$eval(payoutAmountInput,input=>input.value),'169.25');
+        assert.equal(await page.$eval(payoutConfirmation,input=>input.checked),false);
+
+        await click(page,'Use max');
+        assert.equal(await page.$eval(payoutAmountInput,input=>input.value),'285');
+        assert.equal(await isPayoutReviewDisabled(page),true);
+        assert.deepEqual(await payoutRequests(page),[]);
+        await click(page,'Use Replacement Bank','label');
+        await click(page,'Review payout request');
+        await includesText(page,'Replacement Bank · Account ending 0229 for manual processing.');
+        assert.deepEqual(await payoutRequests(page),[]);
+        await verifyMfa(page);
+        await includesText(page,'Payout request saved');
+        const request = (await payoutRequests(page))[0][1];
+        assert.equal(request.p_org_id,'our-org');
+        assert.equal(request.p_data.event_id,14);
+        assert.equal(request.p_data.amount,285);
+        assert.equal(request.p_data.expected_version,'replacement-version');
+    });
+});
+
+test('payout Use max reloads a reduced final cap after a fresh settlement rejects the earlier amount',async()=>{
+    await withPage('payout-use-max-final',owner,'org:our-org',async page=>{
+        await selectPayoutEvent(page);
+        await click(page,'Use max');
+        assert.equal(await page.$eval(payoutAmountInput,input=>input.value),'570');
+        await click(page,'Use Fixture Bank','label');
+        await click(page,'Review payout request');
+        await page.evaluate(()=>{window.fixture.interimPaid=100});
+        await verifyMfa(page);
+        await includesText(page,'The available payout changed.');
+        await page.waitForSelector(payoutAmountInput);
+        assert.equal(await page.$eval(payoutAmountInput,input=>input.max),'470');
+        assert.equal(await page.$eval(payoutAmountInput,input=>input.value),'570');
+        assert.equal(await isPayoutReviewDisabled(page),true);
+        assert.deepEqual(await payoutRequests(page),[]);
+        await click(page,'Use max');
+        assert.equal(await page.$eval(payoutAmountInput,input=>input.value),'470');
+        assert.equal(await isPayoutReviewDisabled(page),true);
+    });
+});
+
+test('payout Use max is unavailable with a pending request, missing destination or foreign scope',async()=>{
+    await withPage('payout-admin',platform,'org:our-org',async page=>{
+        await selectPayoutEvent(page);
+        await includesText(page,'This event already has a pending payout request.');
+        assert.equal(await hasUseMax(page),false);
+    });
+    await withPage('payout-use-max-unbanked',owner,'org:our-org',async page=>{
+        await selectPayoutEvent(page);
+        await includesText(page,'Add banking details before requesting a payout.');
+        assert.equal(await hasUseMax(page),false);
+    });
+    await withPage('payout-use-max-final',owner,'org:other-org',async page=>{
+        await includesText(page,'Select an organisation you own or administer.');
+        assert.equal(await hasUseMax(page),false);
+        assert.deepEqual(await payoutRequests(page),[]);
+    });
+});
+
+async function startUnconfirmedPayout(page) {
+    await selectPayoutEvent(page);
+    await input(page,payoutAmountInput,'140.50');
+    await click(page,'Use Fixture Bank','label');
+    await click(page,'Review payout request');
+    await verifyMfa(page);
+    await includesText(page,'The payout request result could not be confirmed.');
+    return (await payoutRequests(page))[0][1];
+}
+const countMfa = async page => (await calls(page)).filter(([name])=>name==='mfa').length;
+const retryDisabled = page => page.$$eval('button',buttons=>buttons.find(button=>button.textContent==='Retry same payout request').disabled);
+
+test('read-only payout status recovers a saved request after an ambiguous response',async()=>{
+    await withPage('payout-retry-saved',owner,'org:our-org',async page=>{
+        const original = await startUnconfirmedPayout(page);
+        await page.evaluate(()=>{window.fixture.updatedBanking={saved:true,bank_name:'New Fixture Bank',last_four:'0123',version:'new-version'}});
+        await click(page,'Check request status');
+        await includesText(page,'The original payout request was found in payout history.');
+        await includesText(page,'Ending 0155');
+        assert.equal((await payoutRequests(page)).length,1);
+        assert.equal(await countMfa(page),1);
+        assert.equal((await calls(page)).some(([name])=>name==='send-email'),false);
+        assert.deepEqual((await calls(page)).find(([name,args])=>name==='organisation_banking'&&args.p_action==='list'&&args.p_data.event_id),
+            ['organisation_banking',{p_action:'list',p_org_id:'our-org',p_data:{event_id:original.p_data.event_id}}]);
+    });
+});
+
+test('payout retries reuse one UUID after an explicit recheck and fresh MFA for the original draft',async()=>{
+    await withPage('payout-retry-unsaved',owner,'org:our-org',async page=>{
+        const original = await startUnconfirmedPayout(page);
+        await input(page,payoutAmountInput,'141.50');
+        await click(page,'Use Fixture Bank','label');
+        assert.equal(await isPayoutReviewDisabled(page),true);
+        assert.equal(await retryDisabled(page),true);
+        assert.equal(await countMfa(page),1);
+        assert.equal((await payoutRequests(page)).length,1);
+
+        await input(page,payoutAmountInput,'140.50');
+        await click(page,'Check request status');
+        await includesText(page,'The original request has not appeared in payout history.');
+        await click(page,'Retry same payout request');
+        await includesText(page,'Verify to send this payout request');
+        const checks = (await calls(page)).filter(([name,args])=>name==='organisation_banking'&&args.p_action==='list'&&args.p_data.event_id===14);
+        assert.equal(checks.length,2);
+        assert.equal(await countMfa(page),1);
+        assert.equal((await payoutRequests(page)).length,1);
+        await verifyMfa(page);
+        await includesText(page,'Payout request saved');
+        const requests = await payoutRequests(page);
+        assert.equal(requests.length,2);
+        assert.deepEqual(requests[1][1],original);
+        assert.equal((await calls(page)).filter(([name,args])=>name==='organisation_banking'&&args.p_action==='list'&&args.p_data.event_id===14).length,3);
+        assert.equal((await calls(page)).filter(([name])=>name==='send-email').length,1);
+    });
+});
+
+test('payout retry blocks a changed destination before MFA and detects a delayed original save after MFA',async()=>{
+    await withPage('payout-retry-unsaved',owner,'org:our-org',async page=>{
+        const original = await startUnconfirmedPayout(page);
+        await page.evaluate(()=>{window.fixture.updatedBanking={saved:true,bank_name:'New Fixture Bank',last_four:'0123',version:'new-version'}});
+        await click(page,'Retry same payout request');
+        await includesText(page,'The original payout destination changed.');
+        const previous = await page.$eval('[aria-label="Previous payout request"]',panel=>panel.innerText);
+        assert.match(previous,/Fixture Bank · Account ending 0155/);
+        assert.doesNotMatch(previous,/0123/);
+        assert.equal(await countMfa(page),1);
+        assert.deepEqual((await payoutRequests(page)).map(([,args])=>args),[original]);
+    });
+    await withPage('payout-retry-unsaved',owner,'org:our-org',async page=>{
+        const original = await startUnconfirmedPayout(page);
+        await click(page,'Retry same payout request');
+        await includesText(page,'Verify to send this payout request');
+        await page.evaluate(()=>{window.fixture.updatedBanking={saved:true,bank_name:'New Fixture Bank',last_four:'0123',version:'new-version'}});
+        await verifyMfa(page);
+        await includesText(page,'The original payout destination changed.');
+        assert.deepEqual((await payoutRequests(page)).map(([,args])=>args),[original]);
+    });
+    await withPage('payout-retry-unsaved',owner,'org:our-org',async page=>{
+        const original = await startUnconfirmedPayout(page);
+        await click(page,'Retry same payout request');
+        await includesText(page,'Verify to send this payout request');
+        await page.evaluate(input=>{
+            window.fixture.appearedRequest={id:input.request_id,event_id:input.event_id,amount:input.amount,
+                event_name:'Our fixture event',status:'pending',last_four:'0155'};
+        },original.p_data);
+        await verifyMfa(page);
+        await includesText(page,'The original payout request was found in payout history.');
+        assert.deepEqual((await payoutRequests(page)).map(([,args])=>args),[original]);
+    });
+});
+
+test('a deterministic banking rejection does not offer an ambiguous retry',async()=>{
+    await withPage('payout-retry-definite',owner,'org:our-org',async page=>{
+        await selectPayoutEvent(page);
+        await input(page,payoutAmountInput,'100.00');
+        await click(page,'Use Fixture Bank','label');
+        await click(page,'Review payout request');
+        await verifyMfa(page);
+        await includesText(page,'Banking details changed. Refresh and confirm the new account.');
+        assert.equal(await page.$('[aria-label="Previous payout request"]'),null);
+        assert.equal((await payoutRequests(page)).length,1);
+    });
+});
+
+test('a platform organisation-picker refresh preserves the selected event and payout draft',async()=>{
+    await withPage('payout-use-max-final',platform,'all',async page=>{
+        await click(page,'Payout requests');
+        await click(page,'Choose an organisation');
+        await click(page,'Our organisation','[role="option"]');
+        await selectPayoutEvent(page);
+        await input(page,payoutAmountInput,'105.75');
+        await click(page,'Use Fixture Bank','label');
+        await page.evaluate(()=>window.fixture.render(1));
+        await page.waitForFunction(()=>window.fixture.calls.filter(([name,args])=>name==='organisation_banking'&&args.p_action==='summary').length>=2);
+        await page.waitForSelector(payoutAmountInput);
+        assert.equal(await page.$eval(payoutAmountInput,input=>input.value),'105.75');
+        assert.equal(await page.$eval(payoutConfirmation,input=>input.checked),false);
     });
 });

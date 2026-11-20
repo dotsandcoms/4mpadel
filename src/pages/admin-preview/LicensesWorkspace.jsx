@@ -56,11 +56,52 @@ function ChangeForm({action,row,player,options,onClose,onConfirm}){
     <Field label="Reason for change"><textarea required value={form.reason} onChange={e=>patch({reason:e.target.value})}/></Field>{action==='revoke'&&<p>Revocation keeps payment history; it does not refund money. Refunds are handled in Finance.</p>}{error&&<p role="alert">{error}</p>}<button className="ap-primary" disabled={action==='grant' && form.license_type==='full' && !form.year}>Review {action==='grant'?'licence':action}</button>
   </form>}</aside>;
 }
+const isTemporaryPayment = payment => ['temp_license', 'temporary_license'].includes(payment.payment_type);
+
+function LicencePaymentHistory({ payments }) {
+  const groups = groupLicensePayments(payments);
+  return <section aria-labelledby="licence-payment-history-heading">
+    <h3 id="licence-payment-history-heading">Licence payments</h3>
+    <Table label="Licence payments" headers={['Paid / recorded','Payment','Method','Amount','Status']}>
+      {groups.map(payment => {
+        const currency = payment.currency || 'ZAR';
+        const hasCheckoutTotal = payment.bundled && payment.checkout_amount != null;
+        const amount = hasCheckoutTotal ? payment.checkout_amount : payment.amount;
+        const title = payment.bundled ? 'Event checkout with licence' : isTemporaryPayment(payment) ? 'Temporary licence' : 'Full licence';
+        return <tr key={payment.id}>
+          <td>{licenseTimestamp(payment.created_at)}</td>
+          <td>{title}{payment.license_year ? ` · ${payment.license_year}` : ''}{payment.is_test && <strong> · Test</strong>}
+            {payment.event_name && <small>{payment.event_name}</small>}
+            <small>{payment.linked ? 'Linked to licence' : 'Historical payment record'}</small>
+            <details><summary>Payment references</summary>
+              <small>Checkout <code>{payment.reference || payment.id}</code></small>
+              {payment.allocations.map(allocation => <small key={allocation.id}>Licence portion <code>{allocation.reference || allocation.id}</code></small>)}
+            </details>
+          </td>
+          <td>{payment.payment_method || '—'}</td>
+          <td>{licenseMoney(amount,currency)}
+            {payment.bundled && <small>{hasCheckoutTotal ? 'Checkout total' : 'Recorded event amount'}</small>}
+            {hasCheckoutTotal && payment.split_recorded && <small>Event entry portion {licenseMoney(payment.amount,currency)}</small>}
+            {payment.allocations.length > 0 && <details><summary>Licence allocations</summary>
+              {payment.allocations.map(allocation => <small key={allocation.id}>
+                {isTemporaryPayment(allocation) ? 'Temporary licence' : 'Full licence'} · {licenseMoney(allocation.amount,allocation.currency || currency)} · {allocation.status}
+              </small>)}
+            </details>}
+          </td>
+          <td><Status value={payment.status}/></td>
+        </tr>;
+      })}
+    </Table>
+    {!groups.length && <p>No licence payments found.</p>}
+    <p>All matching records are shown, including failed, test and historical payments. Splits or duplicates do not issue extra coverage.</p>
+  </section>;
+}
+
 function PlayerPanel({data,options,onBack,onConfirm}){const [editor,setEditor]=useState(null);return <>
   <button className="ap-secondary" onClick={onBack}>All licences</button><header className="lw-actions"><div><h2>{data.name}</h2><p>{data.email}</p><strong>{data.license_number||'No licence number yet'}</strong></div><button className="ap-primary" onClick={()=>setEditor({action:'grant'})}>Add licence — review</button></header>
   {editor&&<ChangeForm key={`${editor.action}-${editor.row?.id||''}`} {...editor} player={data} options={options} onClose={()=>setEditor(null)} onConfirm={onConfirm}/>}
   <section><h3>Coverage</h3><Table label="Player licence coverage" headers={['Licence','Purchased / granted','Coverage','Status','Review action']}>{(data.licenses||[]).map(row=><tr key={row.id}><td>{licenseLabel(row)}<small>{licenseSource(row.source)}</small></td><td><Purchased row={row}/></td><td>{licenseDate(licenseStartDate(row))}<small>to {licenseDate(row.ends_on)}</small></td><td><Status value={coverageStatus(row)}/></td><td><button className="ap-secondary" onClick={()=>setEditor({action:row.status==='revoked'?'restore':'revoke',row})}>{row.status==='revoked'?'Restore':'Revoke'} — review</button></td></tr>)}</Table>{!data.licenses?.length&&<p>No licences on file.</p>}</section>
-  <section><h3>Licence payments</h3><Table label="Licence payments" headers={['Paid / recorded','Payment','Method','Amount','Status']}>{groupLicensePayments(data.payments).map(p=><tr key={p.id}><td>{licenseTimestamp(p.created_at)}</td><td>{p.bundled?'Event checkout with licence':p.payment_type==='temp_license'?'Temporary licence':'Full licence'}{p.license_year?` · ${p.license_year}`:''}{p.is_test&&<strong> · Test</strong>}<small>{p.reference||p.id}</small><small>{p.event_name}</small><small>{p.linked?'Linked to licence':'Historical payment record'}</small></td><td>{p.payment_method||'—'}</td><td>{licenseMoney(p.amount,p.currency||'ZAR')}{p.bundled&&<small>Checkout total</small>}{p.allocations.length>0&&<details><summary>Licence allocations</summary>{p.allocations.map(child=><small key={child.id}>{child.reference||child.id} · {licenseMoney(child.amount,child.currency||'ZAR')} · {child.status}</small>)}</details>}</td><td><Status value={p.status}/></td></tr>)}</Table>{!data.payments?.length&&<p>No licence payments found.</p>}<p>All matching records are shown, including failed, test and historical payments. Splits or duplicates do not issue extra coverage.</p></section>
+  <LicencePaymentHistory payments={data.payments} />
   <details><summary>Change history ({data.history?.length||0})</summary>{(data.history||[]).map(h=><article className="lw-history" key={h.id}><strong>{h.action?.replaceAll('_',' ')}</strong><p>{h.reason}</p><small>{h.actor_email||'System'} · {licenseTimestamp(h.created_at)}</small></article>)}</details>
   </>;}
 function Settings({options,onConfirm}){

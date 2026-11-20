@@ -7,7 +7,12 @@ export async function organisationBanking(action, organisationId, data = {}, cli
     });
     if (result.error) {
         const message = result.error.message || '';
-        if (message.includes('MFA_REQUIRED:')) throw new Error('Verify a new authenticator code and try again.');
+        // A structured PostgreSQL rejection confirms the request did not commit.
+        // Transport and gateway failures can leave the outcome uncertain.
+        const reject = text => Object.assign(new Error(text), {
+            rejected: result.status >= 400 && result.status < 500 && /^[0-9A-Z]{5}$/.test(result.error.code || ''),
+        });
+        if (message.includes('MFA_REQUIRED:')) throw reject('Verify a new authenticator code and try again.');
         // Only expose known business errors, never a database detail/parameter dump.
         const safe = [
             'Sign in again', 'Only organisation', 'Only 4M', 'Banking details changed',
@@ -15,7 +20,7 @@ export async function organisationBanking(action, organisationId, data = {}, cli
             'Enter a valid', 'Check the bank', 'Payout request does not match',
             'Only pending requests', 'Secure banking is temporarily',
         ];
-        throw new Error(safe.some(prefix => message.startsWith(prefix))
+        throw reject(safe.some(prefix => message.startsWith(prefix))
             ? message : 'Secure banking is unavailable. Please try again or contact 4M support.');
     }
     return result.data;

@@ -5,7 +5,7 @@ import { formatBankingDestination } from '../../utils/organisationBanking';
 import { southAfricanToday } from '../../utils/licenseReporting';
 import { FreshPreviewVerification } from './PreviewAuthenticator';
 import { financeDate } from './financeOverviewData';
-import { loadPayoutSettlement, loadPayoutWorkspace, payoutScope, submitPayoutAction, verifyPayoutIdentity } from './payoutOperations';
+import { checkPayoutRequest, loadPayoutSettlement, loadPayoutWorkspace, payoutScope, PayoutSubmissionUnconfirmed, submitPayoutAction, verifyPayoutIdentity, verifyPayoutRetry } from './payoutOperations';
 import RecordLoading from './RecordLoading';
 
 const rand = value => new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(value);
@@ -49,9 +49,8 @@ function BankingEditor({ summary, onReview, onCancel }) {
   </form>;
 }
 
-function EventPayoutForm({ client, organisationId, data, onReview, selectedEventId, onEventChange }) {
+function EventPayoutForm({ client, organisationId, data, onReview, selectedEventId, onEventChange, amount, onAmountChange, uncertain, locked }) {
   const eventId = data.events.some(event => String(event.id) === String(selectedEventId)) ? String(selectedEventId) : '';
-  const [amount, setAmount] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [manual, setManual] = useState({ amount:'', note:'', paidAt:southAfricanToday() });
   const [snapshot, setSnapshot] = useState(null);
@@ -70,17 +69,20 @@ function EventPayoutForm({ client, organisationId, data, onReview, selectedEvent
   const rules = reply?.result?.rules;
   const requested = Number(amount);
   const pending = data.requests.some(request => String(request.event_id) === eventId && request.status === 'pending');
-  const canSubmit = confirmed && data.banking.saved && !pending && rules?.canRequest && requested > 0 && requested <= rules.maxRequestable;
+  const canEnterAmount = data.banking.saved && !pending && rules?.canRequest
+    && Number.isFinite(rules.maxRequestable) && rules.maxRequestable > 0;
+  const canSubmit = !uncertain && !locked && confirmed && canEnterAmount && requested > 0 && requested <= rules.maxRequestable;
   function review(event) {
     event.preventDefault();
     if (!canSubmit) return;
     onReview({
-      kind: 'request', purpose: 'send this payout request',
+      kind: 'request', purpose: 'send this payout request', destination: formatBankingDestination(data.banking),
+      lastFour: data.banking.last_four,
       input: { event_id: Number(eventId), amount: requested, request_id: crypto.randomUUID(), expected_version: data.banking.version },
     });
   }
   return <section className="lw-editor"><h2>Request event payout</h2>
-    <label className="lw-field"><span>Event</span><SearchableDropdown value={eventId} onChange={event => { onEventChange(event.target.value); setAmount(''); setConfirmed(false); }}>
+    <label className="lw-field"><span>Event</span><SearchableDropdown value={eventId} disabled={locked} onChange={event => { onEventChange(event.target.value); setConfirmed(false); }}>
       <option value="">Select a manual event</option>{data.events.map(event => <option key={event.id} value={String(event.id)}>{event.event_name}</option>)}
     </SearchableDropdown></label>
     {eventId && !reply && <p role="status">Verifying current event receipts…</p>}
@@ -88,9 +90,10 @@ function EventPayoutForm({ client, organisationId, data, onReview, selectedEvent
     {settlement && <form onSubmit={review}>
       <div className="lw-counts">{[['Current entry payments', 'grossEntryFees'], ['Platform fees', 'commission'], ['Paid out', 'interimPaid'], ['Balance due', 'dueToOrg']].map(([title, field]) => <div key={field}><small>{title}</small><strong>{rand(settlement[field])}</strong></div>)}</div>
       <p>{pending ? 'This event already has a pending payout request.' : rules.blockedReason || rules.helperText}</p>
-      {rules.canRequest && !pending && data.banking.saved && <>
-        <label className="lw-field"><span>Payout amount (R), up to {rand(rules.maxRequestable)}</span><input type="number" required min="0.01" max={rules.maxRequestable} step="0.01" value={amount} onChange={event => setAmount(event.target.value)} /></label>
-        <label className="lw-check"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />Use {formatBankingDestination(data.banking)}</label>
+      {canEnterAmount && <>
+        <label className="lw-field"><span>Payout amount (R), up to {rand(rules.maxRequestable)}</span><input type="number" required min="0.01" max={rules.maxRequestable} step="0.01" value={amount} disabled={locked} onChange={event => onAmountChange(event.target.value)} /></label>
+        <div className="lw-actions"><button type="button" className="ap-secondary" disabled={locked} onClick={() => onAmountChange(String(rules.maxRequestable))}>Use max</button></div>
+        <label className="lw-check"><input type="checkbox" checked={confirmed} disabled={locked} onChange={event => setConfirmed(event.target.checked)} />Use {formatBankingDestination(data.banking)}</label>
         <button type="submit" className="ap-primary" disabled={!canSubmit}>Review payout request</button>
       </>}
       {!data.banking.saved && <p>Add banking details before requesting a payout.</p>}
@@ -118,12 +121,11 @@ function EventPayoutForm({ client, organisationId, data, onReview, selectedEvent
   </section>;
 }
 
-function OrganisationPayouts({ client, session, organisationId, revision, initialEventId }) {
+function OrganisationPayouts({ client, session, organisationId, revision, selectedEventId, onEventChange, amount, onAmountChange,
+  uncertain: unconfirmedAttempt, onAttemptChange }) {
   const [reply, setReply] = useState(null);
   const [refresh, setRefresh] = useState(0);
   const [editing, setEditing] = useState(false);
-  const [eventSelection, setEventSelection] = useState(null);
-  const selectedEventId = eventSelection?.initialEventId === initialEventId ? eventSelection?.eventId : initialEventId;
   const [action, setAction] = useState(null);
   const [revealed, setRevealed] = useState(null);
   const [notice, setNotice] = useState('');
@@ -135,6 +137,7 @@ function OrganisationPayouts({ client, session, organisationId, revision, initia
   const requestKey = `${revision}:${refresh}`;
   const answer = reply?.requestKey === requestKey ? reply : null;
   const data = answer?.data;
+  const uncertain = data?.events.some(event => String(event.id) === String(selectedEventId)) ? unconfirmedAttempt : null;
   useEffect(() => {
     const controller = new AbortController();
     lifetime.current = controller.signal;
@@ -156,7 +159,39 @@ function OrganisationPayouts({ client, session, organisationId, revision, initia
     const timer = setTimeout(() => setRevealed(null), 60000);
     return () => clearTimeout(timer);
   }, [revealed]);
-  function review(next) { setAction(next); setEditing(false); setNotice(''); setError(''); setRevealed(null); }
+  function review(next) {
+    if (running.current) return;
+    setAction(next); setEditing(false); setNotice(''); setError(''); setRevealed(null);
+  }
+  const sameAttempt = uncertain && Number(amount) === uncertain.input.amount;
+  async function recheck(retry) {
+    if (!uncertain || (retry && !sameAttempt) || running.current || lifetime.current?.aborted) return;
+    running.current = true;
+    setBusy(true);
+    setNotice('');
+    setError('');
+    setRevealed(null);
+    const signal = lifetime.current;
+    try {
+      const result = await (retry ? verifyPayoutRetry : checkPayoutRequest)(client, session, organisationId, uncertain, signal);
+      if (signal.aborted) return;
+      if (result.saved) {
+        onAttemptChange(uncertain.input.event_id, null);
+        if (sameAttempt) onAmountChange('');
+        setNotice('The original payout request was found in payout history.');
+        setRefresh(n => n + 1);
+      } else if (retry) {
+        setAction({ ...uncertain, retry:true });
+      } else {
+        setNotice('The original request has not appeared in payout history.');
+      }
+    } catch (failure) {
+      if (!signal.aborted) setError(failure.message || 'The payout request status could not be checked.');
+    } finally {
+      running.current = false;
+      if (!signal.aborted) setBusy(false);
+    }
+  }
   async function confirm() {
     if (!action || running.current || lifetime.current?.aborted) return;
     running.current = true;
@@ -169,15 +204,24 @@ function OrganisationPayouts({ client, session, organisationId, revision, initia
       if (action.kind === 'reveal') {
         if (epoch === revealEpoch.current && !document.hidden) setRevealed(result);
       } else {
+        if (action.kind === 'request') {
+          onAttemptChange(action.input.event_id, null);
+          onAmountChange('');
+        }
         setNotice(action.kind === 'request'
-          ? (result.notified ? 'Payout request saved and sent to 4M admin.' : 'Payout request saved. 4M can view it in payout requests.')
+          ? (result.recovered ? 'The original payout request was found in payout history.'
+            : result.notified ? 'Payout request saved and sent to 4M admin.' : 'Payout request saved. 4M can view it in payout requests.')
           : action.kind === 'resolve' ? 'Payout status updated.' : action.kind === 'record_interim' ? 'Interim payment recorded.'
           : action.kind === 'remove_interim' ? 'Interim payment removed.' : 'Banking details updated.');
         setRefresh(n => n + 1);
       }
       setAction(null);
     } catch (failure) {
-      if (!signal.aborted) { setError(failure.message || 'The secure action could not be completed.'); setAction(null); }
+      if (!signal.aborted) {
+        if (failure instanceof PayoutSubmissionUnconfirmed) onAttemptChange(action.input.event_id, action);
+        setError(failure.message || 'The secure action could not be completed.');
+        setAction(null);
+      }
     } finally {
       running.current = false;
       if (!signal.aborted) setBusy(false);
@@ -190,7 +234,7 @@ function OrganisationPayouts({ client, session, organisationId, revision, initia
     {notice && <p role="status">{notice}</p>}{error && <p role="alert">{error}</p>}
     <section className="lw-editor" data-private="true">
       <header className="lw-actions"><div><h2>Payout banking details</h2><p>{formatBankingDestination(data.banking)}</p></div>
-        {!editing && !action && <div className="lw-actions"><button className="ap-secondary" onClick={() => setEditing(true)}>{data.banking.saved ? 'Replace banking details' : 'Add banking details'}</button>
+        {!editing && !action && !busy && <div className="lw-actions"><button className="ap-secondary" onClick={() => setEditing(true)}>{data.banking.saved ? 'Replace banking details' : 'Add banking details'}</button>
           {data.banking.saved && <button className="ap-secondary" onClick={() => review({ kind: 'remove', purpose: 'remove the saved payout account', input: { expected_version: data.banking.version } })}>Remove saved account</button>}
         </div>}
       </header>
@@ -199,7 +243,7 @@ function OrganisationPayouts({ client, session, organisationId, revision, initia
       {action && <div className="lw-review">
         <h3>{['record_interim','remove_interim'].includes(action.kind) ? 'Review recorded payout' : `Verify to ${action.purpose}`}</h3>
         {action.kind === 'resolve' && action.input.status === 'paid' && <p>Only continue once the bank transfer has completed.</p>}
-        {action.kind === 'request' && <p>Request {rand(action.input.amount)} to {formatBankingDestination(data.banking)} for manual processing.</p>}
+        {action.kind === 'request' && <p>Request {rand(action.input.amount)} to {action.destination} for manual processing.</p>}
         {['record_interim','remove_interim'].includes(action.kind) ? <>
           <p>{action.kind === 'record_interim' ? 'Record this completed bank payment' : 'Remove this recorded payment'} · {rand(action.input.amount)}</p>
           <div className="lw-actions"><button className="ap-primary" disabled={busy} onClick={confirm}>{busy ? 'Saving…' : 'Confirm recorded payout change'}</button>
@@ -208,9 +252,20 @@ function OrganisationPayouts({ client, session, organisationId, revision, initia
           onVerified={confirm} onCancel={() => { if (!running.current) setAction(null); }} allowEnrollment />}
       </div>}
     </section>
-    {!editing && !action && <EventPayoutForm client={client} organisationId={organisationId} data={data} onReview={review} selectedEventId={selectedEventId} onEventChange={eventId => setEventSelection({ initialEventId, eventId })} />}
+    {uncertain && !action && !editing && <section className="lw-editor" aria-label="Previous payout request">
+      <h2>Previous payout request</h2>
+      <p>Reviewed amount {rand(uncertain.input.amount)} to {uncertain.destination}.</p>
+      {!sameAttempt && <p>Enter the original amount to retry this request.</p>}
+      <div className="lw-actions">
+        <button type="button" className="ap-secondary" disabled={busy} onClick={() => recheck(false)}>Check request status</button>
+        <button type="button" className="ap-secondary" disabled={busy || !sameAttempt} onClick={() => recheck(true)}>Retry same payout request</button>
+      </div>
+    </section>}
+    {!editing && !action && <EventPayoutForm client={client} organisationId={organisationId} data={data} onReview={review}
+      selectedEventId={selectedEventId} amount={amount} onAmountChange={onAmountChange} onEventChange={onEventChange}
+      uncertain={uncertain} locked={busy} />}
     <section className="lw-editor"><header className="lw-actions"><div><h2>Payout requests</h2><p>4M processes bank transfers manually.</p></div>
-      <button className="ap-secondary" disabled={Boolean(action)} onClick={() => { setRevealed(null); setRefresh(n => n + 1); }}>Refresh requests</button></header>
+      <button className="ap-secondary" disabled={Boolean(action) || busy} onClick={() => { setRevealed(null); setRefresh(n => n + 1); }}>Refresh requests</button></header>
       {revealed && <div className="lw-review" data-private="true"><header className="lw-actions"><h3>Confidential payout destination</h3><button className="ap-secondary" onClick={() => setRevealed(null)}>Hide account details</button></header>
         <dl>{[['Bank','bank_name'],['Account holder','account_holder'],['Account number','account_number'],['Branch code','branch_code'],['Account type','account_type']].map(([label, key]) => (
           <div key={key}><dt>{label}</dt><dd>{revealed[key]}</dd></div>
@@ -218,9 +273,9 @@ function OrganisationPayouts({ client, session, organisationId, revision, initia
       <div className="fo-table-scroll"><table className="fo-detail-table" aria-label="Organiser payout requests"><thead><tr><th>Event</th><th>Requested</th><th>Amount</th><th>Destination</th><th>Status</th>{data.canProcess && <th>Actions</th>}</tr></thead>
         <tbody>{data.requests.map(request => <tr key={request.id}><td>{request.event_name}</td><td>{financeDate(request.created_at)}</td><td>{rand(request.amount)}</td><td>Ending {request.last_four}{request.account_changed && <small>Account changed</small>}</td><td>{request.status}</td>
           {data.canProcess && <td>{request.status === 'pending' && <div className="fo-report-actions">
-            <button className="ap-secondary" disabled={Boolean(action)} onClick={() => review({ kind: 'reveal', purpose: 'view banking details', input: { request_id: request.id } })}>Reveal</button>
-            <button className="ap-secondary" disabled={Boolean(action)} onClick={() => review({ kind: 'resolve', purpose: 'mark this payout paid', input: { request_id: request.id, status: 'paid' } })}>Mark paid</button>
-            <button className="ap-secondary" disabled={Boolean(action)} onClick={() => review({ kind: 'resolve', purpose: 'cancel this payout request', input: { request_id: request.id, status: 'cancelled' } })}>Cancel request</button>
+            <button className="ap-secondary" disabled={Boolean(action) || busy} onClick={() => review({ kind: 'reveal', purpose: 'view banking details', input: { request_id: request.id } })}>Reveal</button>
+            <button className="ap-secondary" disabled={Boolean(action) || busy} onClick={() => review({ kind: 'resolve', purpose: 'mark this payout paid', input: { request_id: request.id, status: 'paid' } })}>Mark paid</button>
+            <button className="ap-secondary" disabled={Boolean(action) || busy} onClick={() => review({ kind: 'resolve', purpose: 'cancel this payout request', input: { request_id: request.id, status: 'cancelled' } })}>Cancel request</button>
           </div>}</td>}</tr>)}</tbody></table></div>
       {!data.requests.length && <p>No payout requests yet.</p>}
     </section>
@@ -231,6 +286,8 @@ export default function PayoutRequestWorkspace({ client, session, permissions, s
   const scope = payoutScope(session, permissions, scopeId);
   const [reply, setReply] = useState(null);
   const [organisation, setOrganisation] = useState(() => String(initialOrganisationId || ''));
+  const [eventDraft, setEventDraft] = useState(null);
+  const [attempts, setAttempts] = useState(() => new Map());
   const [retry, setRetry] = useState(0);
   const platformPicker = scope?.platform && !scope.organisationId;
   const userId = session?.user?.id;
@@ -247,14 +304,29 @@ export default function PayoutRequestWorkspace({ client, session, permissions, s
   }, [client, platformPicker, requestKey, userId]);
   if (!scope) return <section className="ap-section"><h1>Payouts</h1><p>Select an organisation you own or administer.</p></section>;
   const selected = scope.organisationId || replyForScope?.rows?.find(row => row.id === organisation)?.id;
+  const linkedEvent = !initialOrganisationId || selected === initialOrganisationId ? initialEventId : null;
+  const draftKey = JSON.stringify([userId, selected, linkedEvent]);
+  const draft = eventDraft?.key === draftKey ? eventDraft : null;
+  const eventId = draft ? draft.eventId : linkedEvent;
+  const attemptKey = id => JSON.stringify([userId, selected, Number(id)]);
+  function updateAttempt(id, attempt) {
+    setAttempts(previous => {
+      const next = new Map(previous);
+      if (attempt) next.set(attemptKey(id), attempt);
+      else next.delete(attemptKey(id));
+      return next;
+    });
+  }
   return <section className="fo-root">
     <header className="fo-heading"><div><p className="ap-kicker">Money / Payouts</p><h1>Organiser payouts</h1></div></header>
-    {platformPicker && <label className="lw-field"><span>Organisation</span><SearchableDropdown value={organisation} onChange={event => setOrganisation(event.target.value)} disabled={!replyForScope?.rows}>
+    {platformPicker && <label className="lw-field"><span>Organisation</span><SearchableDropdown value={organisation} onChange={event => { setEventDraft(null); setOrganisation(event.target.value); }} disabled={!replyForScope?.rows}>
       <option value="">Choose an organisation</option>{(replyForScope?.rows || []).map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
     </SearchableDropdown></label>}
     {platformPicker && !replyForScope && <p role="status">Loading organisations…</p>}
     {platformPicker && replyForScope?.error && <p role="alert">{replyForScope.error} <button className="ap-secondary" onClick={() => setRetry(n => n + 1)}>Retry organisations</button></p>}
     {selected && <OrganisationPayouts key={`${userId}:${selected}`} client={client} session={session} organisationId={selected} revision={refreshRevision}
-      initialEventId={(!initialOrganisationId || selected === initialOrganisationId) ? initialEventId : null} />}
+      selectedEventId={eventId} amount={draft?.amount || ''} uncertain={attempts.get(attemptKey(eventId))}
+      onEventChange={id => setEventDraft({ key:draftKey, eventId:id, amount:'' })}
+      onAmountChange={value => setEventDraft({ key:draftKey, eventId, amount:value })} onAttemptChange={updateAttempt} />}
   </section>;
 }

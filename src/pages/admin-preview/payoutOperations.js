@@ -110,6 +110,47 @@ async function updateRecordedPayout(client, session, organisationId, action, sig
   return saved.data;
 }
 
+
+export class PayoutSubmissionUnconfirmed extends Error {
+  constructor() { super('The payout request result could not be confirmed. Check its status before retrying.'); }
+}
+
+export async function checkPayoutRequest(client, session, organisationId, action, signal) {
+  await verifyPayoutIdentity(client, session, signal);
+  const { event_id: eventId, request_id: requestId, amount } = action.input;
+  const reply = await organisationBanking('list', organisationId, { event_id: eventId }, client);
+  signal?.throwIfAborted();
+  if (!Array.isArray(reply?.requests) || reply.requests.some(row => Number(row.event_id) !== eventId)) {
+    throw new Error('Payout request status could not be verified.');
+  }
+  const saved = reply.requests.find(row => row.id === requestId);
+  if (saved && (Number(saved.amount) !== amount || saved.last_four !== action.lastFour)) {
+    throw new Error('The saved request does not match the original review. Check payout requests.');
+  }
+  return { saved, pending:reply.requests.some(row => row.status === 'pending') };
+}
+
+export async function verifyPayoutRetry(client, session, organisationId, action, signal) {
+  const { saved, pending } = await checkPayoutRequest(client, session, organisationId, action, signal);
+  if (saved) return { saved };
+  if (pending) throw new Error('This event already has a pending payout request.');
+  const banking = await organisationBanking('summary', organisationId, {}, client);
+  signal?.throwIfAborted();
+  if (!banking?.saved || banking.version !== action.input.expected_version || banking.last_four !== action.lastFour) {
+    throw new Error('The original payout destination changed. Check the original request status.');
+  }
+  return await verifyPayoutLimit(client, organisationId, action.input, signal);
+}
+
+async function verifyPayoutLimit(client, organisationId, input, signal) {
+  const { event_id: eventId, amount } = input;
+  const { rules, settlement } = await loadPayoutSettlement(client, organisationId, eventId, signal);
+  if (!rules.canRequest || !Number.isFinite(amount) || amount > rules.maxRequestable || amount <= 0) {
+    throw new Error(rules.blockedReason || 'The available payout changed. Review the updated event balance.');
+  }
+  return { rules, settlement };
+}
+
 export async function submitPayoutAction(client, session, organisationId, action, signal) {
   await verifyPayoutIdentity(client, session, signal);
   if (['record_interim', 'remove_interim'].includes(action.kind)) return updateRecordedPayout(client, session, organisationId, action, signal);
@@ -118,13 +159,19 @@ export async function submitPayoutAction(client, session, organisationId, action
     return await organisationBanking(action.kind, organisationId, action.input, client);
   }
   const { event_id: eventId, amount } = action.input;
-  const { rules, settlement } = await loadPayoutSettlement(client, organisationId, eventId, signal);
-  if (!rules.canRequest || !Number.isFinite(amount) || amount > rules.maxRequestable || amount <= 0) {
-    throw new Error(rules.blockedReason || 'The available payout changed. Review the updated event balance.');
-  }
+  const checked = action.retry ? await verifyPayoutRetry(client, session, organisationId, action, signal)
+    : await verifyPayoutLimit(client, organisationId, action.input, signal);
+  if (checked.saved) return { request_id: checked.saved.id, recovered:true };
+  const { rules, settlement } = checked;
   await verifyPayoutIdentity(client, session, signal);
-  const saved = await organisationBanking('request', organisationId, action.input, client);
-  if (!saved?.request_id) throw new Error('Payout submission was not confirmed. Refresh requests before retrying.');
+  let saved;
+  try {
+    saved = await organisationBanking('request', organisationId, action.input, client);
+  } catch (error) {
+    if (error.rejected) throw error;
+    throw new PayoutSubmissionUnconfirmed();
+  }
+  if (saved?.request_id !== action.input.request_id) throw new PayoutSubmissionUnconfirmed();
   let notified = false;
   try {
     await verifyPayoutIdentity(client, session, signal);
