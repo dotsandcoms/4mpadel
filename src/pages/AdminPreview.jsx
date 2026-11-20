@@ -49,7 +49,7 @@ import {
   Trophy, UserPlus, FileSpreadsheet, Shuffle, Trash2, Link2,
   Users, WalletCards, X, Zap, Info, RotateCcw, KeyRound,
 } from 'lucide-react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
 import { useAdminPermissions } from '../hooks/useAdminPermissions';
 import { FOURM_PUBLIC_ORIGIN } from '../constants/site.js';
@@ -489,9 +489,10 @@ function OperationsHome({ events, registrations, go, userName, canReadEvents }) 
   const failures = registrations.filter((row) => normalizePayment(row) === 'failed');
   const pending = registrations.filter((row) => ['needs_review', 'pending', 'incomplete'].includes(String(row.status || '').toLowerCase()));
   const draftEvent = events.find((event) => !event.is_visible);
+  const eventById = new Map(events.map(event => [String(event.id), event]));
   const attention = [
-    ...failures.slice(0, 2).map((row) => ({ id: `fail-${row.id}`, type: 'payment', title: 'Recover declined payment', detail: `${personName(row)}, ${registrationDivision(row)}`, context: events.find((event) => String(event.id) === String(row.event_id))?.event_name || 'Event registration', age: '2h', priority: 'High', tone: 'danger', target: 'payment', payload: { registration: row } })),
-    ...pending.slice(0, 2).map((row) => ({ id: `reg-${row.id}`, type: 'registration', title: 'Review registration', detail: `${personName(row)}, ${registrationDivision(row)}`, context: events.find((event) => String(event.id) === String(row.event_id))?.event_name || 'Event registration', age: '5h', priority: 'Medium', tone: 'warning', target: 'registrations', payload: { registration: row } })),
+    ...failures.slice(0, 2).map((row) => ({ id: `fail-${row.id}`, type: 'payment', title: 'Recover declined payment', detail: `${personName(row)}, ${registrationDivision(row)}`, context: eventById.get(String(row.event_id))?.event_name || 'Event registration', age: '2h', priority: 'High', tone: 'danger', target: 'payment', payload: { event:eventById.get(String(row.event_id)), registration: row } })),
+    ...pending.slice(0, 2).map((row) => ({ id: `reg-${row.id}`, type: 'registration', title: 'Review registration', detail: `${personName(row)}, ${registrationDivision(row)}`, context: eventById.get(String(row.event_id))?.event_name || 'Event registration', age: '5h', priority: 'Medium', tone: 'warning', target: 'registrations', payload: { event:eventById.get(String(row.event_id)), registration: row } })),
     ...(draftEvent ? [{ id: `event-${draftEvent.id}`, type: 'event', title: 'Finish event readiness', detail: 'Pricing and publish checks remain', context: draftEvent.event_name, age: '1d', priority: 'Medium', tone: 'warning', target: 'event', payload: { event: draftEvent } }] : []),
   ];
   const paid = registrations.filter((row) => normalizePayment(row) === 'paid');
@@ -932,10 +933,13 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
   const canSeeWorkspace = canOpen(page) && Boolean(scope);
   const displayedScope = scope || { id: 'all', label: 'My authorised access' };
   const canCreateEvents = canOpen('calendar') && permissions?.role === 'super_admin' && displayedScope.id === 'all';
-  const activeEvent = data.events.find(item => String(item.id) === String(focusEventId || context.event?.id || context.registration?.event_id)) || data.events[0];
   const requestedRegistrationId = queryParams.get('registration') || context.registration?.id;
-  const activeRegistration = data.registrations.find(item => requestedRegistrationId != null && String(item.id) === String(requestedRegistrationId)
-    && (!activeEvent || String(item.event_id) === String(activeEvent.id)));
+  const selectedRegistration = requestedRegistrationId == null ? null
+    : data.registrations.find(item => String(item.id) === String(requestedRegistrationId));
+  const selectedEventId = focusEventId || (page === 'payment' && selectedRegistration?.event_id)
+    || context.event?.id || context.registration?.event_id;
+  const activeEvent = data.events.find(item => String(item.id) === String(selectedEventId)) || data.events[0];
+  const activeRegistration = selectedRegistration && String(selectedRegistration.event_id) === String(activeEvent?.id) ? selectedRegistration : null;
   const userName = effectiveSession.user.email?.split('@')[0]?.split(/[._-]/)[0]?.replace(/^./, (letter) => letter.toUpperCase()) || 'there';
   let content;
   if (!canSeeWorkspace) content = <section className="ap-section"><ShieldCheck size={28}/><h1>Workspace unavailable</h1><p>This account has no access to this workspace.</p><button className="ap-primary" onClick={() => go(firstPage)}>Open my workspace</button></section>;

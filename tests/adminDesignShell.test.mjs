@@ -18,6 +18,8 @@ const listeners = new Set();
 const result = data => ({ data, error: null });
 const calls = () => window.fixtureCalls;
 const tenant = () => window.fixtureAccount === 'tenant';
+const paymentFixture = () => window.fixtureAccount === 'platform-payment';
+const platform = () => window.fixtureAccount === 'platform' || paymentFixture();
 const dashboardOnly = () => window.fixtureAccount === 'dashboard-only';
 const eventCoAdmin = () => window.fixtureAccount === 'event-co-admin';
 const clubAssignee = () => window.fixtureAccount === 'club-event-assignee';
@@ -41,20 +43,24 @@ const event = {
   is_manual: true, is_visible: true, sapa_status: 'Silver',
 };
 const drawDivision = { id: 'north-open-division', event_id: event.id, name: 'Open division', format: 'knockout', is_active: true };
+const paymentEvent = { ...event, id:202, event_name:'Other fixture event', slug:'other-fixture-event' };
+const failedEntry = { id:50, event_id:202, email:'entrant@example.invalid', full_name:'Failed payment player', status:'registered',
+  payment_status:'failed', division:'Open', payment_reference:'EVREG-FIXTURE-202' };
 function query(table) {
   let rows = table === 'organisation_members' ? [
     { role: 'admin', user_email: email, organisation_id: north.id, organisations: north },
     { role: 'owner', user_email: 'other@example.invalid', organisation_id: south.id, organisations: south },
   ].filter(row => (window.fixtureAccount !== 'players-only' && !dashboardOnly() && !communicationsFixture()) || row.user_email !== email)
    : table === 'club_members' && clubFixture() ? [{ role: 'admin', user_email: email, clubs: club }]
-   : table === 'calendar' || table === 'events' ? [event]
+   : table === 'calendar' || table === 'events' ? (paymentFixture() ? [event,paymentEvent] : [event])
    : table === 'organisations' ? [north, south]
    : table === 'tournament_divisions' && window.fixtureEventDraw ? [drawDivision]
    : table === 'players' && playerFixture() ? [player]
    : table === 'event_registrations' && playerFixture() ? [{ id: 3, event_id: event.id, email: player.email, status: 'registered', payment_status: 'pending', division: 'Open', calendar: event }]
+   : table === 'event_registrations' && paymentFixture() ? [failedEntry]
    : [];
   if (table === 'admin_sidebar_permissions') {
-    if (window.fixtureAccount === 'platform') rows = [{ email, role: 'super_admin' }];
+    if (platform()) rows = [{ email, role: 'super_admin' }];
     else if (dashboardOnly()) rows = [{ email, role: 'custom', allowed_tabs: ['dashboard'] }];
     else if (playerFixture()) rows = [{ email, role: 'custom', allowed_tabs: ['players'] }];
     else if (eventCoAdmin()) rows = [{ email, role: 'custom', allowed_tabs: ['event-mgmt'] }];
@@ -113,7 +119,7 @@ export const supabase = {
     calls().push(['rpc', name, args]);
     const action = args.p_action;
     if (name === 'account_is_active') return result(window.fixtureAccount !== 'inactive');
-    if (name === 'is_super_admin') return result(window.fixtureAccount === 'platform');
+    if (name === 'is_super_admin') return result(platform());
     if (name === 'help_api') {
       if (communicationsFixture() && action === 'read' && (!canManageCommunications() || args.p_data.id !== ticket.id)) {
         return { error: { code: '42501', message: 'This help request is unavailable.' } };
@@ -240,6 +246,22 @@ async function clickText(page, selector, label, exact = true) {
 
 const destination = (page, label) => clickText(page, '.ap-nav-destination', label);
 
+test('a failed payment opens its exact event and registration from the dashboard and after a fresh sign-in', async t => {
+  const page = await open(t, '/admin-preview/home', 'platform-payment');
+  const paymentRoute = '/admin-preview/payment?event=202&registration=50';
+  await clickText(page, 'button.ap-attention-row', 'Recover declined payment', false);
+  await route(page, paymentRoute);
+  await heading(page, 'Registration payment');
+  assert.match(await page.$eval('.ap-payment-summary', node => node.innerText), /EVREG-FIXTURE-202/);
+  await clickText(page, 'a.ap-primary', 'Manage entry');
+  await route(page, '/admin-preview/event?event=202&registration=50');
+  await heading(page, 'Other fixture event');
+  const direct = await open(t, '/admin-preview/payment?registration=50', 'platform-payment');
+  await heading(direct, 'Registration payment');
+  await clickText(direct, 'button.ap-secondary', 'View registration');
+  await route(direct, '/admin-preview/registrations?event=202&registration=50');
+});
+
 test('dashboard-only staff never get event navigation or a misleading empty operations report', async t => {
   const page = await open(t, '/admin-preview/home', 'dashboard-only');
   await heading(page, 'Good morning, Operator.');
@@ -247,7 +269,7 @@ test('dashboard-only staff never get event navigation or a misleading empty oper
     metrics: Boolean(document.querySelector('.ap-metric-rail')), calls: window.fixtureCalls }));
   assert.equal(screen.metrics, false);
   assert.ok(!['All events','Review event readiness','View all','Event Manager'].some(label => screen.labels.includes(label)));
-  assert.ok(!screen.calls.some(call => call[0] === 'select' && ['calendar','event_registrations'].includes(call[1])));
+  assert.ok(!screen.calls.some(call => call[0] === 'read' && ['calendar','event_registrations'].includes(call[1])));
   await destination(page, 'Account security');
   await route(page, '/admin-preview/security');
 });
