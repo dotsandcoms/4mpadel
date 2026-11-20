@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import SearchableDropdown from '../../components/SearchableDropdown';
 import { publishedNativeDrawUrl } from './publicNativeDrawLink.js';
 import { canEnableSilverPlate, prepareLinkedPlate } from './nativeLinkedPlate.js';
+import { organisationDrawScope } from './nativeOrganisationDraw.js';
 import { canCompleteNativeDraw, nativeCompletionReview } from './nativeDrawLifecycle.js';
 import { canReviewNativeRanking } from './nativeDrawRanking.js';
 import NativeDrawRankingReview, { NativeDrawAwardReceiptReview } from './NativeDrawRankingReview.jsx';
@@ -9,7 +10,7 @@ import NativeDrawPlayPlan, { NativeDrawPlayPlanReview } from './NativeDrawPlayPl
 import NativeDrawCourtSetup, { NativeDrawCourtReview } from './NativeDrawCourtSetup.jsx';
 import { useEventOperation } from './useEventOperation.js';
 import {
-  canReopenNativeDraw, canScheduleNativeDraw, canUpdateNativeMatches, listNativeDrawOperations, loadNativeDrawOperations,
+  canReadPublishedNativeDraw, canReopenNativeDraw, canScheduleNativeDraw, canUpdateNativeMatches, listNativeDrawOperations, loadNativeDrawOperations,
   saveNativeDrawOperation, saveNativeEventCalendarPlan, validNativeLiveMatch,
 } from './nativeDrawOperations.js';
 import './EventPaymentDialog.css';
@@ -25,9 +26,10 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
   const title = useId();
   const userId = session?.user?.id;
   const platform = scopeId === 'all';
+  const canManagePlates = platform || Boolean(organisationDrawScope(scopeId));
   const { bindDialog, busy, error, result, close, run } = useEventOperation({ client, event, session, scopeId, onClose });
   const [eventDraws, setEventDraws] = useState(null);
-  const draws = eventDraws?.filter(draw => platform ? draw.status !== 'archived' : canUpdateNativeMatches(draw));
+  const draws = eventDraws?.filter(draw => platform ? draw.status !== 'archived' : canReadPublishedNativeDraw(draw));
   const [drawId, setDrawId] = useState('');
   const [stored, setStored] = useState(null);
   const [loadError, setLoadError] = useState('');
@@ -46,7 +48,7 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
       .then(rows => {
         if (controller.signal.aborted) return;
         setEventDraws(rows);
-        setDrawId(rows.find(draw => platform ? draw.status !== 'archived' : canUpdateNativeMatches(draw))?.id || '');
+        setDrawId(rows.find(draw => platform ? draw.status !== 'archived' : canReadPublishedNativeDraw(draw))?.id || '');
       })
       .catch(issue => { if (!controller.signal.aborted) setLoadError(issue.message); });
     return () => controller.abort();
@@ -142,10 +144,10 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
             </div>}
             {canUpdateNativeMatches(selected.draw) && !selected.featuredAvailable && <p>Featured-match controls are unavailable on this connection.</p>}
           </>}
-          {platform && enableSilver && <button type="button" className="ap-secondary" onClick={() => setReview({
+          {canManagePlates && enableSilver && <button type="button" className="ap-secondary" onClick={() => setReview({
             type: 'enable-silver', heading: 'Enable Silver plate', summary: drawLabel(selected.draw),
           })}>Enable Silver plate</button>}
-          {platform && plate && (plate.issue ? <p>{plateName} · {plate.issue}</p> : <button type="button" className="ap-secondary" onClick={() => setReview({
+          {canManagePlates && plate && (plate.issue ? <p>{plateName} · {plate.issue}</p> : <button type="button" className="ap-secondary" onClick={() => setReview({
             type: 'plate', plate, heading: 'Create ' + plateName, summary: plate.teams.length + ' teams from the source draw’s opening round.',
           })}>Create {plateName}</button>)}
           {canCompleteNativeDraw(selected.draw, selected.matches) && <button type="button" className="ap-secondary" onClick={() => setReview({

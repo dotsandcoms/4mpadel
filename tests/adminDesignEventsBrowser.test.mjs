@@ -24,6 +24,7 @@ before(async () => {
             import EventPaymentDialog from './src/pages/admin-preview/EventPaymentDialog.jsx';
             import EventRehearsal from './src/pages/admin-preview/EventRehearsal.jsx';
             import NativeDrawOperationsDialog from './src/pages/admin-preview/NativeDrawOperationsDialog.jsx';
+            import { LiveEventCommandCentre } from './src/pages/AdminPreview.jsx';
             import EventGroupDrawDialog from './src/pages/admin-preview/EventGroupDrawDialog.jsx';
             import TournamentWorkspace from './src/pages/admin-preview/tournament/TournamentWorkspace.jsx';
             import CalendarWorkspace from './src/pages/admin-preview/CalendarWorkspace.jsx';
@@ -107,7 +108,8 @@ before(async () => {
                     window.calls.push([name,args]);
                     const request = (async()=>{
                     if (name==='admin_organisation_host_builder') {
-                        if (window.kind==='host-native' || window.kind==='host-draw-complete') {
+                        if ((window.kind==='host-native' || window.kind==='host-draw-complete'
+                            || window.kind.startsWith('host-plate-')) && !window.hostPlatesRevoked) {
                             return {data:{organisation:{id:'org-a',status:'approved'},event_id:11}};
                         }
                         return {error:{message:'Current owner or admin access to the host organisation is required.'}};
@@ -115,6 +117,16 @@ before(async () => {
                     if (name==='native_manage_organisation_draw') {
                         return {data:{organisation_id:args.p_organisation_id,event_id:args.p_event_id,draw_id:args.p_draw_id,
                             match_id:args.p_match_id,action:args.p_action,status:args.p_action==='complete'?'completed':'in_progress',featured:true}};
+                    }
+                    if (name==='native_manage_organisation_draw_plate') {
+                        const scope={organisation_id:args.p_organisation_id,event_id:args.p_event_id,
+                            source_draw_id:args.p_draw_id,action:args.p_action};
+                        if (args.p_action==='enable-silver') {
+                            window.silverEnabled=true;
+                            nativeDraw.updated_at='draw-v2';
+                            return {data:{...scope,id:nativeDraw.id,division_id:51,plate_mode:'double',updated_at:'draw-v2'}};
+                        }
+                        return {data:{...scope,id:'plate-new',kind:window.kind==='host-plate-bronze'?'bronze':'silver',created:true}};
                     }
                     if (name==='native_enable_silver_plate') {
                         if (window.rejectSilverReview) return {error:{message:'The draw changed. Reopen it before enabling the Silver plate.'}};
@@ -254,6 +266,16 @@ before(async () => {
                     if (window.kind==='special-automatic' && table==='draw_matches') rows=courtMatches.map(row=>({...row,court_name:null}));
                     if ((['special-silver','special-bronze'].includes(window.kind) || window.kind.startsWith('special-enable-silver')) && table==='draw_matches') rows=linkedPlateMatches;
                     if ((['special-silver','special-bronze'].includes(window.kind) || window.kind.startsWith('special-enable-silver')) && table==='draw_entries') rows=linkedPlateEntries;
+                    if (window.kind.startsWith('host-plate-')) {
+                        if (table==='draws') {
+                            nativeDraw.status='completed';
+                            nativeDraw.draw_kind=window.kind==='host-plate-bronze'?'silver':'main';
+                            nativeDraw.scoring_rules={plate_mode:window.kind==='host-plate-enable-route'
+                                ? (window.silverEnabled?'double':'none') : 'triple'};
+                        }
+                        if (table==='draw_matches') rows=linkedPlateMatches;
+                        if (table==='draw_entries') rows=linkedPlateEntries;
+                    }
                     if (window.kind.startsWith('special-') && table==='event_play_days') rows=[
                         { id:501,event_id:11,play_date:'2035-01-21',start_time:'08:00',end_time:'18:00',courts_count:1,
                           match_duration_minutes:45,minimum_break_minutes:10,is_active:true,updated_at:'day-v1' },
@@ -415,7 +437,10 @@ before(async () => {
                 if (kind.startsWith('public-draw-')) return <EventDrawWorkspace event={event} divisions={[division]}
                     draws={[kind==='public-draw-live'?nativeDraw:{...nativeDraw,status:'draft'},otherNativeDraw]}
                     registrationCount={()=>4} onDrawDetails={()=>{}} />;
-                if (kind==='native-draw' || kind.startsWith('special-') || kind.startsWith('court-') || kind.startsWith('host-') || ['draw-complete','draw-ranking'].includes(kind)) return <NativeDrawOperationsDialog client={client} session={session} event={kind==='host-foreign'?other:event}
+                if (kind==='host-plate-enable-route') return <LiveEventCommandCentre event={event} divisions={[division]}
+                    registrations={[]} activity={[]} payments={[]} draws={[{...nativeDraw,status:'completed'}]} go={()=>{}}
+                    canOperateHostDraw client={client} session={session} scopeId="org:org-a" initialTab="draws" />;
+                if (kind==='native-draw' || kind.startsWith('special-') || kind.startsWith('court-') || kind.startsWith('host-') || ['draw-complete','draw-ranking'].includes(kind)) return <NativeDrawOperationsDialog client={client} session={session} event={['host-foreign','host-plate-foreign'].includes(kind)?other:event}
                     scopeId={kind.startsWith('host-')||['court-tenant','special-enable-silver-tenant'].includes(kind)?'org:org-a':'all'} onClose={()=>window.calls.push(['closed'])} />;
                 if (kind.startsWith('rankedin-')) return <MemoryRouter><CalendarWorkspace session={session} client={client}
                   scope={{id:'all'}} permissions={{role:'super_admin'}} scopeId="all" canManageEvents /></MemoryRouter>;
@@ -447,11 +472,11 @@ before(async () => {
                     from(){const query={select(){return query},eq(){return query},in(){return query},order(){return query},limit(){return query},
                         maybeSingle(){return Promise.resolve({data:null})},then(resolve){return Promise.resolve({data:[]}).then(resolve)}};return query}};
                     export const isSupabaseConfigured=()=>false;`,
-                snapshots: 'export const loadEventSnapshots=async()=>({});',
+                snapshots: 'export const loadEventSnapshots=async()=>({}); export const eventSnapshot=async()=>({}); export const readEventProfiles=async()=>[];',
                 clubs: 'const clubs=[]; export const useClubs=()=>({clubs,loading:false});',
                 permissions: 'const permissions={role:"super_admin"}; export const useAdminPermissions=()=>({permissions});',
                 maps: 'export const loadGoogleMaps=async()=>null; export const attachPlacesAutocomplete=async()=>()=>{};',
-                editor: 'export default ()=>null;',
+                editor: 'export default ()=>null; export const EditorFrame=()=>null;',
             }[args.path] }));
         } }],
     });
@@ -984,6 +1009,58 @@ test('linked Silver and Bronze plate reviews show only opening-round losers and 
             }]]);
         } finally { await page.close(); }
     }
+});
+
+test('the organisation Event Manager enables Silver on an eligible completed main draw after review', async () => {
+    const page = await open('host-plate-enable-route');
+    try {
+        await clickText(page, 'Manage native draw');
+        await clickText(page, 'Enable Silver plate');
+        assert.match(await page.$eval('dialog', node => node.textContent), /Open · Main draw · completed/);
+        assert.equal(await page.evaluate(() => window.calls.some(([name]) => name === 'native_manage_organisation_draw_plate')), false);
+        await clickText(page, 'Back');
+        await clickText(page, 'Enable Silver plate');
+        await clickText(page, 'Confirm draw action');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent.includes('Silver plate enabled'));
+        const calls = await page.evaluate(() => window.calls.filter(([name]) => name === 'native_manage_organisation_draw_plate'));
+        assert.deepEqual(calls, [['native_manage_organisation_draw_plate', {
+            p_organisation_id:'org-a',p_event_id:11,p_draw_id:'draw-a',p_expected_draw:'draw-v1',p_action:'enable-silver',
+        }]]);
+        assert.equal(await page.evaluate(() => window.calls.some(([name]) => name === 'native_enable_silver_plate')), false);
+    } finally { await page.close(); }
+});
+
+test('approved organisation owners and admins review Silver and Bronze plates in their exact host workspace', async () => {
+    for (const [kind, label] of [['host-plate-silver','Create Silver plate'], ['host-plate-bronze','Create Bronze plate']]) {
+        const page = await open(kind);
+        try {
+            await clickText(page, label);
+            assert.match(await page.$eval('dialog', node => node.textContent), /Plate Team 2Plate Team 4/);
+            assert.doesNotMatch(await page.$eval('dialog', node => node.textContent), /Plate Team 1|Plate Team 3/);
+            assert.equal(await page.evaluate(() => window.calls.some(([name]) => name === 'native_manage_organisation_draw_plate')), false);
+            await clickText(page, 'Confirm draw action');
+            await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent.includes('created and published'));
+            const calls = await page.evaluate(() => window.calls.filter(([name]) => name === 'native_manage_organisation_draw_plate'));
+            assert.deepEqual(calls, [['native_manage_organisation_draw_plate', {
+                p_organisation_id:'org-a',p_event_id:11,p_draw_id:'draw-a',p_expected_draw:'draw-v1',p_action:'create-plate',
+                p_expected_matches:{'plate-first':'match-v1','plate-second':'match-v1'},
+            }]]);
+        } finally { await page.close(); }
+    }
+    const foreign = await open('host-plate-foreign');
+    try {
+        await foreign.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('no longer available'));
+        assert.doesNotMatch(await foreign.$eval('dialog', node => node.textContent), /Enable Silver|Create Silver|Create Bronze/);
+        assert.equal(await foreign.evaluate(() => window.calls.some(([name]) => name === 'native_manage_organisation_draw_plate')), false);
+    } finally { await foreign.close(); }
+    const revoked = await open('host-plate-bronze');
+    try {
+        await clickText(revoked, 'Create Bronze plate');
+        await revoked.evaluate(() => { window.hostPlatesRevoked=true; });
+        await clickText(revoked, 'Confirm draw action');
+        await revoked.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('host organisation is required'));
+        assert.equal(await revoked.evaluate(() => window.calls.some(([name]) => name === 'native_manage_organisation_draw_plate')), false);
+    } finally { await revoked.close(); }
 });
 
 test('legacy main draw enables Silver after confirmation and keeps plate creation as a separate reviewed action', async () => {

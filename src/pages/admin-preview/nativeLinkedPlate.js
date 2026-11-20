@@ -13,7 +13,7 @@ export function canEnableSilverPlate(draw, matches, eventDraws) {
 }
 
 export function linkedPlateKind(draw, matches) {
-  if (!published.includes(draw.status)) return null;
+  if (!published.includes(draw.status) || draw.tournament_divisions?.is_active === false) return null;
   const mode = draw.scoring_rules?.plate_mode;
   if (draw.draw_kind === 'silver' && draw.format === 'knockout' && mode === 'triple') return 'bronze';
   if (draw.draw_kind === 'main' && ['knockout', 'group_knockout'].includes(draw.format) && ['double', 'triple'].includes(mode)

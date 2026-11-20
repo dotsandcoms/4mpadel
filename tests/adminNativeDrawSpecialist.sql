@@ -42,6 +42,7 @@ alter table public.draw_matches add column court_name text, add column americano
 \ir ../supabase/migrations/20261119112841_atomic_native_court_schedule.sql
 \ir ../supabase/migrations/20261120065013_enable_reviewed_native_silver_plate.sql
 \ir ../supabase/migrations/20261120113720_allow_silver_after_empty_custom_placement.sql
+\ir ../supabase/migrations/20261120120915_scope_reviewed_organisation_draw_plates.sql
 
 insert into public.calendar values (101, 1000, true, 'active'), (102, 1001, true, 'active');
 insert into public.tournament_divisions values

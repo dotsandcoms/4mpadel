@@ -100,6 +100,7 @@ export async function loadNativeDrawOperations({ client, event, drawId, signal, 
 }
 
 export const canUpdateNativeMatches = draw => ['published', 'in_progress'].includes(draw.status);
+export const canReadPublishedNativeDraw = draw => canUpdateNativeMatches(draw) || draw.status === 'completed';
 export const canScheduleNativeDraw = draw => draw.format !== 'americano' && ['draft', 'published', 'in_progress'].includes(draw.status);
 export const canReopenNativeDraw = draw => draw.draw_kind === 'main' && draw.status === 'published';
 
@@ -194,37 +195,55 @@ export async function loadNativeDrawRanking({ client, event, draw, ...access }) 
   return readNativeRankingReview({ client, event, draw: current, signal: access.signal });
 }
 
+async function saveReviewedPlate({ client, event, draw, operation, onAttempt, scopeId, isCurrent }) {
+  const organisationId = organisationDrawScope(scopeId);
+  const enable = operation.type === 'enable-silver';
+  const expected = draw.updated_at;
+  let request;
+  onAttempt();
+  if (organisationId) {
+    request = client.rpc('native_manage_organisation_draw_plate', {
+      p_organisation_id: organisationId, p_event_id: event.id, p_draw_id: draw.id, p_expected_draw: expected,
+      p_action: enable ? 'enable-silver' : 'create-plate',
+      ...(enable ? {} : { p_expected_matches: operation.plate.versions }),
+    });
+  } else if (enable) {
+    request = client.rpc('native_enable_silver_plate', { p_event_id: event.id, p_draw_id: draw.id, p_expected_draw: expected });
+  } else {
+    request = client.rpc('native_create_linked_plate', {
+      p_event_id: event.id, p_parent_draw: draw.id, p_expected_parent: expected, p_expected_matches: operation.plate.versions,
+    });
+  }
+  const { data, error } = await request;
+  if (error) throw error;
+  if (!isCurrent() || (organisationId && (data?.organisation_id !== organisationId
+      || String(data.event_id) !== String(event.id) || data.source_draw_id !== draw.id
+      || data.action !== (enable ? 'enable-silver' : 'create-plate')))) {
+    throw new Error('Could not verify the reviewed draw operation.');
+  }
+  if (enable) {
+    if (data?.id !== draw.id || String(data.event_id) !== String(event.id) || data.division_id !== draw.division_id
+        || data.plate_mode !== 'double' || !data.updated_at || data.updated_at === expected) {
+      throw new Error('Could not confirm the Silver plate setting.');
+    }
+    return 'Silver plate enabled. Reopen draw operations to review creation after the opening round is complete.';
+  }
+  if (!data?.id || data.kind !== operation.plate.kind || typeof data.created !== 'boolean') {
+    throw new Error('Could not verify the linked plate.');
+  }
+  const name = data.kind === 'silver' ? 'Silver plate' : 'Bronze plate';
+  return data.created ? name + ' created and published.' : name + ' is already available.';
+}
+
 export async function saveNativeDrawOperation({ client, event, draw, operation, onAttempt, ...access }) {
   const context = { client, event, ...access };
   await verifyNativeEvent(context);
   const fresh = await readNativeDraw(client, event, draw.id);
   if (fresh.updated_at !== draw.updated_at || !access.isCurrent()) throw new Error('The draw changed. Reopen it before continuing.');
+  if (operation.type === 'enable-silver' || operation.type === 'plate') {
+    return saveReviewedPlate({ client, event, draw: fresh, operation, onAttempt, ...access });
+  }
   if (organisationDrawScope(access.scopeId)) return saveOrganisationDrawOperation({ client, event, draw: fresh, operation, onAttempt, ...access });
-
-  if (operation.type === 'enable-silver') {
-    const expectedVersion = fresh.updated_at;
-    onAttempt();
-    const { data, error } = await client.rpc('native_enable_silver_plate', {
-      p_event_id: event.id, p_draw_id: fresh.id, p_expected_draw: expectedVersion,
-    });
-    if (error) throw error;
-    if (data?.id !== fresh.id || String(data.event_id) !== String(event.id) || data.division_id !== fresh.division_id
-      || data.plate_mode !== 'double' || !data.updated_at || data.updated_at === expectedVersion) {
-      throw new Error('Could not confirm the Silver plate setting.');
-    }
-    return 'Silver plate enabled. Reopen draw operations to review creation after the opening round is complete.';
-  }
-
-  if (operation.type === 'plate') {
-    onAttempt();
-    const { data, error } = await client.rpc('native_create_linked_plate', {
-      p_event_id: event.id, p_parent_draw: fresh.id, p_expected_parent: fresh.updated_at, p_expected_matches: operation.plate.versions,
-    });
-    if (error) throw error;
-    if (!data?.id || data.kind !== operation.plate.kind) throw new Error('Could not verify the linked plate.');
-    const name = data.kind === 'silver' ? 'Silver plate' : 'Bronze plate';
-    return data.created ? name + ' created and published.' : name + ' is already available.';
-  }
 
   if (operation.type === 'complete') {
     const matches = await nativeMatches(client, fresh, access.signal);

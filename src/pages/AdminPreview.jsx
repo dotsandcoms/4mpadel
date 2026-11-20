@@ -10,6 +10,7 @@ import { loadManagedEventCompletions, managedEventStage } from "./admin-preview/
 import { verifyEventOperationAccess } from "./admin-preview/eventOperationAccess.js";
 import EventRankedinDialog from "./admin-preview/EventRankedinDialog.jsx";
 import NativeDrawOperationsDialog from './admin-preview/NativeDrawOperationsDialog.jsx';
+import { canReadPublishedNativeDraw } from './admin-preview/nativeDrawOperations.js';
 import EventDrawWorkspace, { currentDrawForDivision } from './admin-preview/EventDrawWorkspace.jsx';
 import { isAvailableSolo } from "../utils/pairEventEntries.js";
 import EventRemovalDialog from "./admin-preview/EventRemovalDialog.jsx";
@@ -617,8 +618,8 @@ export function LiveEventCommandCentre({ event, registrations, payments, divisio
   const managedEvent = { ...event, management_completed_at: completion.value || null };
   const canAddEntry = operationAccess && event.event_status !== 'cancelled';
   const canSyncRankedin = canManagePayments && Boolean(eventRankedinId(event));
-  const hasActiveNativeDraw = draws.some(draw => ['published', 'in_progress'].includes(draw.status));
-  const canOperateNativeDraw = (canManagePayments || canOperateHostDraw && hasActiveNativeDraw) && canAddEntry && event.is_manual;
+  const hasPublishedNativeDraw = draws.some(canReadPublishedNativeDraw);
+  const canOperateNativeDraw = (canManagePayments || canOperateHostDraw && hasPublishedNativeDraw) && canAddEntry && event.is_manual;
   const openRehearsal = canRehearse && event.is_manual ? () => { setAction(null); setRehearsing(true); } : undefined;
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [cancelScope, setCancelScope] = useState(null);
