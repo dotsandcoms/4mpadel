@@ -17,6 +17,7 @@ CREATE TABLE public.temporary_licenses (id bigint PRIMARY KEY, event_id bigint R
 ALTER TABLE public.payment_refunds ENABLE ROW LEVEL SECURITY;
 GRANT SELECT, UPDATE ON ALL TABLES IN SCHEMA public TO service_role;
 \ir ../supabase/migrations/20261120112000_reviewed_event_refund_retry.sql
+\ir ../supabase/migrations/20261120120620_preserve_original_entry_refund_allowance.sql
 INSERT INTO calendar VALUES (11), (22);
 INSERT INTO event_registrations (id,event_id,email,status,payment_status,division,refund_amount) VALUES
  ('11111111-0000-4000-8000-000000000001',11,'match@example.invalid','withdrawn','paid','Open',100),
@@ -107,5 +108,40 @@ BEGIN
     RAISE SQLSTATE 'P0002';
   EXCEPTION WHEN SQLSTATE 'P0002' THEN NULL;
   END;
+END $$;
+RESET ROLE;
+
+
+INSERT INTO event_registrations (id,event_id,email,status,payment_status,division) VALUES
+ ('11111111-0000-4000-8000-000000000003',11,'moved@example.invalid','withdrawn','paid','Lower'),
+ ('11111111-0000-4000-8000-000000000004',11,'teammate@example.invalid','withdrawn','paid','Open');
+INSERT INTO payments (id,event_id,reference,payment_method,status,amount,metadata,is_test) VALUES
+ ('22222222-0000-4000-8000-000000000006',11,'moved-checkout','paystack','success',800,
+  '{"division_entry_fees":{"Open":400,"Lower":250},"covers":[{"type":"entry","division":"Open","email":"teammate@example.invalid"},{"type":"license","email":"former@example.invalid"},{"type":"entry","division":"Open","division_id":"open-id","email":"former@example.invalid"}],"verified_entry_transfers":[{"registration_id":"11111111-0000-4000-8000-000000000003","event_id":11,"cover_position":2,"division":"Lower","division_id":"lower-id","original_division":"Open","original_division_id":"open-id"}]}',false),
+ ('22222222-0000-4000-8000-000000000007',11,'unproven-checkout','paystack','success',800,
+  '{"division_entry_fees":{"Lower":400},"covers":[{"type":"entry","division":"Open"}],"verified_entry_transfers":[{"registration_id":"11111111-0000-4000-8000-000000000003","event_id":11,"cover_position":5,"division":"Lower","original_division":"Open"}]}',false);
+INSERT INTO payment_refunds (id,event_registration_id,payment_id,amount,currency,status,reason,metadata) VALUES
+ ('33333333-0000-4000-8000-000000000010','11111111-0000-4000-8000-000000000003','22222222-0000-4000-8000-000000000006',100,'ZAR','needs_attention','division_switch','{"cover_type":"entry"}'),
+ ('33333333-0000-4000-8000-000000000011','11111111-0000-4000-8000-000000000003','22222222-0000-4000-8000-000000000006',301,'ZAR','failed','owner_withdraw','{"cover_type":"entry"}'),
+ ('33333333-0000-4000-8000-000000000012','11111111-0000-4000-8000-000000000003','22222222-0000-4000-8000-000000000006',300,'ZAR','failed','owner_withdraw','{"cover_type":"entry"}'),
+ ('33333333-0000-4000-8000-000000000013','11111111-0000-4000-8000-000000000004','22222222-0000-4000-8000-000000000006',400,'ZAR','failed','owner_withdraw','{"cover_type":"entry"}'),
+ ('33333333-0000-4000-8000-000000000014','11111111-0000-4000-8000-000000000003','22222222-0000-4000-8000-000000000007',1,'ZAR','failed','owner_withdraw','{"cover_type":"entry"}');
+
+SET ROLE service_role;
+DO $$
+DECLARE
+    payment constant uuid := '22222222-0000-4000-8000-000000000006';
+    moved constant uuid := '11111111-0000-4000-8000-000000000003';
+    teammate constant uuid := '11111111-0000-4000-8000-000000000004';
+    result jsonb;
+BEGIN
+    result := public.claim_event_refund_retry('33333333-0000-4000-8000-000000000011',11,moved,payment,301,null,null,'paystack','moved-checkout','127',80000,'live','synthetic',false);
+    IF result->>'unavailable' IS DISTINCT FROM 'component_allowance' THEN RAISE EXCEPTION 'partial exceeded the original slot: %', result; END IF;
+    result := public.claim_event_refund_retry('33333333-0000-4000-8000-000000000012',11,moved,payment,300,null,null,'paystack','moved-checkout','127',80000,'live','synthetic',false);
+    IF result->>'phase' IS DISTINCT FROM 'held' THEN RAISE EXCEPTION 'remaining original slot was rejected: %', result; END IF;
+    result := public.claim_event_refund_retry('33333333-0000-4000-8000-000000000013',11,teammate,payment,400,null,null,'paystack','moved-checkout','127',80000,'live','synthetic',false);
+    IF result->>'phase' IS DISTINCT FROM 'held' THEN RAISE EXCEPTION 'moved entry reduced the teammate component: %', result; END IF;
+    result := public.claim_event_refund_retry('33333333-0000-4000-8000-000000000014',11,moved,'22222222-0000-4000-8000-000000000007',1,null,null,'paystack','unproven-checkout','128',80000,'live','synthetic',false);
+    IF result->>'unavailable' IS DISTINCT FROM 'component_allowance' THEN RAISE EXCEPTION 'missing canonical cover fell back to current price: %', result; END IF;
 END $$;
 RESET ROLE;

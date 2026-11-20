@@ -587,6 +587,7 @@ async function handleSwitchDivision(
         const partnerReg = await findLinkedRefundPartner(supabaseAdmin, reg, true);
         if (!partnerReg) return json(400, { error: 'The selected registrations are not a linked team' });
         const moving = [reg as RegistrationRow, partnerReg as RegistrationRow];
+        const preserveQuotedCovers = successPayments.some(payment => moving.some(player => paymentUsesVerifiedEntryTransfer(payment, player)));
         for (const player of moving) {
             const { data: targetRows } = await supabaseAdmin
                 .from('event_registrations')
@@ -621,7 +622,7 @@ async function handleSwitchDivision(
                 p_is_paid: newStatus === 'paid',
             });
 
-            for (const payment of successPayments) {
+            for (const payment of preserveQuotedCovers ? [] : successPayments) {
                 const meta = parseMeta(payment.metadata);
                 const covers = Array.isArray(meta.covers) ? meta.covers as Record<string, unknown>[] : [];
                 let changed = false;
@@ -1004,7 +1005,7 @@ serve(async (req: Request) => {
         if (paymentIds.length) {
             const { data: refs, error: refundsReadError } = await supabaseAdmin
                 .from('payment_refunds')
-                .select('id, payment_id, amount, status')
+                .select('id, payment_id, event_registration_id, amount, status, metadata')
                 .in('payment_id', paymentIds);
             if (refundsReadError) throw refundsReadError;
             existingRefunds = (refs || []) as RefundRow[];
@@ -1138,7 +1139,7 @@ serve(async (req: Request) => {
             // (Re-query is simplest and safe for the small per-event volume.)
             const { data: refs, error: refundsReadError } = await supabaseAdmin
                 .from('payment_refunds')
-                .select('id, payment_id, amount, status')
+                .select('id, payment_id, event_registration_id, amount, status, metadata')
                 .in('payment_id', paymentIds.length ? paymentIds : ['00000000-0000-0000-0000-000000000000']);
             if (refundsReadError) throw refundsReadError;
             existingRefunds = (refs || []) as RefundRow[];

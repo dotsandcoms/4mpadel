@@ -6,12 +6,14 @@ import { searchRegistrationPlayers } from '../../utils/adminEventRegistration';
 
 const normalize = value => String(value || '').trim().toLowerCase();
 
-export default function ReplaceRegistrationPlayerDialog({ players, initialRegistrationId, onClose, onReplaced }) {
+export default function ReplaceRegistrationPlayerDialog({ players, initialRegistrationId, initialReplacement, onClose, onReplaced }) {
     const dialogRef = useRef(null);
     const [registrationId, setRegistrationId] = useState(initialRegistrationId || players[0].id);
-    const [query, setQuery] = useState('');
+    const [selected, setSelected] = useState(() => initialReplacement?.id && normalize(initialReplacement.email)
+        && !players.some(player => normalize(player.email) === normalize(initialReplacement.email))
+        ? initialReplacement : null);
+    const [query, setQuery] = useState(selected?.name || '');
     const [results, setResults] = useState([]);
-    const [selected, setSelected] = useState(null);
     const [searching, setSearching] = useState(false);
     const [searched, setSearched] = useState(false);
     const [saving, setSaving] = useState(false);

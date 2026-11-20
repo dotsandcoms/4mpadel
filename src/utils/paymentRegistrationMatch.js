@@ -71,13 +71,15 @@ export function paymentEntryCoversFor(metadata = {}) {
         const position = ++entryPosition;
         if (!byPosition.has(position)) return cover;
         const transfer = byPosition.get(position);
+        const sourceDivision = transfer?.original_division ?? transfer?.division;
+        const sourceDivisionId = transfer?.original_division !== undefined ? transfer.original_division_id : transfer?.division_id;
         if (transfer?.cover_position !== position || !transfer.registration_id || !transfer.event_id
             || (transfer.email !== undefined && !norm(transfer.email))
-            || (cover.division_id && String(cover.division_id) !== String(transfer.division_id))
-            || (!cover.division_id && cover.division !== transfer.division)) return null;
+            || (cover.division_id && String(cover.division_id) !== String(sourceDivisionId))
+            || (!cover.division_id && cover.division !== sourceDivision)) return null;
         return { ...cover, email: transfer.email, registration_id: transfer.registration_id,
             division: transfer.division, division_id: transfer.division_id,
-            [verifiedEntryTransfer]: { ...transfer, originalEmail: cover.email } };
+            [verifiedEntryTransfer]: { ...transfer, originalEmail: cover.email, originalDivision: sourceDivision } };
     }).filter(Boolean);
     // Only top-level entry covers are part of the verified checkout quote.
     // A nested gateway snapshot can still carry the old player or division.
@@ -275,9 +277,9 @@ export function getRegistrationEntryFeePaid(payment, reg, fallbackFee = 0) {
     const entryCovers = paymentEntryCoversFor(meta).filter((cover) => cover.type === 'entry');
     const transferred = entryCovers.find(cover => verifiedCoverMatches(cover, reg))?.[verifiedEntryTransfer];
     const snapshot = transferred && paymentRegistrationRows(meta).find(row =>
-        norm(row.email) === norm(transferred.originalEmail) && row.division === transferred.division);
+        norm(row.email) === norm(transferred.originalEmail) && row.division === transferred.originalDivision);
     const fullName = norm(snapshot?.full_name || reg.full_name);
-    const pricedDivision = transferred?.division || division;
+    const pricedDivision = transferred?.originalDivision || division;
     const paymentAmount = Number(payment.amount || 0);
 
     if (Array.isArray(meta.line_items) && meta.line_items.length > 0) {
@@ -303,8 +305,8 @@ export function getRegistrationEntryFeePaid(payment, reg, fallbackFee = 0) {
 
         // Team checkout: match this player's share from entry line items by cover count
         if (entryItems.length > 1 && email) {
-            const coverIndex = entryCovers.findIndex((c) => c[verifiedEntryTransfer] ? verifiedCoverMatches(c, reg)
-                : norm(c.email) === email && (!division || !c.division || c.division === division));
+            const coverIndex = transferred ? transferred.cover_position - 1 : entryCovers.findIndex((c) => !c[verifiedEntryTransfer]
+                && norm(c.email) === email && (!division || !c.division || c.division === division));
             if (coverIndex >= 0 && entryItems[coverIndex]?.amount != null) {
                 return Number(entryItems[coverIndex].amount) || 0;
             }

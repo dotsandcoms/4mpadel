@@ -20,7 +20,7 @@ CREATE FUNCTION public.can_manage_event(event_id bigint) RETURNS boolean LANGUAG
     SELECT auth.email() = 'admin@example.com' AND event_id = 101;
 $$;
 CREATE TABLE public.calendar(id bigint PRIMARY KEY, event_status text DEFAULT 'active', registration_closes_at timestamptz, is_weekly boolean DEFAULT false, is_quick_event boolean DEFAULT false);
-CREATE TABLE public.tournament_divisions(id uuid PRIMARY KEY, event_id bigint, name text, entries_close_at timestamptz, entry_limit integer);
+CREATE TABLE public.tournament_divisions(id uuid PRIMARY KEY, event_id bigint, name text, entries_close_at timestamptz, entry_limit integer, entry_fee numeric DEFAULT 400);
 CREATE TABLE public.players(id bigint PRIMARY KEY, name text, email text, contact_number text);
 CREATE TABLE public.event_registrations(
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(), event_id bigint, email text, full_name text, phone text, created_at timestamptz DEFAULT now(), access_grant_id uuid,
@@ -49,6 +49,7 @@ GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA public TO authenticated;
 \ir ../supabase/migrations/20261017144329_manage_registration_teams.sql
 \ir ../supabase/migrations/20261019050830_division_team_capacity.sql
 \ir ../supabase/migrations/20261019050836_registration_deadline_payment_access.sql
+\ir ../supabase/migrations/20261019050841_atomic_division_capacity_moves.sql
 \ir ../supabase/migrations/20261020084211_event_manager_player_replacement.sql
 
 create function auth.jwt() returns jsonb language sql stable as
@@ -197,4 +198,111 @@ begin
   assert (select sha256(convert_to(private.checkout_cart(p)::text,'UTF8'))=q.cart_hash
     from public.payments p join private.event_checkout_security_quotes q on q.payment_id=p.id where p.id=event_payment),
     'redaction preserves the original quote hash';
+end $$;
+
+create table auth.users(id uuid primary key,email text);
+create function private.verified_email_change_context() returns boolean language sql stable as $$ select false $$;
+\ir ../supabase/migrations/20261120120500_preserve_verified_transfer_contact_changes.sql
+
+create function pg_temp.change_transfer_contact_outside_review() returns void language plpgsql as $$
+begin
+  update public.event_registrations set email='direct-link@example.com'
+    where id='20000000-0000-0000-0000-000000000002';
+  set constraints verified_transfer_contact_is_current immediate;
+end $$;
+
+set role authenticated;
+select pg_temp.must_fail('select pg_temp.change_transfer_contact_outside_review()','Use Replace player');
+reset role;
+
+do $$
+declare
+  payment_id_value constant uuid:='40000000-0000-0000-0000-000000000001';
+  slot_id constant uuid:='20000000-0000-0000-0000-000000000002';
+  original jsonb;
+  result jsonb;
+begin
+  select to_jsonb(p) into original from public.payments p where p.id=payment_id_value;
+  assert (select email='next@example.com' from public.event_registrations where id=slot_id);
+  insert into public.players values (7,'Latest replacement','latest@example.com','777');
+  set local role authenticated;
+  result:=pg_temp.replace_player(slot_id,'next@example.com','payer@example.com',7);
+  reset role;
+  set constraints verified_transfer_contact_is_current immediate;
+  assert result->>'new_email'='latest@example.com';
+  assert (select email='latest@example.com' from private.verified_payment_entry_transfers
+    where payment_id=payment_id_value and registration_id=slot_id);
+  assert (select to_jsonb(p)=original from public.payments p where p.id=payment_id_value);
+  assert not has_function_privilege('authenticated','private.sync_verified_transfer_contact()','execute');
+  assert not has_function_privilege('service_role','private.anonymize_verified_transfer_contact()','execute');
+end $$;
+
+\ir ../supabase/migrations/20261120120700_move_verified_entry_allocations.sql
+
+insert into public.tournament_divisions(id,event_id,name,entry_limit,entry_fee) values
+  ('30000000-0000-0000-0000-000000000002',101,'Advanced',8,400),
+  ('30000000-0000-0000-0000-000000000003',102,'Foreign',8,400),
+  ('30000000-0000-0000-0000-000000000004',101,'Full division',1,400);
+insert into public.event_registrations(event_id,email,full_name,division,division_id)
+  values(101,'occupant@example.com','Unrelated team','Full division','30000000-0000-0000-0000-000000000004');
+
+do $$
+declare
+  event_payment constant uuid := '40000000-0000-0000-0000-000000000001';
+  paid_slot constant uuid := '20000000-0000-0000-0000-000000000002';
+  payer_slot constant uuid := '20000000-0000-0000-0000-000000000001';
+  target_id constant uuid := '30000000-0000-0000-0000-000000000002';
+  original jsonb;
+  aliases jsonb;
+  reviewed_entries jsonb;
+begin
+  select to_jsonb(p) into original from public.payments p where p.id = event_payment;
+  set local role authenticated;
+  begin
+    update public.event_registrations set division_id = target_id, division = 'Advanced' where id = paid_slot;
+    set constraints verify_transferred_registration_division immediate;
+    raise exception 'A direct edit moved a verified allocation';
+  exception when insufficient_privilege then
+    if position('reviewed division action' in sqlerrm) = 0 then raise; end if;
+  end;
+  perform pg_temp.must_fail(format('select public.move_registration_division(%L,%L)', array[paid_slot]::text,
+    '30000000-0000-0000-0000-000000000003'), 'available target division');
+  perform pg_temp.must_fail(format('select public.move_registration_division(%L,%L)', array[payer_slot,paid_slot]::text,
+    '30000000-0000-0000-0000-000000000004'), 'full');
+  reset role;
+  assert (select to_jsonb(p) = original from public.payments p where p.id = event_payment), 'failed moves preserve the entire original receipt';
+  assert (select count(*)=1 from private.verified_payment_entry_transfers where payment_id=event_payment),
+    'failed team move rolls back the added teammate allocation';
+  assert (select count(*)=2 from public.event_registrations where id in (paid_slot,payer_slot) and division='Open');
+
+  perform set_config('request.jwt.claims','{"sub":"00000000-0000-0000-0000-000000000004","email":"other@example.com","role":"authenticated"}',true);
+  set local role authenticated;
+  perform pg_temp.must_fail(format('select public.move_registration_division(%L,%L)', array[payer_slot,paid_slot]::text,target_id),
+    'cannot manage entries');
+  reset role;
+  perform set_config('request.jwt.claims','{"sub":"00000000-0000-0000-0000-000000000001","email":"admin@example.com","role":"authenticated"}',true);
+  select jsonb_agg(jsonb_build_object('id',r.id,'email',r.email,'division',r.division,'division_id',r.division_id,
+    'status',r.status,'payment_status',r.payment_status,'partner_email',r.partner_email) order by r.id)
+    into reviewed_entries from public.event_registrations r where r.id in (paid_slot,payer_slot);
+  set local role authenticated;
+  perform pg_temp.must_fail(format('select public.admin_reviewed_move_registration_division(101,%L,%L,400,500)',target_id,reviewed_entries),
+    'reviewed division or fees changed');
+  perform pg_temp.must_fail(format('select public.admin_reviewed_move_registration_division(101,%L,%L,400,400)',target_id,
+    jsonb_set(reviewed_entries,'{0,email}','"wrong@example.com"')), 'reviewed entries changed');
+  perform public.admin_reviewed_move_registration_division(101,target_id,reviewed_entries,400,400);
+  reset role;
+  set constraints verify_transferred_registration_division immediate;
+
+  assert (select count(*)=2 from public.event_registrations where id in (paid_slot,payer_slot)
+    and division_id=target_id and payment_status='paid' and partner_email IS NOT NULL), 'the team and paid status are preserved';
+  assert (select count(*)=2 from private.verified_payment_entry_transfers where payment_id=event_payment and division_id=target_id),
+    'both the replaced and unchanged player have current allocation coordinates';
+  select metadata->'verified_entry_transfers' into aliases from public.payments where id=event_payment;
+  assert jsonb_array_length(aliases)=2 and aliases #>> '{0,original_division}'='Open' and aliases #>> '{1,original_division}'='Open';
+  assert not jsonb_path_exists(aliases, '$[*].email'), 'the moved allocation keeps replacement contacts private';
+  assert (select to_jsonb(p)-'metadata'=original-'metadata' and p.metadata-'verified_entry_transfers'=(original->'metadata')-'verified_entry_transfers'
+    from public.payments p where p.id=event_payment), 'the original Paystack amount, reference, and quote stay intact';
+  assert (select sha256(convert_to(private.checkout_cart(p)::text,'UTF8'))=q.cart_hash
+    from public.payments p join private.event_checkout_security_quotes q on q.payment_id=p.id where p.id=event_payment);
+  assert not has_function_privilege('authenticated','private.move_registration_division_before_transfer(uuid[],uuid,boolean)','execute');
 end $$;

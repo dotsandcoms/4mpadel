@@ -37,8 +37,10 @@ export type PaymentRow = {
 export type RefundRow = {
     id?: string;
     payment_id: string | null;
+    event_registration_id?: string | null;
     amount: number;          // RANDS
     status: string;
+    metadata?: unknown;
 };
 
 export type RegistrationRow = {
@@ -112,6 +114,8 @@ type VerifiedEntryTransfer = {
     email?: string;
     division: string;
     division_id: string | null;
+    original_division?: string;
+    original_division_id?: string | null;
 };
 
 function refundEntryCover(payment: PaymentRow, registration: RegistrationRow): { cover: Cover; transferred: boolean } | undefined {
@@ -123,10 +127,12 @@ function refundEntryCover(payment: PaymentRow, registration: RegistrationRow): {
         if (cover.type !== 'entry') continue;
         const alias = byPosition.get(++position);
         if (alias) {
+            const sourceDivision = alias.original_division ?? alias.division;
+            const sourceDivisionId = alias.original_division !== undefined ? alias.original_division_id : alias.division_id;
             if (alias.cover_position === position && String(alias.event_id) === String(registration.event_id)
                 && alias.registration_id === registration.id && normEmail(registration.email)
                 && (alias.email === undefined || normEmail(alias.email) === normEmail(registration.email))
-                && (cover.division_id ? cover.division_id === alias.division_id : cover.division === alias.division)
+                && (cover.division_id ? cover.division_id === sourceDivisionId : cover.division === sourceDivision)
                 && (alias.division_id ? alias.division_id === registration.division_id : alias.division === registration.division)) {
                 return { cover, transferred: true };
             }
@@ -219,12 +225,20 @@ export function resolveRefundableItems(
     // items chosen in this call, so an entry + license taken from one
     // transaction stay within that transaction's amount.
     const drawnByPayment = new Map<string, number>();
+    const entryDrawnByPayment = new Map<string, number>();
     for (const r of existingRefunds) {
         if (!r.payment_id || r.status === 'failed') continue;
         drawnByPayment.set(
             r.payment_id,
             roundRands((drawnByPayment.get(r.payment_id) || 0) + Number(r.amount || 0)),
         );
+        const coverType = parseMeta(r.metadata).cover_type;
+        if (r.event_registration_id === registration.id && (!coverType || coverType === 'entry')) {
+            entryDrawnByPayment.set(
+                r.payment_id,
+                roundRands((entryDrawnByPayment.get(r.payment_id) || 0) + Number(r.amount || 0)),
+            );
+        }
     }
 
     const successPayments = payments.filter((p) => p.status === 'success');
@@ -256,14 +270,19 @@ export function resolveRefundableItems(
     const entryPayments = successPayments
         .filter(p => parseMeta(p.metadata).source !== 'native_entry_balance')
         .filter(p => paymentCoversRefundEntry(p, registration))
-        .sort(byRoomThenRecent);
+        // A previous partial identifies the receipt for this entry. Finish that
+        // allocation before considering any other successful checkout.
+        .sort((a, b) => Number(entryDrawnByPayment.has(b.id)) - Number(entryDrawnByPayment.has(a.id)) || byRoomThenRecent(a, b));
 
     for (const p of entryPayments) {
         const cover = refundEntryCover(p, registration)?.cover;
         const entryFee = roundRands(Number(divisionFeesOf(p)[cover?.division || registration.division] || 0));
-        const remaining = remainingOf(p);
-        if (entryFee <= 0 || remaining <= 0) continue;
-        const amount = Math.min(entryFee, remaining);
+        const entryRemaining = roundRands(entryFee - (entryDrawnByPayment.get(p.id) || 0));
+        const amount = Math.min(entryRemaining, remainingOf(p));
+        if (amount <= 0) {
+            if (entryDrawnByPayment.has(p.id)) break;
+            continue;
+        }
         items.push({
             payment_id: p.id,
             // Always the Paystack checkout ref (parent), never LIC-* ledger refs.
@@ -487,6 +506,7 @@ export async function switchRegistrationDivision(
 ): Promise<void> {
     const oldDivision = String(reg.division || '');
     const regEmail = normEmail(reg.email);
+    const hasVerifiedAllocation = payments.some(payment => payment.status === 'success' && paymentUsesVerifiedEntryTransfer(payment, reg));
 
     // Capacity and partner changes commit together, or the original entry stays intact.
     const { error } = await supabaseAdmin.rpc('move_registration_division', {
@@ -495,6 +515,7 @@ export async function switchRegistrationDivision(
         p_reset_payment: false,
     });
     if (error) throw error;
+    if (hasVerifiedAllocation) return;
 
     // 3. Rewrite the original payment's entry cover from old -> new division.
     for (const payment of payments) {

@@ -194,5 +194,38 @@ select set_config('request.jwt.claims','{"sub":"00000000-0000-0000-0000-00000000
 set local role authenticated;
 select pg_temp.reject($q$select public.own_player_identity()$q$,'Sign in again');
 reset role;
+select set_config('request.jwt.claims','{}',true);
+create table private.verified_payment_entry_transfers(payment_id uuid references public.payments,
+  registration_id uuid,event_id bigint,email text not null,primary key(payment_id,registration_id));
+insert into private.verified_payment_entry_transfers values(
+  '40000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001',1,'third@example.test');
+\ir ../../supabase/migrations/20261120120500_preserve_verified_transfer_contact_changes.sql
+create temp table original_receipt as select to_jsonb(p) receipt,to_jsonb(q) quote from public.payments p
+  join private.event_checkout_security_quotes q on q.payment_id=p.id;
+update auth.users set email_change='fourth@example.test' where id='00000000-0000-0000-0000-000000000001';
+set session authorization supabase_auth_admin;
+update auth.users set email='fourth@example.test',email_change='' where id='00000000-0000-0000-0000-000000000001';
+reset session authorization;
+set constraints verified_transfer_contact_is_current immediate;
+select pg_temp.expect((select email='fourth@example.test' from private.verified_payment_entry_transfers)
+  and (select email='fourth@example.test' and payment_status='paid' from public.event_registrations),
+  'verified Auth confirmation keeps the transfer attached to the same paid slot');
+select pg_temp.expect((select to_jsonb(p)=s.receipt and to_jsonb(q)=s.quote from public.payments p
+  join private.event_checkout_security_quotes q on q.payment_id=p.id cross join original_receipt s),
+  'updating the verified transfer contact does not rewrite the receipt or quote');
+
+-- Mirror the checked erasure sequence. The synthetic legacy guards above
+-- check only email changes, so disable those test substitutes for erasure.
+set constraints verified_transfer_contact_is_current deferred;
+alter table public.event_registrations disable trigger deadline;
+alter table public.event_registrations disable trigger attestation;
+update public.event_registrations set email='deleted-00000000-0000-0000-0000-000000000001@deleted.invalid';
+delete from auth.sessions where user_id='00000000-0000-0000-0000-000000000001';
+delete from auth.users where id='00000000-0000-0000-0000-000000000001';
+set constraints verified_transfer_contact_is_current immediate;
+select pg_temp.expect((select email='deleted-00000000-0000-0000-0000-000000000001@deleted.invalid'
+  from private.verified_payment_entry_transfers),'completed account erasure clears the transfer contact');
+select pg_temp.expect((select to_jsonb(p)=s.receipt from public.payments p cross join original_receipt s),
+  'changing the private transfer contact preserves the original payer receipt');
 rollback;
-\echo 'Email/profile DB: verified atomic identity, private fields, role/entry preservation, checkout fingerprints, audit grants and stale sessions passed.'
+\echo 'Email/profile DB: verified atomic identity, transfer contacts, private fields, checkout fingerprints, audit grants and stale sessions passed.'

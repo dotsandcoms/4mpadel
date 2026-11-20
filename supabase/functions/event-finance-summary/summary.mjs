@@ -60,14 +60,16 @@ function paymentEntryCoversFor(metadata = {}) {
     const position = ++entryPosition;
     if (!byPosition.has(position)) return cover;
     const transfer = byPosition.get(position);
-    if (transfer?.cover_position !== position || !transfer.registration_id || !transfer.event_id || transfer.email !== void 0 && !norm(transfer.email) || cover.division_id && String(cover.division_id) !== String(transfer.division_id) || !cover.division_id && cover.division !== transfer.division) return null;
+    const sourceDivision = transfer?.original_division ?? transfer?.division;
+    const sourceDivisionId = transfer?.original_division !== void 0 ? transfer.original_division_id : transfer?.division_id;
+    if (transfer?.cover_position !== position || !transfer.registration_id || !transfer.event_id || transfer.email !== void 0 && !norm(transfer.email) || cover.division_id && String(cover.division_id) !== String(sourceDivisionId) || !cover.division_id && cover.division !== sourceDivision) return null;
     return {
       ...cover,
       email: transfer.email,
       registration_id: transfer.registration_id,
       division: transfer.division,
       division_id: transfer.division_id,
-      [verifiedEntryTransfer]: { ...transfer, originalEmail: cover.email }
+      [verifiedEntryTransfer]: { ...transfer, originalEmail: cover.email, originalDivision: sourceDivision }
     };
   }).filter(Boolean);
   return [...projected, ...innerCovers.filter((cover) => cover && cover.type !== "entry")];
@@ -192,9 +194,9 @@ function getRegistrationEntryFeePaid(payment, reg, fallbackFee = 0) {
   const division = reg.division || reg.class_name || "";
   const entryCovers = paymentEntryCoversFor(meta).filter((cover) => cover.type === "entry");
   const transferred = entryCovers.find((cover) => verifiedCoverMatches(cover, reg))?.[verifiedEntryTransfer];
-  const snapshot = transferred && paymentRegistrationRows(meta).find((row) => norm(row.email) === norm(transferred.originalEmail) && row.division === transferred.division);
+  const snapshot = transferred && paymentRegistrationRows(meta).find((row) => norm(row.email) === norm(transferred.originalEmail) && row.division === transferred.originalDivision);
   const fullName = norm(snapshot?.full_name || reg.full_name);
-  const pricedDivision = transferred?.division || division;
+  const pricedDivision = transferred?.originalDivision || division;
   const paymentAmount = Number(payment.amount || 0);
   if (Array.isArray(meta.line_items) && meta.line_items.length > 0) {
     const entryItems = meta.line_items.filter((item) => !isLicenseLineItem(item));
@@ -215,7 +217,7 @@ function getRegistrationEntryFeePaid(payment, reg, fallbackFee = 0) {
       }
     }
     if (entryItems.length > 1 && email) {
-      const coverIndex = entryCovers.findIndex((c) => c[verifiedEntryTransfer] ? verifiedCoverMatches(c, reg) : norm(c.email) === email && (!division || !c.division || c.division === division));
+      const coverIndex = transferred ? transferred.cover_position - 1 : entryCovers.findIndex((c) => !c[verifiedEntryTransfer] && norm(c.email) === email && (!division || !c.division || c.division === division));
       if (coverIndex >= 0 && entryItems[coverIndex]?.amount != null) {
         return Number(entryItems[coverIndex].amount) || 0;
       }

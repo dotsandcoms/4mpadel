@@ -103,3 +103,30 @@ test('two redacted transfers in the same division remain distinct in receipts an
     assert.equal(findPaymentForRegistration([receipt],former),null);
     assert.equal(findPaymentForRegistration([receipt],unrelated),null);
 });
+
+
+test('a partial division refund reduces only the exact entry component on a bundled receipt', () => {
+    const refund = (registration, amount, status, cover_type) => ({
+        payment_id: payment.id, event_registration_id: registration.id, amount, status,
+        metadata: cover_type ? { cover_type } : {},
+    });
+    const priorRefunds = [
+        refund(replacement, 100, 'processing', 'entry'),
+        refund(replacement, 40, 'needs_attention'),
+        refund(replacement, 300, 'failed', 'entry'),
+        refund(replacement, 20, 'processed', 'license'),
+        refund(payer, 100, 'processed', 'entry'),
+    ];
+    const entryOnly = { refundLicense: false };
+    assert.deepEqual(resolveRefundableItems(replacement, [payment], priorRefunds, entryOnly), [{
+        payment_id: payment.id, reference: payment.reference, refund_amount_rands: 260,
+        cover_type: 'entry', already_refunded_rands: 260, is_test: false,
+    }]);
+    assert.equal(resolveRefundableItems(payer, [payment], priorRefunds, entryOnly)[0]?.refund_amount_rands, 300);
+
+    const duplicate = { ...payment, id: 'another-receipt', reference: 'duplicate-reference' };
+    assert.equal(resolveRefundableItems(replacement, [payment, duplicate], priorRefunds, entryOnly)[0]?.payment_id, payment.id);
+    assert.deepEqual(resolveRefundableItems(replacement, [payment, duplicate], [
+        ...priorRefunds, refund(replacement, 260, 'processed', 'entry'),
+    ], entryOnly), []);
+});
