@@ -106,9 +106,10 @@ function licenseBenefitsFixture(copy = async () => true) {
     'react/jsx-runtime': require('react/jsx-runtime'),
     'react-native': {
       AccessibilityInfo: { announceForAccessibility: message => calls.push(['announce', message]) },
-      Pressable: 'Pressable', Text: 'Text', View: 'View', StyleSheet: { create: value => value },
+      Image: 'Image', Pressable: 'Pressable', Text: 'Text', View: 'View', StyleSheet: { create: value => value },
     },
     'expo-router': { Link: 'RouterLink' },
+    '@/assets/images/court-sport.png': 1,
     'expo-clipboard': { setStringAsync: number => { calls.push(['copy', number]); return copy(number); } },
     '@/components/home-action': { HomeAction: 'HomeAction' },
     '@/theme/tokens': { lightBrand: {} },
@@ -125,6 +126,7 @@ test('Benefits shows the assigned licence number and copies only that number', a
   let screen;
   try {
     await act(async () => { screen = create(React.createElement(Benefit, { licenseNumber: 'SAPA00017' })); });
+    assert.equal(screen.root.findByType('Image').props.accessibilityLabel, 'Court Sport logo');
     assert.equal(screen.root.findByType('RouterLink').props.href, 'https://www.courtsport.co.za/');
     assert.equal(screen.root.findByProps({ selectable: true }).props.children, 'SAPA00017');
     const copy = screen.root.findByType('HomeAction');
