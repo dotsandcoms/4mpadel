@@ -17,6 +17,7 @@ BEGIN;
 \ir ../../supabase/migrations/20261120074419_scope_host_tournament_rotation.sql
 \ir ../../supabase/migrations/20261120075155_scope_host_fixed_group_qualification.sql
 \ir ../../supabase/migrations/20261120080334_scope_host_americano_results.sql
+\ir ../../supabase/migrations/20261120081256_scope_host_ranked_group_qualification.sql
 CREATE FUNCTION pg_temp.expect_denied(query text) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
  BEGIN EXECUTE query; EXCEPTION WHEN insufficient_privilege THEN RETURN; END;
@@ -28,4 +29,5 @@ END $$;
 \ir host-rotation-preparation.sql
 \ir host-group-qualification.sql
 \ir host-rotation-results.sql
+\ir host-ranked-qualification.sql
 ROLLBACK;

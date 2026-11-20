@@ -79,6 +79,10 @@ export function generateElimination(data, draw) {
         if (!standing || standing.requires_manual_resolution) throw new Error('Resolve tied group standings before creating elimination matches.');
         return data.entries.find(e => e.id === standing.entry_id);
     })).flat();
+    return generateRankedElimination(qualifiers, draw);
+}
+
+export function generateRankedElimination(qualifiers, draw) {
     const draft = generateKnockoutDraft(qualifiers.map((e, i) => ({ ...e, seed_number: i + 1 })), { seedingMethod: 'manual', separateGroups: true, plateMode: draw.scoring_rules?.plate_mode || 'none', placementPlayoff: draw.scoring_rules?.playoff_mode || 'none' });
     const ids = new Map(draft.matches.map(m => [m.key, crypto.randomUUID()]));
     return draft.matches.map(m => ({ id: ids.get(m.key), key: m.key, stage: m.stage, round_code: m.round_code, round_label: m.round_label, round_number: m.round_number, bracket_position: m.bracket_position,

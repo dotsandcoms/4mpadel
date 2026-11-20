@@ -57,13 +57,18 @@ async function tournamentRpc(name, args = {}) {
 return {
     saveRegistration: (data, division, registration, payload) => tournamentRpc('save_registration', { p_event: data.event.id, p_division: division, p_registration: registration?.id || null, p_payload: payload, p_expected: registration?._revision || null }),
     saveDivision: (data, division, name, active) => tournamentRpc('save_division', { p_event: data.event.id, p_division: division, p_name: name, p_active: active }),
-    qualify: (data, draw, matches) => {
+    qualify: (data, draw, matches, rankedQualifiers) => {
         const payload = { p_event: data.event.id, p_draw: draw.id, p_expected: draw.updated_at, p_matches: matches };
         if (hostEvent) {
             const groupMatches = new Map(data.matches.filter(m => m.draw_id === draw.id && m.stage === 'group').map(m => [m.id, m.updated_at]));
             payload.p_group_versions = Object.fromEntries(groupMatches);
             payload.p_group_sets = Object.fromEntries(data.sets.filter(set => groupMatches.has(set.match_id))
                 .map(set => [set.match_id + ':' + set.set_number, [set.entry_one_games, set.entry_two_games, set.is_match_tiebreak]]));
+            if (rankedQualifiers) {
+                payload.p_ranked_qualifiers = rankedQualifiers;
+                payload.p_group_results = Object.fromEntries(data.matches.filter(m => groupMatches.has(m.id)).map(m => [m.id,
+                    [m.group_id, m.entry_one_id, m.entry_two_id, m.winner_entry_id, m.status, m.result_summary ?? null]]));
+            }
         }
         return tournamentRpc('qualify', payload);
     },

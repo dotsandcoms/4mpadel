@@ -350,6 +350,28 @@ before(async () => {
                     }
                     return <MemoryRouter initialEntries={['/admin-preview/event?event=505&tab=draws']}><HostGeneratorFixture /></MemoryRouter>;
                 }
+                if (['host-ranked-all','host-ranked-best'].includes(kind)) {
+                    if (!hostTournament.draws.length) {
+                        generator.divisions=[generatorDivision];
+                        hostTournament.divisions=[generatorDivision];
+                        const drawId='host-published-group';
+                        const all=kind==='host-ranked-all';
+                        hostTournament.draws=[{id:drawId,event_id:505,division_id:generatorDivision.id,draw_kind:'main',
+                            status:'published',format:'group_knockout',group_count:2,advancers_per_group:all?null:1,
+                            updated_at:'published-v1',scoring_rules:{qualification:{mode:all?'all':'best_placed',extras:all?0:1}}}];
+                        hostTournament.entries=[1,2,3,4,5].map(n=>({id:'team-'+n,draw_id:drawId,team_name:'Team '+n,
+                            group_id:n<4?'ga':'gb',seed_number:n}));
+                        const games=[[1,2,6,1],[1,3,6,2],[2,3,6,0],[4,5,6,4]];
+                        hostTournament.matches=games.map(([one,two],index)=>({id:'qualifying-group-'+index,draw_id:drawId,
+                            stage:'group',status:index===1?'retired':'completed',round_label:'Group match',round_number:1,bracket_position:1,
+                            group_id:one<4?'ga':'gb',entry_one_id:'team-'+one,entry_two_id:'team-'+two,
+                            winner_entry_id:'team-'+one,updated_at:'group-version-1',result_summary:index===1?[2,0]:null,
+                        }));
+                        hostTournament.sets=games.map(([one,two,p1,p2],index)=>({id:'set-'+index,match_id:'qualifying-group-'+index,
+                            set_number:1,entry_one_games:p1,entry_two_games:p2,is_match_tiebreak:false}));
+                    }
+                    return <MemoryRouter initialEntries={['/admin-preview/event?event=505&tab=draws']}><HostGeneratorFixture /></MemoryRouter>;
+                }
                 if (kind==='host-fixed-qualification') {
                     if (!hostTournament.draws.length) {
                         generator.divisions=[generatorDivision];
@@ -1257,4 +1279,38 @@ test('hosts enter and correct reviewed Americano scores and complete only when e
         assert.deepEqual(Object.keys(writes[4][1].p_payload.p_match_versions).sort(), ['stored-r1-m1','stored-r2-m1']);
         assert.equal(await page.$$eval(panel + ' button', buttons => buttons.some(b=>/Enter score|Correct score|Complete rotation/.test(b.textContent))), false);
     } finally { await page.close(); }
+});
+
+test('hosts review ranked all and best-placed groups, including the adjustment for unequal groups', async () => {
+    for (const [kind, expected] of [
+        ['host-ranked-all',['team-1','team-4','team-5','team-2','team-3']],
+        ['host-ranked-best',['team-1','team-4','team-5']],
+    ]) {
+        const page = await open(kind);
+        const panel = 'section[aria-label="Elimination phase"]';
+        try {
+            await clickText(page, 'Draw generator');
+            await page.waitForSelector(panel + ' ol');
+            const names = expected.map(id=>id.replace('team-', 'Team '));
+            assert.deepEqual(await page.$$eval(panel + ' ol li', items=>items.map(item=>item.textContent)), names);
+            if (kind==='host-ranked-best') {
+                assert.match(await page.$eval('table[aria-label="Best-placed comparison"]', table=>table.textContent), /Team 5.*Qualified.*Team 2.*Did not qualify/);
+                assert.match(await page.$eval(panel, section=>section.textContent), /same size/);
+            }
+            await clickText(page, 'Review elimination bracket');
+            await page.waitForSelector(panel + ' input[type=checkbox]');
+            await page.$eval(panel + ' input', input=>input.click());
+            await clickText(page, 'Create elimination phase');
+            await page.waitForFunction(() => document.querySelector('.tm-body [role=status]')?.textContent.includes('Elimination matches created'));
+            const calls = (await page.evaluate(() => window.calls)).filter(([method])=>method==='tm_host_group_qualification');
+            assert.equal(calls.length,1);
+            const [,args] = calls[0];
+            assert.equal(args.p_organisation,'org-a');
+            assert.equal(String(args.p_event),'505');
+            assert.equal(args.p_payload.p_draw,'host-published-group');
+            assert.deepEqual(args.p_payload.p_ranked_qualifiers,expected);
+            assert.deepEqual(args.p_payload.p_group_results['qualifying-group-1'],['ga','team-1','team-3','team-1','retired',[2,0]]);
+            assert.equal(args.p_payload.p_matches.length,kind==='host-ranked-all'?7:3);
+        } finally { await page.close(); }
+    }
 });

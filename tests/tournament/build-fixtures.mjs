@@ -1,4 +1,6 @@
 import { writeFileSync } from 'node:fs';
+import { rankGroupQualifiers } from '../../src/utils/drawQualification.js';
+import { generateRankedElimination } from '../../src/pages/admin-preview/tournament/utils/tournament/draws.js';
 import { sampleTournament } from '../../sandbox/tournament-manager/data.js';
 import { generateTournamentSchedule } from '../../src/utils/tournament/scheduling.js';
 import { generateDivisionDraw, generateElimination } from '../../src/utils/tournament/draws.js';
@@ -63,4 +65,37 @@ gd.standings=groupDraft.groups.flatMap(g=>gd.entries.filter(e=>e.group_id===g.id
 const elimination=generateElimination(gd,draw);
 sql.push(`SELECT tm_qualify(${d.event.id},${q(draw.id)},(SELECT updated_at FROM draws WHERE id=${q(draw.id)}),${q(elimination)}); DO $$ BEGIN IF (SELECT count(*) FROM draw_matches WHERE draw_id=${q(draw.id)} AND stage='knockout' AND scheduled_start IS NOT NULL)<>3 THEN RAISE EXCEPTION 'Reserved elimination slots were lost'; END IF; END $$;`);
 sql.push("SELECT 'Tournament integration assertions passed' AS result;");
+// The deployed native JS implementation serves as the independent reference
+// for the SQL ranking calculator. Use unequal groups and a custom lots tie.
+const hostId = number => '71110000-0000-4000-8000-' + String(number).padStart(12, '0');
+sql.push('CREATE TEMPORARY TABLE ranked_fixture_reference(mode text PRIMARY KEY,payload jsonb);');
+for (const example of [
+    { mode: 'all', drawNumber: 310, offset: 1000 },
+    { mode: 'best_placed', drawNumber: 311, offset: 2000 },
+]) {
+    const drawId = hostId(example.drawNumber);
+    const id = number => hostId(example.offset + number);
+    const groups = ['Large group', 'Small group'].map((name, index) => ({ id: id(index + 1), name }));
+    const entries = [1, 2, 3, 4, 5].map((n, index) => ({
+        id: id(10 + n), draw_id: drawId, group_id: groups[n < 4 ? 0 : 1].id,
+        team_name: 'Team ' + n, seed_number: n,
+    }));
+    const matches = [[1, 2, 6, 1], [1, 3, 6, 2], [2, 3, 6, 0], [4, 5, 6, 4]].map(([one, two], index) => ({
+        id: id(31 + index), draw_id: drawId, group_id: groups[one < 4 ? 0 : 1].id,
+        entry_one_id: entries[one - 1].id, entry_two_id: entries[two - 1].id,
+        winner_entry_id: entries[one - 1].id, status: index === 1 ? 'retired' : 'completed',
+        result_summary: index === 1 ? [2, 0] : null,
+    }));
+    const matchSets = [[6,1],[6,2],[6,0],[6,4]].map(([one,two],index) => ({
+        match_id: matches[index].id, set_number:1, entry_one_games:one, entry_two_games:two,
+    }));
+    const input = { ...example, drawId, groups, entries, matches, matchSets, places: 1, extras: 1 };
+    const ranked = rankGroupQualifiers(input);
+    const lotRules = ['won','unsupported','won','draw'];
+    const lotOrdered = rankGroupQualifiers({ ...input, rules: lotRules }).advancing.map(row=>row.id);
+    const bracket = generateRankedElimination(ranked.advancing, { id: drawId, scoring_rules: {} });
+    const payload = { drawId, groups, entries, matches, matchSets, lotRules, lotOrdered, bracket,
+        ranked: ranked.advancing.map(row=>row.id) };
+    sql.push(`INSERT INTO ranked_fixture_reference VALUES (${q(example.mode)},${q(payload)});`);
+}
 writeFileSync('tests/tournament/fixtures.generated.sql',sql.join('\n')+'\n');

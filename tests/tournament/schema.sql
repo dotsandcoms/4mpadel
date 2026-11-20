@@ -38,6 +38,7 @@ CREATE FUNCTION is_org_admin(uuid) RETURNS boolean LANGUAGE sql STABLE AS $$ SEL
 \ir ../../supabase/migrations/20260819_native_draw_data_model.sql
 ALTER TABLE draw_matches ADD COLUMN court_name text;
 ALTER TABLE draw_matches ADD COLUMN americano_fixture_key text;
+ALTER TABLE draw_matches ADD COLUMN result_summary smallint[];
 ALTER TABLE draws DROP CONSTRAINT draws_format_check;
 ALTER TABLE draws ADD CONSTRAINT draws_format_check CHECK(format IN('knockout','group_knockout','group_only','americano'));
 CREATE TABLE event_play_days(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),event_id bigint,play_date date,start_time time,end_time time,courts_count integer,match_duration_minutes integer,minimum_break_minutes integer,is_active boolean DEFAULT true,is_removed boolean DEFAULT false,UNIQUE(event_id,play_date));
