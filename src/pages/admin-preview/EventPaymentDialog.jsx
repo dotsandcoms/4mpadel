@@ -12,6 +12,7 @@ export default function EventPaymentDialog({ action, event, divisions, onClose, 
   const close = () => { if (!lock.current) onClose({ refresh: saveAttempted.current }); };
   const { registration: reg, type } = action;
   const receipt = type === 'correct' ? reg._editablePayment : null;
+  const withdrawnReceipt = receipt && reg.status === 'withdrawn';
   const metadata = normalizePaymentMetadata(receipt?.metadata);
   const [method, setMethod] = useState(receipt?.payment_method || (type === 'comp' ? 'comp' : 'manual'));
   const [recipient, setRecipient] = useState(collectionRecipient(receipt) || '');
@@ -32,18 +33,18 @@ export default function EventPaymentDialog({ action, event, divisions, onClose, 
     finally { lock.current = false; setBusy(false); }
   }
   return <dialog ref={dialog} className="ap-payment-dialog" aria-labelledby={titleId} onCancel={e => { e.preventDefault(); close(); }}>
-    <header><div><p>{event.event_name || event.name}</p><h2 id={titleId}>{unmark ? 'Remove admin payment' : receipt ? 'Edit payment' : comp ? 'Complimentary entry' : 'Mark player as paid'}</h2></div><button className="ap-icon-button" disabled={busy} onClick={close} aria-label="Close payment dialog"><X size={20}/></button></header>
+    <header><div><p>{event.event_name || event.name}</p><h2 id={titleId}>{unmark ? 'Remove admin payment' : withdrawnReceipt ? 'Correct withdrawn receipt' : receipt ? 'Edit payment' : comp ? 'Complimentary entry' : 'Mark player as paid'}</h2></div><button className="ap-icon-button" disabled={busy} onClick={close} aria-label="Close payment dialog"><X size={20}/></button></header>
     <form onSubmit={submit}>
       <div className="ap-payment-person"><strong>{name}</strong><span>{reg.division || 'Division not recorded'}</span></div>
       {done ? <p role="status">Payment updated successfully. Close to refresh the event.</p> : <>
         {unmark ? <p>This removes the admin-marked payment or comp and returns this player to pending. It does not issue a refund.</p> : <>
           <label>Payment received via<SearchableDropdown disabled={busy} value={method} onChange={e => setMethod(e.target.value)}><option value="manual">Other manual payment</option><option value="eft">EFT</option><option value="cash">Cash</option><option value="external">External payment provider</option>{(!receipt || receipt.payment_method === 'paystack') && <option value="paystack">Paystack (offline correction)</option>}{!receipt && <option value="comp">Complimentary (free entry)</option>}</SearchableDropdown></label>
           {needsRecipient && <label>Payment received by<SearchableDropdown disabled={busy} value={recipient} onChange={e => setRecipient(e.target.value)}><option value="">Select recipient</option><option value="4m">4M</option><option value="organiser">Club / organiser</option></SearchableDropdown></label>}
-          {receipt && <p>The paid status and amount will stay the same. The event audit records the correction.</p>}
+          {receipt && <p>{withdrawnReceipt && 'The entry will stay withdrawn. '}The paid status and amount will stay the same. The event audit records the correction.</p>}
           <div className="ap-payment-amount">{amount == null ? 'Division fee will be verified before saving' : new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(Number(amount))}{comp && ' · Complimentary entry'}</div>
           <label>{comp ? 'Reason for complimentary entry' : 'Payment note'} (required)<textarea required maxLength={2000} disabled={busy} value={note} onChange={e => setNote(e.target.value)} placeholder={comp ? 'e.g. Sponsor guest approved by organiser' : 'e.g. EFT received, with reference'}/></label>
         </>}
-        <p className="ap-payment-live-note">Confirming updates the live registration and payment ledger.</p>
+        <p className="ap-payment-live-note">{withdrawnReceipt ? 'Confirming updates the receipt method, recipient and note.' : 'Confirming updates the live registration and payment ledger.'}</p>
         {error && <p role="alert">{error}</p>}
       </>}
       <footer><button type="button" className="ap-secondary" disabled={busy} onClick={close}>{done ? 'Done' : 'Cancel'}</button>{!done && <button className="ap-primary" disabled={busy || !canSubmit} type="submit">{busy ? 'Saving…' : unmark ? 'Confirm removal' : receipt ? 'Save payment' : comp ? 'Confirm complimentary entry' : 'Confirm payment'}</button>}</footer>

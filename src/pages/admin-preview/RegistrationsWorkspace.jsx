@@ -4,9 +4,13 @@ import { ArrowRight, ChevronRight, Download, Plus, Search, X } from 'lucide-reac
 import { Link } from 'react-router-dom';
 import SearchableDropdown from '../../components/SearchableDropdown';
 import EventReplacementDialog from './EventReplacementDialog';
+import EventPaymentDialog from './EventPaymentDialog.jsx';
 import RecordLoading from './RecordLoading';
+import RegistrationProfileNameDialog from './RegistrationProfileNameDialog.jsx';
 import RegistrationRefundReview from './RegistrationRefundReview.jsx';
+import { canAlignRegistrationProfile } from './registrationProfileName.js';
 import { registrationRefundAction } from './registrationRefundReview.js';
+import { saveWithdrawnRegistrationReceipt } from './withdrawnRegistrationReceipt.js';
 import { downloadRegistrations } from './registrationExports.js';
 import { filterRegistrationWorkspace, indexRegistrationLedger, loadRegistrationWorkspace, recordedRegistrationPayment, registrationDivisionLabel, registrationIsWithdrawn, registrationName, registrationPaymentState, saveRegistrationWhatsApp } from './registrationWorkspaceData.js';
 import { useEventOperation } from './useEventOperation.js';
@@ -70,6 +74,7 @@ function EventRegistrations({ client, session, scopeId, event, events, initialRe
   const rowIds = new Set(rows.map(row => String(row.id)));
   const selectedIds = new Set(selected.filter(id => rowIds.has(id)));
   const drawer = rows.find(row => sameId(row.id, drawerId));
+  const withdrawnReceipt = drawer && ledger.withdrawnReceipts.get(String(drawer.id));
   const divisionOptions = [...new Set(rows.map(row => registrationDivisionLabel(row, divisions)))].sort();
   const exportRows = toExport => downloadRegistrations(event.id, toExport.map(row => ({ ...row, division: registrationDivisionLabel(row, divisions) })));
   const updateSelected = (ids, checked) => setSelected(previous => checked ? [...new Set([...previous, ...ids])] : previous.filter(id => !ids.includes(id)));
@@ -141,15 +146,19 @@ function EventRegistrations({ client, session, scopeId, event, events, initialRe
           <div><button className="ap-secondary" disabled={currentPage === 1} onClick={() => changePage(currentPage - 1)}>Previous</button><span>Page {currentPage} of {pageCount}</span><button className="ap-secondary" disabled={currentPage === pageCount} onClick={() => changePage(currentPage + 1)}>Next</button></div>
         </nav>}
       </>}
-    {drawer && <RegistrationDrawer key={drawer.id} row={drawer} payment={ledger.payments.get(String(drawer.id))} refunds={ledger.refunds.get(String(drawer.id))} division={registrationDivisionLabel(drawer, divisions)}
+    {drawer && <RegistrationDrawer key={drawer.id} row={drawer} payment={ledger.payments.get(String(drawer.id))} refunds={ledger.refunds.get(String(drawer.id))}
+      withdrawnReceipt={withdrawnReceipt} division={registrationDivisionLabel(drawer, divisions)}
       {...{ event, go, canOperate, canOpenPlayer, closeDrawer }} operation={operation} setOperation={setOperation} />}
     {drawer && operation?.refund && <RegistrationRefundReview {...{ client, session, scopeId, event }} row={drawer} refund={operation.refund} action={operation.action} onClose={closeOperation} />}
     {drawer && canOperate && operation === 'whatsapp' && <RegistrationGroupDialog {...{ client, session, scopeId, event }} row={drawer} onClose={closeOperation} />}
     {drawer && canOperate && operation === 'replacement' && <EventReplacementDialog {...{ client, session, scopeId, event }} team={[drawer]} initialRegistrationId={drawer.id} onClose={closeOperation} />}
+    {drawer && canOperate && operation === 'profile-name' && <RegistrationProfileNameDialog {...{ client, session, scopeId, event }} registration={drawer} onClose={closeOperation} />}
+    {drawer && withdrawnReceipt && operation === 'withdrawn-receipt' && <EventPaymentDialog {...{ client, session, scopeId, event, divisions }}
+      action={{ type: 'correct', registration: { ...drawer, _editablePayment: withdrawnReceipt } }} save={saveWithdrawnRegistrationReceipt} onClose={closeOperation} />}
   </>;
 }
 
-function RegistrationDrawer({ row, payment, refunds = [], division, event, go, canOperate, canOpenPlayer, closeDrawer, operation, setOperation }) {
+function RegistrationDrawer({ row, payment, refunds = [], withdrawnReceipt, division, event, go, canOperate, canOpenPlayer, closeDrawer, operation, setOperation }) {
   const title = useId();
   const paymentState = registrationPaymentState(row, payment, refunds);
   const record = recordedRegistrationPayment(row, payment);
@@ -172,8 +181,10 @@ function RegistrationDrawer({ row, payment, refunds = [], division, event, go, c
         <section><h3>Player profile</h3>
           {canOpenPlayer && row._player ? <button className="ap-linked-record" onClick={() => go('player', { registration: row, event })}><span className="ap-avatar">{registrationName(row).slice(0, 1)}</span><span><b>{row._player.name || registrationName(row)}</b><small>Open player record</small></span><ChevronRight size={17} /></button> : <p>{row._player?.name || 'No matching profile'}</p>}
           {canChange && row.email && <button className="ap-secondary" onClick={() => setOperation('replacement')}>Replace player / Change profile</button>}
+          {canChange && canAlignRegistrationProfile(row) && <button className="ap-secondary" onClick={() => setOperation('profile-name')}>Match profile name</button>}
         </section>
         <section><h3>Recorded payment</h3><dl className="ap-details-list">{record.method && <div><dt>Method</dt><dd>{record.method}</dd></div>}{record.reference && <div><dt>Reference</dt><dd>{record.reference}</dd></div>}{record.recipient && <div><dt>Received by</dt><dd>{record.recipient}</dd></div>}{record.note && <div><dt>Notes</dt><dd>{record.note}</dd></div>}{payment?.amount != null && <div><dt>Amount</dt><dd>{moneyFormat.format(payment.amount)}</dd></div>}</dl>
+          {withdrawnReceipt && <button className="ap-secondary" onClick={() => setOperation('withdrawn-receipt')}>Correct withdrawn receipt</button>}
           {refunds.length > 0 && <ul>{refunds.map(refund => {
             const next = registrationRefundAction(refund);
             return <li key={refund.id}>{moneyFormat.format(refund.amount)} · {String(refund.status).replaceAll('_', ' ')}{refund.reason && <> · {refund.reason.replaceAll('_', ' ')}</>}

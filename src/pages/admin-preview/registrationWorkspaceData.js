@@ -4,6 +4,7 @@ import { resolveRegistrationDivision } from '../../utils/registrationDivision.js
 import { findPaymentForRegistration, hasBlockingProcessedRefund, isPaystackPaymentMethod, normalizePaymentMetadata, registrationIsCompedEntry, resolveRegistrationPaymentMethod } from '../../utils/paymentRegistrationMatch.js';
 import { verifyCalendarPlatformActor } from './calendarRecordActions.js';
 import { verifyEventOperationAccess } from './eventOperationAccess.js';
+import { findWithdrawnRegistrationReceipt } from './withdrawnRegistrationReceipt.js';
 import { readEventProfiles } from './eventSnapshots.js';
 import { eventLicenseCategory, hydrateEventLicenses } from './eventLicenseData.js';
 import { readAll } from './playersData.js';
@@ -57,7 +58,11 @@ export function indexRegistrationLedger(rows, payments, refunds) {
     if (!refundByRow.has(key)) refundByRow.set(key, []);
     refundByRow.get(key).push(refund);
   }
-  return { payments: paymentByRow, refunds: refundByRow };
+  const withdrawnReceipts = new Map(rows.filter(registrationIsWithdrawn).map(row => {
+    const key = String(row.id);
+    return [key, findWithdrawnRegistrationReceipt(row, payments, refundByRow.get(key) || [])];
+  }));
+  return { payments: paymentByRow, refunds: refundByRow, withdrawnReceipts };
 }
 
 export function recordedRegistrationPayment(row, payment) {

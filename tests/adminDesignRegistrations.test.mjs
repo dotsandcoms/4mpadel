@@ -83,6 +83,25 @@ const client = {
         data = {registration_id:row.id,new_name:player.name,new_email:player.email};
       }
     }
+    if (name==='admin_align_registration_profile_name') {
+      const row = registrations.find(row=>row.id===args.p_registration);
+      const player = tables.players.find(player=>player.id===args.p_player);
+      if (row?.event_id===args.p_event && row.email===player?.email && row.full_name===args.p_expected.entry_name) {
+        row.full_name=player.name;
+        data={event_id:args.p_event,registration_id:row.id,player_id:player.id,full_name:player.name};
+      }
+    }
+    if (name==='admin_correct_withdrawn_registration_receipt') {
+      const row=registrations.find(row=>row.id===args.p_registration);
+      const receipt=tables.payments.find(payment=>payment.id===args.p_payment);
+      if (window.fixtureRole==='platform' && row?.event_id===args.p_event && row.status==='withdrawn'
+        && receipt?.event_id===row.event_id && receipt.metadata.registration_id===row.id) {
+        row.payment_method=args.p_method;
+        receipt.payment_method=args.p_method;
+        receipt.metadata={...receipt.metadata, collection_recipient:args.p_recipient, payment_note:args.p_note};
+        data={paymentId:receipt.id,method:args.p_method,recipient:args.p_recipient};
+      }
+    }
     const request = Promise.resolve(result(data));
     request.abortSignal = () => request;
     return request;
@@ -133,7 +152,15 @@ before(async () => {
         {location.pathname.endsWith('/registrations') && <RegistrationsWorkspace client={client} session={session} scopeId={scopeId} events={scopedEvents}
           eventId={values.get('event')} initialRegistrationId={values.get('registration')} canReadLedger={scopeId==='all'} canOpenMessages canOpenPlayer={scopeId==='all'} go={go}/>}</main></div>;
     }
-    window.start = (role, route) => { window.fixtureRole=role; createRoot(document.querySelector('#fixture')).render(<MemoryRouter initialEntries={[route]}><App /></MemoryRouter>); };
+    window.start = (role, route) => {
+      window.fixtureRole=role;
+      if (route.includes('registration=historical')) {
+        registrations.push(registration('historical',11,'Historical Fixture',{status:'withdrawn',payment_status:'paid',payment_method:'eft'}));
+        tables.payments.push({...receipt,id:'historical-receipt',reference:'MANUAL-ADMIN-historical',
+          metadata:{registration_id:'historical',source:'manual_event_admin',collection_recipient:'4m',payment_note:'Previous note'}});
+      }
+      createRoot(document.querySelector('#fixture')).render(<MemoryRouter initialEntries={[route]}><App /></MemoryRouter>);
+    };
     window.loadOutside = () => loadRegistrationWorkspace({client,expectedUserId:session.user.id,eventId:21,scopeId:'org:north',canReadLedger:true}).then(()=>true,error=>error.message);
   ` }, jsx: 'automatic', outfile: script, bundle: true, platform: 'browser', format: 'iife', define: { 'import.meta.env': '{}' },
   loader: { '.svg': 'dataurl', '.png': 'dataurl', '.jpg': 'dataurl', '.woff2': 'dataurl' },
@@ -319,4 +346,38 @@ test('platform refund review holds an unconfirmed receipt, then checks its saved
     ['edge','paystack-refund',{action:'reviewed_retry_failed',event_id:11,reviewed_registration_id:'zulu',payment_refund_id:'zulu-refund'}],
     ['edge','paystack-refund',{action:'reconcile_retry',event_id:11,reviewed_registration_id:'zulu',payment_refund_id:'zulu-refund'}],
   ]);
+});
+
+test('the original drawer connects matching profile names and only eligible withdrawn receipts', async t => {
+  const tenant = await open(t, 'tenant', '/admin-preview/registrations?event=11&registration=alpha');
+  await drawer(tenant, 'Alpha Player');
+  await clickText(tenant, '.ap-drawer button', 'Match profile name');
+  await tenant.waitForSelector('dialog[open]');
+  await clickText(tenant, 'dialog button', 'Confirm profile name');
+  await bodyText(tenant, 'The registration now uses Alpha on file.');
+  await clickText(tenant, 'dialog button', 'Done');
+  await drawer(tenant, 'Alpha on file');
+  const [nameCall] = await tenant.evaluate(() => window.requests.filter(([, name]) => name === 'admin_align_registration_profile_name'));
+  assert.equal(nameCall[2].p_scope, 'org:north');
+  assert.equal(nameCall[2].p_expected.profile_email, 'alpha@example.invalid');
+
+  const platform = await open(t, 'platform', '/admin-preview/registrations?event=11&registration=historical');
+  await drawer(platform, 'Historical Fixture');
+  await clickText(platform, '.ap-drawer button', 'Correct withdrawn receipt');
+  await platform.waitForSelector('dialog[open] textarea');
+  await platform.$eval('dialog[open] textarea', textarea => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(textarea, 'Reviewed the historical bank receipt');
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await clickText(platform, 'dialog button', 'Save payment');
+  await bodyText(platform, 'Payment updated successfully.');
+  const [receiptCall] = await platform.evaluate(() => window.requests.filter(([, name]) => name === 'admin_correct_withdrawn_registration_receipt'));
+  assert.equal(receiptCall[2].p_event, 11);
+  assert.equal(receiptCall[2].p_registration, 'historical');
+  assert.equal(receiptCall[2].p_payment, 'historical-receipt');
+  assert.equal(receiptCall[2].p_expected.reference, 'MANUAL-ADMIN-historical');
+
+  const other = await open(t, 'tenant', '/admin-preview/registrations?event=11&registration=historical');
+  await drawer(other, 'Historical Fixture');
+  assert.doesNotMatch(await other.$eval('.ap-drawer', node=>node.textContent), /Correct withdrawn receipt|MANUAL-ADMIN-historical/);
 });
