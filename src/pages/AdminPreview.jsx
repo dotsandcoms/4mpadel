@@ -24,7 +24,7 @@ import EventRehearsal, { EventRehearsalWorkspace } from './admin-preview/EventRe
 import EventGroupDrawDialog from './admin-preview/EventGroupDrawDialog.jsx';
 import { registrationPaymentLink } from '../utils/provisionalEntry.js';
 import { calculateEventSettlement } from '../utils/eventSettlement.js';
-import { downloadRegistrations } from './admin-preview/registrationExports.js';
+import RegistrationsWorkspace from './admin-preview/RegistrationsWorkspace.jsx';
 import EventPaymentDialog from './admin-preview/EventPaymentDialog.jsx';
 import RecordLoading from './admin-preview/RecordLoading.jsx';
 import { CreateEventMenu, ReviewNotifications } from './admin-preview/ReviewNavigationDialogs.jsx';
@@ -116,7 +116,6 @@ const PREVIEW_REGISTRATIONS = [
   { id: 'REG-1293', event_id: PREVIEW_EVENT.id, name: 'Amara Molefe', email: 'amara@example.com', partner_name: 'Leila Khan', division: 'Women’s open', payment_status: 'pending', status: 'needs_review', created_at: '2026-09-01T09:34:00Z', amount: 1500, player_id: 'player-amara' },
 ];
 const EMPTY_RELATED = { payments: [], divisions: [], activity: [], draws: [], refunds: [] };
-const REGISTRATION_PAGE_SIZE = 50;
 const RECORD_WORKSPACE_PAGES = ['messaging', 'help', 'security', 'settings', 'blog', 'audit-log', 'integrations', 'players', 'calendar', 'coaches', 'clubs', 'organisations', 'federations', 'reports', 'payments', 'payouts', 'team-access', 'gallery', 'email', 'push', 'licenses', 'tournaments'];
 const REFRESH_WORKSPACE_PAGES = RECORD_WORKSPACE_PAGES;
 
@@ -224,10 +223,10 @@ const readinessFor = (event, regs = []) => {
   return { label: 'On track', tone: 'positive' };
 };
 
-function usePreviewData(session, permissions, forceFixture = false, focusEventId = null, publicLive = false, scope = null) {
+function usePreviewData(session, permissions, forceFixture = false, focusEventId = null, publicLive = false, scope = null, loadEntries = true) {
   const identity = sessionIdentity(session);
   const request = useRef(0);
-  const accessKey = `${identity}|${JSON.stringify(permissions)}|${scope?.id}|${focusEventId}|${forceFixture}`;
+  const accessKey = `${identity}|${JSON.stringify(permissions)}|${scope?.id}|${focusEventId}|${forceFixture}|${loadEntries}`;
   const [state, setState] = useState({ events: [], registrations: [], players: [], ...EMPTY_RELATED, loading: true, error: null, source: 'live' });
   const load = useCallback(async () => {
     const version = ++request.current;
@@ -250,7 +249,7 @@ function usePreviewData(session, permissions, forceFixture = false, focusEventId
       if (focusEventId && !events?.length) throw new Error('This event is not available in your admin scope.');
       const eventIds = (events || []).map((event) => event.id);
       let registrations = [];
-      if (eventIds.length) {
+      if (loadEntries && eventIds.length) {
         const registrationSource = publicLive ? 'event_registrations_public' : 'event_registrations';
         for (let offset = 0; offset < eventIds.length; offset += 50) {
           const ids = eventIds.slice(offset, offset + 50);
@@ -304,7 +303,7 @@ function usePreviewData(session, permissions, forceFixture = false, focusEventId
       console.warn('Admin preview data load failed:', error);
       publish({ events: [], registrations: [], players: [], ...EMPTY_RELATED, loading: false, error: error.message, source: 'error' });
     }
-  }, [identity, permissions, forceFixture, focusEventId, publicLive, scope, accessKey]);
+  }, [identity, permissions, forceFixture, focusEventId, publicLive, scope, accessKey, loadEntries]);
   useEffect(() => { load(); return () => { request.current += 1; }; }, [load]);
   return { ...(state.accessKey === accessKey ? state : { events: [], registrations: [], players: [], ...EMPTY_RELATED, loading: true, error: null }), reload: load };
 }
@@ -805,36 +804,6 @@ export function LiveEventCommandCentre({ event, registrations, payments, divisio
 
 function WorkspacePlaceholder({ icon: Icon, title, detail }) { return <section className="ap-section ap-workspace-placeholder">{React.createElement(Icon, { size: 30 })}<h2>{title}</h2><p>{detail}</p><button className="ap-secondary" title="Actions are disabled in this read-only preview">Open workspace</button></section>; }
 
-function RegistrationDrawer({ registration, onClose, go, event }) {
-  const closeRef = useRef(null);
-  useEffect(() => { closeRef.current?.focus(); const key = (e) => e.key === 'Escape' && onClose(); document.addEventListener('keydown', key); return () => document.removeEventListener('keydown', key); }, [onClose]);
-  if (!registration) return null;
-  const payment = normalizePayment(registration);
-  const eligibility = registrationEligibility(registration);
-  const eligibilityIcon = eligibility.tone === 'positive' ? <CheckCircle2 size={17} /> : eligibility.tone === 'danger' ? <AlertCircle size={17} /> : <Clock3 size={17} />;
-  return <Motion.aside className="ap-drawer" role="dialog" aria-modal="true" aria-labelledby="registration-drawer-title" initial={{ x: 36, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 24, opacity: 0 }} transition={{ type: 'spring', duration: .28, bounce: 0 }}>
-    <div className="ap-drawer-head"><div><p className="ap-kicker">Registration {registration.id}</p><h2 id="registration-drawer-title">{personName(registration)}</h2></div><button ref={closeRef} className="ap-icon-button" onClick={onClose} aria-label="Close registration details"><X size={19} /></button></div>
-    <div className="ap-drawer-body"><div className="ap-drawer-status"><Status tone={payment === 'paid' ? 'positive' : payment === 'failed' ? 'danger' : 'warning'}>{payment === 'paid' ? 'Paid' : payment === 'failed' ? 'Payment failed' : 'Payment pending'}</Status><Status tone={String(registration.status).includes('review') ? 'warning' : 'neutral'}>{String(registration.status || 'Submitted').replaceAll('_', ' ')}</Status></div><dl className="ap-details-list"><div><dt>Event</dt><dd>{event?.event_name || event?.title || 'Cape Town Open'}</dd></div><div><dt>Division</dt><dd>{registrationDivision(registration)}</dd></div><div><dt>Partner</dt><dd>{registration.partner_name || 'Partner needed'}</dd></div><div><dt>Submitted</dt><dd>{formatDate(registration.created_at)}</dd></div><div><dt>Amount</dt><dd>{(registration.amount ?? event?.entry_fee) != null ? formatMoney(registration.amount ?? event?.entry_fee) : 'Not exposed'}</dd></div></dl><section><p className="ap-kicker">Checks</p><div className="ap-check-list"><span className={!registration._player ? 'is-risk' : ''}>{registration._player ? <CheckCircle2 size={17} /> : <AlertCircle size={17} />} Player record {registration._player ? 'matched' : 'not matched'}</span><span className={eligibility.tone === 'danger' ? 'is-risk' : ''}>{eligibilityIcon} {eligibility.label}</span><span className={payment !== 'paid' ? 'is-risk' : ''}>{payment === 'paid' ? <CheckCircle2 size={17} /> : <AlertCircle size={17} />} Payment {payment}</span></div></section><section><p className="ap-kicker">Record trail</p><button className="ap-linked-record" onClick={() => go('player', { registration, event })}><span className="ap-avatar">{personName(registration).slice(0, 1)}</span><span><b>{personName(registration)}</b><small>Open player record</small></span><ChevronRight size={17} /></button></section></div><div className="ap-drawer-actions">{payment === 'failed' && <button className="ap-primary" onClick={() => go('payment', { registration, event })}>Resolve payment <ArrowRight size={16} /></button>}{event?.id && <Link className="ap-secondary" to={`/admin-preview/event?event=${encodeURIComponent(event.id)}&registration=${encodeURIComponent(registration.id)}`}>Manage this entry</Link>}</div>
-  </Motion.aside>;
-}
-
-function RegistrationsWorkspace({ event, events, registrations, go, initialRegistration, canOpenMessages }) {
-  const activeEvent = event || events[0]; const [query, setQuery] = useState(''); const [status, setStatus] = useState('All states'); const [selected, setSelected] = useState([]); const [drawer, setDrawer] = useState(initialRegistration || null); const [page, setPage] = useState(1);
-  const eventRegs = activeEvent ? registrations.filter((row) => String(row.event_id) === String(activeEvent.id)) : [];
-  const visible = eventRegs.filter((row) => `${personName(row)} ${row.partner_name || ''} ${registrationDivision(row)} ${row.id}`.toLowerCase().includes(query.toLowerCase()) && (status === 'All states' || (status === 'Payment issues' && normalizePayment(row) === 'failed') || (status === 'Needs review' && String(row.status).includes('review')) || (status === 'Paid' && normalizePayment(row) === 'paid')));
-  const pageCount = Math.max(1, Math.ceil(visible.length / REGISTRATION_PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount);
-  const pageRows = visible.slice((currentPage - 1) * REGISTRATION_PAGE_SIZE, currentPage * REGISTRATION_PAGE_SIZE);
-  const toggle = (id) => setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
-  if (!activeEvent) return <section className="ap-section ap-live-loading"><h2>No event registrations are available</h2><button className="ap-secondary" onClick={() => go('events')}>Choose an event</button></section>;
-  return <><PageHeading eyebrow={`${activeEvent.event_name || activeEvent.title} / Operate`} title="Registrations" description="Review entries, payment state, eligibility and partner completion."><button className="ap-secondary" disabled={!visible.length} onClick={() => downloadRegistrations(activeEvent.id, visible)}><Download size={16} /> Export view</button>{activeEvent.is_manual && activeEvent.event_status !== 'cancelled' && <Link className="ap-primary" to={`/admin-preview/event?event=${encodeURIComponent(activeEvent.id)}&action=add`}><Plus size={16} /> Add registration</Link>}</PageHeading>
-    <div className="ap-filter-bar"><label className="ap-filter-search"><Search size={17} /><span className="ap-visually-hidden">Search registrations</span><input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="Search player, team or registration" /></label><div className="ap-filter-tabs" role="group" aria-label="Registration state filter">{['All states', 'Needs review', 'Payment issues', 'Paid'].map((item) => <button key={item} aria-pressed={status === item} onClick={() => { setStatus(item); setPage(1); }}>{item}</button>)}</div></div>
-    <AnimatePresence initial={false}>{selected.length > 0 && <Motion.div className="ap-bulk-bar" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}><strong>{selected.length} selected</strong><button onClick={() => downloadRegistrations(activeEvent.id, eventRegs.filter(row => selected.includes(row.id)))}>Export selected</button>{canOpenMessages && <button onClick={() => go('messaging', { event: activeEvent })}>Open event messages</button>}<button onClick={() => setSelected([])}>Clear selection</button></Motion.div>}</AnimatePresence>
-    <section className="ap-section ap-registration-table"><div className="ap-registration-row ap-registration-head"><span><input type="checkbox" aria-label="Select all registrations on this page" checked={pageRows.length > 0 && pageRows.every((row) => selected.includes(row.id))} onChange={(e) => setSelected(e.target.checked ? [...new Set([...selected, ...pageRows.map((row) => row.id)])] : selected.filter((id) => !pageRows.some((row) => row.id === id)))} /></span><span>Player / team</span><span>Division</span><span>Submitted</span><span>Payment</span><span>Eligibility</span><span>Status</span><span /></div><AnimatePresence mode="popLayout" initial={false}>{pageRows.map((row) => { const payment = normalizePayment(row); const eligibility = registrationEligibility(row); return <Motion.div layout key={row.id} className={`ap-registration-row ${selected.includes(row.id) ? 'is-selected' : ''}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><span><input type="checkbox" aria-label={`Select ${personName(row)}`} checked={selected.includes(row.id)} onChange={() => toggle(row.id)} /></span><button className="ap-person-cell" onClick={() => setDrawer(row)}><i>{personName(row).slice(0, 1)}</i><span><b>{personName(row)}</b><small>{row.partner_name ? `with ${row.partner_name}` : 'Partner needed'}</small></span></button><span><b>{registrationDivision(row)}</b><small>{row.id}</small></span><span><b>{formatDate(row.created_at, { year: undefined })}</b><small>Online entry</small></span><span><Status tone={payment === 'paid' ? 'positive' : payment === 'failed' ? 'danger' : 'warning'}>{payment}</Status></span><span><Status tone={eligibility.tone}>{eligibility.label}</Status></span><span><Status tone={String(row.status).includes('review') ? 'warning' : row.status === 'approved' ? 'positive' : 'neutral'}>{String(row.status || 'submitted').replaceAll('_', ' ')}</Status></span><button className="ap-icon-button" onClick={() => setDrawer(row)} aria-label={`Open ${personName(row)} registration`}><ChevronRight size={17} /></button></Motion.div>; })}</AnimatePresence>{!visible.length && <div className="ap-empty"><Search size={28} /><h3>No registrations match this view</h3><p>Clear the search or choose another state.</p><button className="ap-secondary" onClick={() => { setQuery(''); setStatus('All states'); setPage(1); }}>Clear filters</button></div>}</section>
-    {visible.length > 0 && <nav className="ap-pagination" aria-label="Registration pages"><span>Showing {(currentPage - 1) * REGISTRATION_PAGE_SIZE + 1}-{Math.min(currentPage * REGISTRATION_PAGE_SIZE, visible.length)} of {visible.length}</span><div><button className="ap-secondary" disabled={currentPage === 1} onClick={() => { setPage((current) => Math.max(1, current - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Previous</button><span>Page {currentPage} of {pageCount}</span><button className="ap-secondary" disabled={currentPage === pageCount} onClick={() => { setPage((current) => Math.min(pageCount, current + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Next</button></div></nav>}
-    <AnimatePresence>{drawer && <><Motion.button className="ap-drawer-scrim" aria-label="Close registration details" onClick={() => setDrawer(null)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} /><RegistrationDrawer registration={drawer} onClose={() => setDrawer(null)} go={go} event={activeEvent} /></>}</AnimatePresence></>;
-}
-
 function PaymentException({ registration, event, payments, go }) {
   if (!registration || !event || String(registration.event_id) !== String(event.id)) {
     return <section className="ap-section ap-live-loading"><h2>Choose a registration to review its payment</h2><button className="ap-secondary" onClick={() => go('registrations')}>Open registrations</button></section>;
@@ -917,7 +886,7 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
   };
   const mayLoadEvents = ['home', 'events', 'event', 'registrations', 'payment'].includes(page)
     && canOpen(page) && canReadPreviewEvents(fixturePermissions, scope);
-  const data = usePreviewData(!mayLoadEvents || permissionsLoading ? null : effectiveSession, fixturePermissions, localFixture, focusEventId, false, scope);
+  const data = usePreviewData(!mayLoadEvents || permissionsLoading ? null : effectiveSession, fixturePermissions, localFixture, page === 'registrations' ? null : focusEventId, false, scope, page !== 'registrations');
   const activeWorkspace = workspaces.find(workspace => workspace.items.some(item => (item.activePages || [item.page]).includes(page)))?.id || 'operate';
   const setActiveWorkspace = (id) => { const first = workspaces.find(workspace => workspace.id === id)?.items[0]; if (first) go(first.page); };
   const go = useCallback((target, payload = {}) => {
@@ -985,7 +954,7 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
   else if (scope.id !== 'all' && page === 'players') content = <section className="ap-section"><ShieldCheck size={28} /><h2>This workspace is not yet available in {scope.label}</h2><p>Organisation and club access for this module is still being connected.</p><button className="ap-secondary" onClick={() => setScope(scopes[0])}>Return to my authorised access</button></section>;
   else if (permissions?.role === 'private_rehearsal' && page === 'events') content = <EventRehearsalWorkspace client={supabase} session={session} />;
   else if (!localFixture && ['events', 'event', 'registrations', 'payment'].includes(page) && !canReadPreviewEvents(permissions, scope)) content = <section className="ap-section"><ShieldCheck size={28} /><h2>Event Manager access is required</h2><p>Your account has no Event Manager permission. Choose one of your authorised modules.</p></section>;
-  else if (['event', 'registrations', 'payment'].includes(page) && (data.loading || !activeEvent)) content = <EventRecordState loading={data.loading} error={data.error}/>;
+  else if (['event', 'payment'].includes(page) && (data.loading || !activeEvent)) content = <EventRecordState loading={data.loading} error={data.error}/>;
   else if (page === 'messaging') content = <MessagingWorkspace session={session} />;
   else if (page === 'help') content = <HelpRequestsWorkspace session={session} />;
   else if (page === 'security') content = <AccountSecurityWorkspace session={session} permissions={permissions} client={supabase} targetEmail={session?.user?.email} />;
@@ -1040,7 +1009,11 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
   else if (page === 'calendar' && session && (permissionsLoading || !permissions)) content = <section className="ap-section" role="status">Checking Calendar access…</section>;
   else if (page === 'calendar' && session && !canOpen('calendar')) content = <section className="ap-section"><h2>Calendar access is required</h2><p>Your account does not have Calendar admin permission.</p></section>;
   else if (page === 'calendar') content = <CalendarWorkspace key={`${session?.user?.id || 'signed-out'}-${scope.id}-${playerRefresh}`} session={session} permissions={permissions} scope={scope} scopeId={scope.id} canManageEvents={Boolean(session) && !localFixture && permissions?.role === 'super_admin' && scope.id === 'all'} />;
-  else if (page === 'registrations') content = <RegistrationsWorkspace key={`${session?.user?.id}-${scope.id}`} event={activeEvent} events={data.events} registrations={data.registrations} go={go} initialRegistration={activeRegistration} canOpenMessages={canOpen('messaging')} />;
+  else if (page === 'registrations' && data.loading) content = <section className="ap-section"><RecordLoading label="Loading available events…" detail="Reading events for the selected workspace." /></section>;
+  else if (page === 'registrations' && data.error) content = <section className="ap-section ap-live-loading" role="alert"><h2>Registrations could not be loaded</h2><p>{data.error}</p><button className="ap-secondary" onClick={data.reload}>Try again</button></section>;
+  else if (page === 'registrations') content = <RegistrationsWorkspace client={supabase} session={session} scopeId={scope.id}
+    events={data.events} eventId={focusEventId} initialRegistrationId={queryParams.get('registration')} fixtureRows={localFixture ? data.registrations : undefined}
+    canReadLedger={permissions?.role === 'super_admin' && scope.id === 'all'} canOpenMessages={canOpen('messaging')} canOpenPlayer={canOpen('player')} go={go} />;
   else if (page === 'payment') content = <PaymentException registration={activeRegistration} event={activeEvent} payments={data.payments} go={go} />;
   else content = <OperationsHome events={data.events} registrations={data.registrations} go={go} userName={userName} />;
 
