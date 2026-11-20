@@ -839,6 +839,7 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [shellDialog, setShellDialog] = useState(null);
+  const [bronzePreference, setBronzePreference] = useState(null);
   const session = verifiedSession || localSession;
   const [context, setContext] = useState({ event: null, registration: null });
   const queryParams = new URLSearchParams(location.search);
@@ -936,6 +937,7 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
   if (!requestedPage) return <Navigate replace to={`/admin-preview/${canOpen('events') ? 'events' : firstPage}`} />;
   const canSeeWorkspace = canOpen(page) && Boolean(scope);
   const displayedScope = scope || { id: 'all', label: 'My authorised access' };
+  const eventListKey = JSON.stringify([session?.user?.id, displayedScope.id]);
   const canCreateEvents = canOpen('calendar') && permissions?.role === 'super_admin' && displayedScope.id === 'all';
   const requestedRegistrationId = queryParams.get('registration') || context.registration?.id;
   const selectedRegistration = requestedRegistrationId == null ? null
@@ -990,7 +992,8 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
   else if (page === 'tournaments') content = <TournamentAdminWorkspace key={`${session.user.id}-${scope.id}`} client={supabase} session={session} scopeId={scope.id} refreshRevision={playerRefresh} canBuildEvents={!localFixture && permissions?.role === 'super_admin'} />;
   else if (page === 'events' && data.loading) content = <section className="ap-section"><RecordLoading label="Loading Event Manager records…" detail="Reading events and registrations available in your current workspace. Larger histories may take longer."/></section>;
   else if (page === 'events' && data.error) content = <section className="ap-section ap-live-loading"><h2>Event Manager could not be loaded</h2><p>{data.error}</p><button className="ap-secondary" onClick={data.reload}>Try again</button></section>;
-  else if (page === 'events') content = <EventManagerDashboard key={session?.user?.id || 'signed-out'} events={data.events} registrations={data.registrations} go={go} session={session} scopeId={scope.id} canOpenCalendar={canOpen('calendar')} canReadSnapshots={Boolean(session) && !localFixture}
+  else if (page === 'events') content = <EventManagerDashboard key={eventListKey} events={data.events} registrations={data.registrations} go={go} session={session} scopeId={scope.id} canOpenCalendar={canOpen('calendar')} canReadSnapshots={Boolean(session) && !localFixture}
+    showBronzeEvents={bronzePreference?.key === eventListKey && bronzePreference.value} onShowBronzeEvents={value => setBronzePreference({ key: eventListKey, value })}
     canBulkSyncRankedin={Boolean(session) && !localFixture && permissions?.role === 'super_admin'} onRefresh={data.reload} />;
   else if (page === 'event' && focusEventId && data.loading) content = <section className="ap-section ap-live-loading"><LoaderCircle className="ap-spin" /><h2>Loading the live event</h2><p>Reading the event, registrations, payments, divisions and activity available to your admin account.</p></section>;
   else if (page === 'event' && focusEventId && data.error) content = <section className="ap-section ap-live-loading"><AlertCircle size={24} /><h2>The live event could not be loaded</h2><p>{data.error}</p><button className="ap-secondary" onClick={data.reload}>Try again</button></section>;

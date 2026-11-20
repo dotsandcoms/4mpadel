@@ -13,10 +13,12 @@ import { bulkImportedRosterEvents } from './importedParticipantBulkSync.js';
 import ImportedParticipantBulkSyncDialog from './ImportedParticipantBulkSyncDialog.jsx';
 
 const Badge = ({ tone = 'neutral', children }) => <span className={`ap-status ap-status--${tone}`}>{children}</span>;
-export default function EventManagerDashboard({ events, registrations, go, canOpenCalendar = false, canReadSnapshots = false, client = supabase, session, scopeId = 'all', canBulkSyncRankedin = false, onRefresh }) {
+export default function EventManagerDashboard({ events, registrations, go, canOpenCalendar = false, canReadSnapshots = false, client = supabase,
+  session, scopeId = 'all', canBulkSyncRankedin = false, showBronzeEvents, onShowBronzeEvents, onRefresh }) {
   const [query, setQuery] = useState('');
   const [phase, setPhase] = useState('Upcoming');
-  const [showBronze, setShowBronze] = useState(false);
+  const [localBronze, setLocalBronze] = useState(false);
+  const showBronze = showBronzeEvents ?? localBronze;
   const [page, setPage] = useState(1);
   const list = useRef(null);
   const [snapshotState, setSnapshotState] = useState({ key: '', data: {}, error: null });
@@ -71,7 +73,7 @@ export default function EventManagerDashboard({ events, registrations, go, canOp
     <div className="em-stats">{stats.map(([title, value, count]) => <button key={title} className="ap-section" data-state={value || 'all'} aria-pressed={phase === value} onClick={() => filter(value)}><span className="em-stat-label">{title}<span className="em-stat-icon" aria-hidden="true">{value === 'In progress' ? <Radio size={20} /> : value === 'Upcoming' ? <CalendarDays size={20} /> : value === 'Completed' ? <CircleCheck size={20} /> : <Layers size={20} />}</span></span><strong>{completionState.loading || completionState.error ? '—' : <AnimatedCount value={count} />}</strong><small>{phase === value ? <>Showing events <Check size={14} /></> : <>View events <ArrowRight size={14} /></>}</small></button>)}</div>
     <section className="ap-section em-guide"><div><h2>Inside each event</h2><p>Open an event to review its overview, players and teams, registrations, draws, income statement and activity log.</p></div><small>Completed is an explicit Event Manager status, independent of calendar dates.</small></section>
     <div className="ap-filter-bar"><label className="ap-filter-search"><Search size={17} /><span className="ap-visually-hidden">Search events</span><input value={query} onChange={e => { setQuery(e.target.value); setPage(1); }} placeholder="Search event, organiser, venue or city" /></label><label>Event status <SearchableDropdown value={phase} onChange={e => filter(e.target.value)}><option value="">All statuses</option>{['Upcoming', 'In progress', 'Awaiting completion', 'Completed', 'Active'].map(value => <option key={value}>{value}</option>)}</SearchableDropdown></label></div>
-    {canReadSnapshots && <label className="em-bronze-filter"><input type="checkbox" role="switch" checked={showBronze} onChange={event => { setShowBronze(event.target.checked); setPage(1); }} /> Show Bronze events</label>}
+    {canReadSnapshots && <label className="em-bronze-filter"><input type="checkbox" role="switch" checked={showBronze} onChange={event => { (onShowBronzeEvents || setLocalBronze)(event.target.checked); setPage(1); }} /> Show Bronze events</label>}
     {completionState.error && <p role="alert">Completion status unavailable: {completionState.error} <button className="ap-text-button" onClick={() => setRetry(value => value + 1)}>Retry status</button></p>}
     <p className="em-note">Registration-fee snapshot · same basis as the existing Event Manager. Collected / billed is separate from the refund-adjusted income statement. Licences count unique players.</p>
     {snapshotState.key === snapshotKey && snapshotState.error && <p role="alert">Snapshot unavailable: {snapshotState.error} <button className="ap-text-button" onClick={() => setRetry(value => value + 1)}>Retry snapshots</button></p>}

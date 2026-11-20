@@ -40,7 +40,7 @@ const ticket = {
 const event = {
   id: 101, event_name: 'North open', title: 'North open', start_date: '2035-01-21',
   end_date: '2035-01-21', created_at: '2025-01-01T09:00:00Z', organisation_id: north.id,
-  is_manual: true, is_visible: true, sapa_status: 'Silver',
+  is_manual: true, is_visible: true, finance_managed: true, sapa_status: 'Silver',
 };
 const drawDivision = { id: 'north-open-division', event_id: event.id, name: 'Open division', format: 'knockout', is_active: true };
 const paymentEvent = { ...event, id:202, event_name:'Other fixture event', slug:'other-fixture-event' };
@@ -535,6 +535,22 @@ test('Event Manager opens Calendar and setup only for accounts with Calendar acc
   await heading(operator, 'Event manager');
   await clickText(operator, '.em-workspace header button', 'Calendar & setup');
   await route(operator, '/admin-preview/calendar');
+});
+
+test('the Bronze switch stays on when returning from an event in the same scope', async t => {
+  const page = await open(t, '/admin-preview/events');
+  const bronzeSwitch = '.em-bronze-filter input';
+  await page.waitForSelector(bronzeSwitch);
+  assert.equal(await page.$eval(bronzeSwitch, input => input.checked), false);
+  await page.click(bronzeSwitch);
+  await clickText(page, '.em-table button', 'North open');
+  await route(page, '/admin-preview/event?event=101');
+  await destination(page, 'Event manager');
+  await route(page, '/admin-preview/events');
+  await page.waitForSelector(bronzeSwitch);
+  assert.equal(await page.$eval(bronzeSwitch, input => input.checked), true);
+  await page.click(bronzeSwitch);
+  assert.equal(await page.$eval(bronzeSwitch, input => input.checked), false);
 });
 
 test('verified platform permission reaches the Players page and its account controls', async t => {
