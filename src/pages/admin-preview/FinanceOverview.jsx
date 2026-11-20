@@ -13,6 +13,8 @@ import RecordLoading from './RecordLoading.jsx';
 import EventSettlementOverview from './EventSettlementOverview.jsx';
 import FinanceUserLedger from './FinanceUserLedger.jsx';
 import FinanceCollectionsWorkspace from './FinanceCollectionsWorkspace.jsx';
+import FinancialSummaryWorkspace from './FinancialSummaryWorkspace.jsx';
+import { financialSummaryScope } from './financialSummaryData.js';
 
 const money = cents => new Intl.NumberFormat('en-ZA', {style:'currency',currency:'ZAR'}).format(cents / 100);
 function ReceiptOverview({session, permissions, scopeId, client = supabase, refreshRevision = 0}) {
@@ -99,18 +101,29 @@ function ReceiptOverview({session, permissions, scopeId, client = supabase, refr
 }
 
 export default function FinanceOverview(props) {
-  const [view, setView] = useState('receipts');
   const platform = canReadFinanceOverview(props.session, props.permissions, props.scopeId);
-  if (!platform) return <EventSettlementOverview client={supabase} {...props} />;
+  const summary = Boolean(props.session?.user?.id && financialSummaryScope(props.permissions, props.scopeId));
+  const [selection, setSelection] = useState(null);
+  const workspaceProps = { client: supabase, ...props };
+  const views = [
+    ...(platform ? [['receipts', 'Receipts and refunds']] : []),
+    ['settlements', 'Event settlements'],
+    ...(platform ? [['users', 'User ledger'], ['collections', 'Collections']] : []),
+    ...(summary ? [['summary', 'Summary report']] : []),
+  ];
+  const view = views.some(([id]) => id === selection) ? selection : views[0][0];
+
+  let report = <EventSettlementOverview {...workspaceProps} />;
+  if (view === 'receipts') report = <ReceiptOverview {...workspaceProps} />;
+  if (view === 'users') report = <FinanceUserLedger {...workspaceProps} />;
+  if (view === 'collections') report = <FinanceCollectionsWorkspace {...workspaceProps} />;
+  if (view === 'summary') report = <FinancialSummaryWorkspace {...workspaceProps} />;
+
   return <div className="fo-root">
-    <nav className="fo-report-actions" aria-label="Finance report views">
-      <button type="button" className="ap-secondary" aria-pressed={view === 'receipts'} onClick={() => setView('receipts')}>Receipts and refunds</button>
-      <button type="button" className="ap-secondary" aria-pressed={view === 'settlements'} onClick={() => setView('settlements')}>Event settlements</button>
-      <button type="button" className="ap-secondary" aria-pressed={view === 'users'} onClick={() => setView('users')}>User ledger</button>
-      <button type="button" className="ap-secondary" aria-pressed={view === 'collections'} onClick={() => setView('collections')}>Collections</button>
-    </nav>
-    {view === 'receipts' ? <ReceiptOverview {...props} /> : view === 'users'
-      ? <FinanceUserLedger client={supabase} {...props} /> : view === 'collections'
-        ? <FinanceCollectionsWorkspace client={supabase} {...props} /> : <EventSettlementOverview client={supabase} {...props} />}
+    {views.length > 1 && <nav className="fo-report-actions" aria-label="Finance report views">
+      {views.map(([id, label]) => <button key={id} type="button" className="ap-secondary" aria-pressed={view === id}
+        onClick={() => setSelection(id)}>{label}</button>)}
+    </nav>}
+    {report}
   </div>;
 }
