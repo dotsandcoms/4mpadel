@@ -1,7 +1,7 @@
 import type { PendingAction } from './home';
 import { pathFromNotificationData } from './notification-routing';
 
-export type PlayerNotification = { id: string; type: string; title: string; body: string; path: string | null; created_at: string; read_at?: string | null };
+export type PlayerNotification = { id: string; type: string; title: string; body: string; path: string | null; created_at: string; read_at?: string | null; badge_unread?: boolean };
 export type NotificationEvent = { id: number; event_name: string | null; start_date: string | null; city: string | null; custom_image_url: string | null; poster_image_url: string | null; image_url: string | null; sapa_status?: string | null };
 export type NotificationGroup = { key: string; eventId: number | null; title: string; event?: NotificationEvent; actions: PendingAction[]; notifications: PlayerNotification[] };
 

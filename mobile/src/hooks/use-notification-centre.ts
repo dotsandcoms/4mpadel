@@ -3,11 +3,11 @@ import { useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { fetchPendingActions, type PendingAction } from '@/lib/home';
 import { notificationEventIds, type NotificationEvent, type PlayerNotification } from '@/lib/notification-centre';
-import { fetchNotificationSnapshot, markNotificationsRead } from '@/lib/notification-read-state';
+import { fetchNotificationSnapshot, markDrawerItemsRead, markDrawerNotificationsRead, markNotificationsRead } from '@/lib/notification-read-state';
 
 type Owner = { key: string; email: string; id: string };
-type State = { owner?: string; actions: PendingAction[]; notifications: PlayerNotification[]; events: NotificationEvent[]; unread: number; through: string | null; loading: boolean; error: string };
-const empty: State = { actions: [], notifications: [], events: [], unread: 0, through: null, loading: true, error: '' };
+type State = { owner?: string; actions: PendingAction[]; notifications: PlayerNotification[]; events: NotificationEvent[]; unread: number; through: string | null; drawerReadAvailable: boolean; loading: boolean; error: string };
+const empty: State = { actions: [], notifications: [], events: [], unread: 0, through: null, drawerReadAvailable: false, loading: true, error: '' };
 
 export function useNotificationCentre() {
   const [owner, setOwner] = useState<Owner | null>(), [state, setState] = useState<State>(empty);
@@ -41,7 +41,7 @@ export function useNotificationCentre() {
     const actions = pending.status === 'fulfilled' ? pending.value : [];
     const notifications = history.status === 'fulfilled' ? history.value.items : [];
     const error = pending.status === 'rejected' || history.status === 'rejected' ? 'Some notifications couldn’t load. Pull down to retry.' : '';
-    setState({ owner: key, actions, notifications, events: [], unread: history.status === 'fulfilled' ? history.value.unread : 0, through: history.status === 'fulfilled' ? history.value.through : null, loading: false, error });
+    setState({ owner: key, actions, notifications, events: [], unread: history.status === 'fulfilled' ? history.value.unread : 0, through: history.status === 'fulfilled' ? history.value.through : null, drawerReadAvailable: history.status === 'fulfilled' && history.value.drawerReadAvailable === true, loading: false, error });
     const ids = notificationEventIds(actions, notifications);
     if (!ids.length) return;
     try {
@@ -57,18 +57,21 @@ export function useNotificationCentre() {
   }, [key, email]);
   const markRead = useCallback(async (ids?: string[]) => {
     if (!key || currentOwner.current !== key || reading.current) return false;
+    if (!ids && (!state.drawerReadAvailable || !state.through)) return false;
     const request = ++version.current, token = {};
     reading.current = token;
     try {
-      const result = await markNotificationsRead(ids, ids ? undefined : state.through ?? undefined);
+      const result = ids
+        ? await (state.drawerReadAvailable ? markDrawerItemsRead(ids) : markNotificationsRead(ids))
+        : await markDrawerNotificationsRead(state.through!);
       if (currentOwner.current !== key || request !== version.current) return false;
-      setState(previous => ({ ...previous, notifications: result.items, unread: result.unread, through: result.through, loading: false, error: '' }));
+      setState(previous => ({ ...previous, notifications: result.items, unread: result.unread, through: result.through, drawerReadAvailable: result.drawerReadAvailable === true, loading: false, error: '' }));
       return true;
     } catch {
       if (currentOwner.current === key && request === version.current) setState(previous => ({ ...previous, loading: false, error: 'Couldn’t mark notifications read. Please try again.' }));
       return false;
     } finally { if (reading.current === token) reading.current = null; }
-  }, [key, state.through]);
+  }, [key, state.drawerReadAvailable, state.through]);
   useFocusEffect(useCallback(() => { void load(); return () => { version.current++; }; }, [load]));
   const current = state.owner === key && !!key;
   return { ...(current ? state : { ...empty, loading: owner === undefined }), ownerKey: key, signedIn: !!owner, refresh: load, markRead };

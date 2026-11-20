@@ -65,6 +65,7 @@ alter default privileges in schema public revoke all on tables from public,anon,
 \ir ../supabase/migrations/20261110095535_messaging_admin_inbox_scope_qualification.sql
 \ir ../supabase/migrations/20261110114014_messaging_group_event_attachments.sql
 \ir ../supabase/migrations/20261110100044_notification_read_state_and_unread_badges.sql
+\ir ../supabase/migrations/20261120094045_notification_drawer_read_state.sql
 -- Reproduce hosted legacy drift; the correction must close even broad policies/grants.
 grant select,insert,update,delete on public.push_outbox to anon,authenticated;
 create policy account_must_exist on public.push_outbox for all to authenticated using(true) with check(true);
