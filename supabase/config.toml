@@ -67,3 +67,9 @@ enabled = true
 # Validate the caller with Auth in the handler, including newer JWT signing keys.
 verify_jwt = false
 entrypoint = "./functions/admin-paystack-backfill/index.ts"
+
+[functions.organisation-event-attachments]
+enabled = true
+# The handler verifies the caller with Auth before running the scoped host check.
+verify_jwt = false
+entrypoint = "./functions/organisation-event-attachments/index.ts"

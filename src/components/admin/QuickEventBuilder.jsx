@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { supabase } from '../../supabaseClient';
 import { FOURM_PUBLIC_ORIGIN } from '../../constants/site.js';
 import { uploadToGallery } from '../../utils/eventMedia.js';
+import { uploadOrganisationEventAttachment } from '../../utils/organisationEventAttachments.js';
 import { useClubs } from '../../hooks/useClubs';
 import { attachPlacesAutocomplete } from '../../utils/googleMaps';
 import { generateAccessCode } from '../../utils/eventAccessCode';
@@ -530,11 +531,20 @@ const QuickEventBuilder = ({ isOpen, onClose: closeRequested, onSaved, organisat
             if ((previewTheme || renderEditor) && typeof beforeSave !== 'function') throw new Error('Event editor access could not be verified.');
             const authorised = await beforeSave?.({ operation: 'upload', asset: type, event: editingEvent, form });
             if (authorised === false) throw new Error('The upload was not authorised.');
-            const url = organisationBound && type === 'poster'
-                ? await uploadToGallery(file, 'cover', authorised?.verifyContinuing, {
+            let url;
+            if (organisationBound && type === 'sponsor') {
+                const media = await uploadOrganisationEventAttachment({
+                    client: supabase, organisationId: organisation.id, eventId: editingEvent?.id,
+                    kind: 'sponsor', file, checkpoint: authorised.verifyContinuing,
+                });
+                url = media.url;
+            } else if (organisationBound) {
+                url = await uploadToGallery(file, 'cover', authorised?.verifyContinuing, {
                     bucket: 'event-covers', folder: editingEvent?.id ? `events/${editingEvent.id}` : `drafts/${organisation.id}`,
-                })
-                : await uploadImage(file, type === 'poster' ? 'quick-event-posters' : 'quick-event-sponsors', authorised?.verifyContinuing);
+                });
+            } else {
+                url = await uploadImage(file, type === 'poster' ? 'quick-event-posters' : 'quick-event-sponsors', authorised?.verifyContinuing);
+            }
             if (type === 'poster') update('custom_image_url', url);
             else update('sponsor_logos', [url]);
             toast.success(type === 'poster' ? 'Event poster uploaded' : 'Sponsor logo uploaded');
@@ -885,7 +895,12 @@ const QuickEventBuilder = ({ isOpen, onClose: closeRequested, onSaved, organisat
                             </div>
                         </div>}
 
-                        {step === 3 && <div className="space-y-6"><div className="grid grid-cols-1 gap-4 md:grid-cols-2">{[['poster', 'Event poster', form.custom_image_url], ['sponsor', 'Sponsor logo', form.sponsor_logos[0]]].map(([type, label, url]) => <label key={type} className="flex min-h-48 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-4 text-center hover:border-padel-green/50">{url ? <img src={url} alt={`${label} preview`} className="mb-3 h-28 max-w-full rounded-xl object-contain outline outline-1 -outline-offset-1 outline-white/10" /> : <ImageIcon size={32} className="mb-3 text-gray-600" />}{uploading === type ? <Loader2 size={18} className="animate-spin text-padel-green" /> : <><span className="text-sm font-bold text-white">{label}</span><span className="mt-1 text-xs text-gray-500">PNG, JPG or WebP · max 5 MB</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => handleUpload(e, type)} className="sr-only" /></>}</label>)}</div><div><label className={labelClass}>Prize value (R)</label><input type="number" min="0" value={form.prize_money_total} onChange={(e) => update('prize_money_total', e.target.value)} className={inputClass} /></div></div>}
+                        {step === 3 && <div className="space-y-6"><div className="grid grid-cols-1 gap-4 md:grid-cols-2">{[['poster', 'Event poster', form.custom_image_url], ['sponsor', 'Sponsor logo', form.sponsor_logos[0]]].map(([type, label, url]) => <label key={type} className="flex min-h-48 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-4 text-center hover:border-padel-green/50">{url ? <img src={url} alt={`${label} preview`} className="mb-3 h-28 max-w-full rounded-xl object-contain outline outline-1 -outline-offset-1 outline-white/10" /> : <ImageIcon size={32} className="mb-3 text-gray-600" />}{uploading === type ? <Loader2 size={18} className="animate-spin text-padel-green" /> : <><span className="text-sm font-bold text-white">{label}</span><span className="mt-1 text-xs text-gray-500">PNG, JPG or WebP · max 5 MB</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => handleUpload(e, type)} className="sr-only" /></>}</label>)}</div>
+                            {organisationBound && <div className="flex flex-wrap gap-3">
+                                {form.custom_image_url && <button type="button" className="ap-secondary" disabled={!!uploading} onClick={() => update('custom_image_url', '')}>Remove event poster</button>}
+                                {form.sponsor_logos.length > 0 && <button type="button" className="ap-secondary" disabled={!!uploading} onClick={() => update('sponsor_logos', [])}>Remove sponsor logo</button>}
+                            </div>}
+                            <div><label className={labelClass}>Prize value (R)</label><input type="number" min="0" value={form.prize_money_total} onChange={(e) => update('prize_money_total', e.target.value)} className={inputClass} /></div></div>}
 
                         {step === 4 && <div className="grid grid-cols-1 gap-4 md:grid-cols-2"><div className="md:col-span-2"><label className={labelClass}>About this event</label><textarea rows={5} value={form.description} onChange={(e) => update('description', e.target.value)} className={inputClass} /></div><div><label className={labelClass}>Contact person</label><input value={form.contact_details} onChange={(e) => update('contact_details', e.target.value)} className={inputClass} /></div><div><label className={labelClass}>Phone / WhatsApp</label><input type="tel" value={form.organiser_phone} onChange={(e) => update('organiser_phone', e.target.value)} className={inputClass} /></div><div className="md:col-span-2"><label className={labelClass}>Contact email</label><input type="email" value={form.organiser_email} onChange={(e) => update('organiser_email', e.target.value)} className={inputClass} /></div><div className="md:col-span-2"><label className={labelClass}>Other information</label><textarea rows={5} value={form.other_info} onChange={(e) => update('other_info', e.target.value)} className={inputClass} /></div></div>}
 

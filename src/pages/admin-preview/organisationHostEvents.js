@@ -67,8 +67,8 @@ export async function verifyOrganisationHostEdit({ client, organisationId, snaps
     throw new Error('Weekly series settings cannot detach an occurrence.');
   }
   if (context.operation === 'save' && !context.payload) throw new Error('Review the event before saving.');
-  if (context.operation.startsWith('upload') && context.operation !== 'upload-cover' && !(context.operation === 'upload' && context.asset === 'poster')) {
-    throw new Error('Only cover uploads are available in the organisation workspace.');
+  if (context.operation === 'upload' && !['poster', 'sponsor'].includes(context.asset)) {
+    throw new Error('Choose a quick-event poster or sponsor logo.');
   }
   await verifyOrganisationHostBuilder({ client, organisationId, event, payload: context.payload, ...access });
   if (!event) return;

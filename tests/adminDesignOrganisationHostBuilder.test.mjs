@@ -74,5 +74,6 @@ test('host editing checks exact venue, preserved ownership, latest division set 
   await assert.rejects(verifyOrganisationHostEdit({ ...operation, client, snapshot, context: { ...context, payload: { ...context.payload, organisation_id: 'foreign' } } }), /must remain/);
   await assert.rejects(verifyOrganisationHostEdit({ ...operation, client, snapshot, context: { ...context, payload: { ...context.payload, federation_sanction_status: 'approved' } } }), /federation must approve/);
   await assert.rejects(verifyOrganisationHostEdit({ ...operation, client: fixture({ eventRows: [{ ...event, event_name:'Changed by another admin' }] }), snapshot, context }), /changed/);
-  await assert.rejects(verifyOrganisationHostEdit({ ...operation, client, snapshot, context: { ...context, operation: 'upload-sponsor', payload: null } }), /Only cover uploads/);
+  await verifyOrganisationHostEdit({ ...operation, client, snapshot, context: { ...context, operation: 'upload-sponsor', payload: null } });
+  await assert.rejects(verifyOrganisationHostEdit({ ...operation, client, snapshot, context: { ...context, operation: 'upload', asset: 'other' } }), /quick-event poster or sponsor/);
 });

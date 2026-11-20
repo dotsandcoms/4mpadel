@@ -13,6 +13,7 @@ import CancelEventDialog from './CancelEventDialog';
 import { supabase } from '../../supabaseClient';
 import { reviewedWeeklyMembers, scopeWeeklyOccurrence } from '../../utils/calendarWeeklySeries.js';
 import { uploadToGallery, uploadEventAsset } from '../../utils/eventMedia';
+import { uploadOrganisationEventAttachment } from '../../utils/organisationEventAttachments.js';
 import { useClubs } from '../../hooks/useClubs';
 import { useAdminPermissions } from '../../hooks/useAdminPermissions';
 import { getDefaultBackgroundForStatus } from '../../utils/imageUtils';
@@ -1697,13 +1698,23 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         }
     };
 
+    const uploadHostAttachment = (kind, file, checkpoint) => uploadOrganisationEventAttachment({
+        client: supabase, organisationId: organisation.id, eventId: activeEvent?.id, kind, file, checkpoint,
+    });
+
     const handlePosterUpload = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
         try {
             setUploadingPoster(true);
             const checkpoint = await authorizeMutation('upload-poster');
-            if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+            if (organisationBound) {
+                const media = await uploadHostAttachment('poster', file, checkpoint);
+                setForm(prev => ({ ...prev,
+                    poster_document_url: media.contentType === 'application/pdf' ? media.url : '',
+                    poster_image_url: media.contentType === 'application/pdf' ? '' : media.url,
+                }));
+            } else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
                 const url = await uploadEventAsset(file, 'event-posters', undefined, checkpoint);
                 setForm((prev) => ({ ...prev, poster_document_url: url, poster_image_url: '' }));
             } else {
@@ -1725,7 +1736,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         try {
             setUploadingKit(true);
             const checkpoint = await authorizeMutation('upload-organiser-kit');
-            const url = await uploadEventAsset(file, 'event-kits', undefined, checkpoint);
+            const url = organisationBound
+                ? (await uploadHostAttachment('organiser-kit', file, checkpoint)).url
+                : await uploadEventAsset(file, 'event-kits', undefined, checkpoint);
             setField('organiser_kit_url', url);
             toast.success('Event organiser document uploaded');
         } catch (err) {
@@ -1743,7 +1756,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             setUploadingGallery(true);
             const checkpoint = await authorizeMutation('upload-gallery');
             const urls = [];
-            for (const file of files) urls.push(await uploadToGallery(file, 'event-media', checkpoint));
+            for (const file of files) {
+                const url = organisationBound ? (await uploadHostAttachment('gallery', file, checkpoint)).url
+                    : await uploadToGallery(file, 'event-media', checkpoint);
+                urls.push(url);
+            }
             setForm((prev) => ({
                 ...prev,
                 media_gallery_urls: [...(prev.media_gallery_urls || []), ...urls],
@@ -1767,7 +1784,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             setField('organiser_logo_url', url);
             toast.success('Organisation logo uploaded');
         } catch (err) {
-            toast.error('Failed to upload organisation logo');
+            toast.error(err.message || 'Failed to upload organisation logo');
         } finally {
             setUploadingOrgLogo(false);
         }
@@ -1782,7 +1799,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             setUploadingSponsor(true);
             const checkpoint = await authorizeMutation('upload-sponsor');
             const urls = [];
-            for (const file of files) urls.push(await uploadToGallery(file, 'sponsors', checkpoint));
+            for (const file of files) {
+                const url = organisationBound ? (await uploadHostAttachment('sponsor', file, checkpoint)).url
+                    : await uploadToGallery(file, 'sponsors', checkpoint);
+                urls.push(url);
+            }
             setForm((prev) => {
                 const current = [...(prev.sponsor_logos || [])];
                 if (asMain) {
@@ -1794,7 +1815,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             });
             toast.success(`${urls.length} sponsor logo(s) uploaded`);
         } catch (err) {
-            toast.error('Failed to upload sponsor logo');
+            toast.error(err.message || 'Failed to upload sponsor logo');
         } finally {
             setUploadingSponsor(false);
             e.target.value = '';
@@ -2528,6 +2549,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
      */
     const handleSave = async (mode = 'publish', { stayOpen = true } = {}) => {
         if (coverUploadRef.current) return;
+        if (organisationBound && (uploadingPoster || uploadingKit || uploadingGallery || uploadingOrgLogo || uploadingSponsor)) {
+            toast.error('Wait for the attachment upload to finish before saving.');
+            return { success: false, mutationAttempted: false };
+        }
         if (previewTheme && previewWriteFailed.current) { toast.error('Close and refresh before retrying this save.'); return { success: false, error: 'Close and refresh before retrying.', mutationAttempted: true }; }
         if (saveLock.current) return { success: false, reason: 'busy', mutationAttempted: false };
         if (guardedEditor && (loadingExisting || loadError)) return { success: false, error: loadError || 'Wait for event setup to finish loading.', mutationAttempted: false };
@@ -4907,7 +4932,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                             <button
                                                                 type="button"
                                                                 onClick={() => removeSponsor(0)}
-                                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                aria-label="Remove main sponsor logo"
+                                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                                                             >
                                                                 <X size={12} />
                                                             </button>
@@ -4940,7 +4966,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => removeSponsor(idx)}
-                                                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                        aria-label={`Remove sponsor logo ${idx + 1}`}
+                                                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                                                                     >
                                                                         <X size={12} />
                                                                     </button>
@@ -5000,7 +5027,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                         <input type="file" accept="application/pdf,.doc,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" onChange={handleOrganiserKitUpload} disabled={uploadingKit} />
                                                     </label>
                                                     {form.organiser_kit_url && <a href={form.organiser_kit_url} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-padel-green hover:text-white">Open document</a>}
-                                                    {form.organiser_kit_url && <button type="button" onClick={() => setField('organiser_kit_url', '')} className="text-xs font-bold text-red-400 hover:text-red-300">Remove</button>}
+                                                    {form.organiser_kit_url && <button type="button" onClick={() => setField('organiser_kit_url', '')} className="text-xs font-bold text-red-400 hover:text-red-300">Remove organiser kit</button>}
                                                 </div>
                                                 <p className="mt-1 text-[11px] text-gray-500">Maximum 10 MB.</p>
                                             </div>
