@@ -8,6 +8,7 @@ const outcomeText = result => result.message || ({
     already_recorded: 'An existing ledger entry already uses this receipt.',
     held: 'The receipt needs further review.',
     changed: 'Receipt evidence changed. Refresh and review again.',
+    deferred: 'Left for later review.',
 })[result.state] || 'Receipt is unavailable.';
 const reviewText = row => {
     if (row.kind === 'entry') return `Event #${row.eventId}. ${row.entries} existing entries will be marked paid${row.licences ? ` with ${row.licences} licence payments` : ''}.`;
@@ -25,6 +26,7 @@ export default function GatewayBackfillReview({ client, session, permissions, sc
     const [batch, setBatch] = useState(0), [retry, setRetry] = useState(0);
     const [loaded, setLoaded] = useState(null), [busy, setBusy] = useState(false);
     const [history, setHistory] = useState([]);
+    const [selected, setSelected] = useState(() => new Map());
     const [reason, setReason] = useState(''), [confirmed, setConfirmed] = useState(false);
     const [recordingAttempted, setRecordingAttempted] = useState(false);
     const batchCount = Math.ceil(selection.current.length / batchSize);
@@ -47,21 +49,37 @@ export default function GatewayBackfillReview({ client, session, permissions, sc
     }, [batch, retry, client, session, permissions, scopeId]);
 
     const ready = results?.filter(({ result }) => result.state === 'review') || [];
+    const isSelected = ({ row, result }) => selected.get(row.reference) === result.token;
+    const selectedReady = bulk ? ready.filter(isSelected) : ready;
+    const setReceiptSelected = ({ row, result }, checked) => setSelected(previous => {
+        const next = new Map(previous);
+        if (checked) next.set(row.reference, result.token);
+        else next.delete(row.reference);
+        return next;
+    });
+
     async function record() {
         const controller = request.current;
-        if (!controller || controller.signal.aborted || recording.current || !ready.length || !reason.trim() || confirmed) return;
+        if (!controller || controller.signal.aborted || recording.current || !selectedReady.length || !reason.trim()) return;
+        const approved = new Set(selectedReady);
         recording.current = true;
         setRecordingAttempted(true);
         setBusy(true); onBusyChange?.(true);
         const completed = [];
         try {
-            for (const { row, result } of results) {
+            for (const item of results) {
                 if (controller.signal.aborted) return;
-                if (result.state !== 'review') { completed.push({ row,result }); continue; }
+                if (!approved.has(item)) { completed.push(item); continue; }
+                const { row, result } = item;
                 try { completed.push({ row,result:await recordGatewayBackfill(client,session,permissions,scopeId,row,result,reason,controller.signal) }); }
                 catch (error) { completed.push({ row,result:{state:'unconfirmed',message:error.message} }); }
             }
-            if (!controller.signal.aborted) { setLoaded({ batch, retry, results:completed }); setConfirmed(true); }
+            if (!controller.signal.aborted) {
+                setLoaded({ batch, retry, results:completed });
+                setSelected(new Map());
+                setReason('');
+                setConfirmed(true);
+            }
         } finally {
             recording.current = false;
             if (!controller.signal.aborted) setBusy(false);
@@ -69,34 +87,58 @@ export default function GatewayBackfillReview({ client, session, permissions, sc
         }
     }
     function nextBatch() {
-        setHistory(previous => [...previous, ...results]);
-        setBatch(value => value + 1);
+        if (!results || recording.current || batch + 1 >= batchCount) return;
+        setHistory(previous => [...previous, ...results.map(item => item.result.state === 'review'
+            ? { row:item.row, result:{ state:'deferred' } } : item)]);
+        setBatch(batch + 1);
+        setSelected(new Map());
         setReason('');
         setConfirmed(false);
     }
     function retryBatch() {
+        if (recording.current) return;
+        setSelected(new Map());
+        setReason('');
         setConfirmed(false);
         setRetry(value => value + 1);
     }
-    const canContinue = results && !ready.length && batch + 1 < batchCount;
+    const canContinue = results && batch + 1 < batchCount;
     const canRetry = results?.some(({ result }) => ['unavailable','unconfirmed','changed'].includes(result.state));
-    const renderedResults = items => <ul>{items.map(({ row, result }) => <li key={row.reference}><strong>{row.reference}</strong> · {
-        result.state === 'review' ? `${money(result.amountMinor)} · ${result.payer}. ${reviewText(result)}` : outcomeText(result)
-    }</li>)}</ul>;
+    const renderedResults = (items, selectable = false) => <ul>{items.map(item => {
+        const { row, result } = item;
+        const reference = <strong>{row.reference}</strong>;
+        return <li key={row.reference}>
+            {selectable && result.state === 'review' ? <label>
+                <input type="checkbox" aria-label={`Select receipt ${row.reference}`} checked={isSelected(item)} disabled={busy}
+                    onChange={event => setReceiptSelected(item,event.target.checked)}/> {reference}
+            </label> : reference} · {
+                result.state === 'review' ? `${money(result.amountMinor)} · ${result.payer}. ${reviewText(result)}` : outcomeText(result)
+            }
+        </li>;
+    })}</ul>;
 
     return <section className="ap-section" style={{ padding:18 }} aria-label="Review missing Paystack receipts">
         <h2>{confirmed ? 'Receipt recording results' : 'Review missing Paystack receipts'}</h2>
         {bulk && <p role="status">{selection.current.length} missing receipts in the filtered results. Batch {batch + 1} of {batchCount}.</p>}
-        {!results ? <p role="status">Verifying the selected receipts with Paystack…</p> : <>
-            {renderedResults(results)}
+        {!results ? <p role="status">Verifying receipts with Paystack…</p> : <>
+            {bulk && ready.length > 0 && <>
+                <div className="fo-report-actions">
+                    <button type="button" className="ap-secondary" disabled={busy || selectedReady.length === ready.length}
+                        onClick={() => setSelected(new Map(ready.map(({ row, result }) => [row.reference,result.token])))}>Select all ready receipts</button>
+                    <button type="button" className="ap-secondary" disabled={busy || !selectedReady.length}
+                        onClick={() => setSelected(new Map())}>Clear selection</button>
+                </div>
+                <p role="status">{selectedReady.length} of {ready.length} ready receipts selected.</p>
+            </>}
+            {renderedResults(results,bulk)}
             {ready.length > 0 && <label className="lw-field"><span>Reason for recording these receipts</span>
                 <textarea rows={3} maxLength={500} disabled={busy} value={reason} onChange={event => setReason(event.target.value)}/></label>}
         </>}
         {history.length > 0 && <details><summary>Earlier batch results ({history.length} receipts)</summary>{renderedResults(history)}</details>}
         <div className="fo-report-actions">
-            {!!ready.length && <button type="button" className="ap-primary" disabled={busy || !reason.trim()} onClick={record}>
+            {!!ready.length && <button type="button" className="ap-primary" disabled={busy || !selectedReady.length || !reason.trim()} onClick={record}>
                 {busy ? 'Recording receipts…' : 'Confirm receipt recording'}</button>}
-            {canContinue && <button type="button" className="ap-primary" onClick={nextBatch}>Review next batch</button>}
+            {canContinue && <button type="button" className="ap-secondary" disabled={busy} onClick={nextBatch}>Review next batch</button>}
             {canRetry && <button type="button" className="ap-secondary" disabled={busy} onClick={retryBatch}>
                 {confirmed ? 'Recheck receipt results' : 'Retry batch verification'}</button>}
             <button type="button" className="ap-secondary" disabled={busy} onClick={recordingAttempted ? onRecorded : onClose}>

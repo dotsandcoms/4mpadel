@@ -9,9 +9,9 @@ const actor={id:'fixture-account',email:'operator@example.invalid'};
 export const application={id:'club-a',name:'Fixture venue',status:'pending',contact_email:'applicant@example.invalid',contacts:null,created_by:7,
  city:'Fixture city',group_id:null,updated_at:'2026-11-02T00:00:00Z',website_url:null,logo_url:null};
 const claim={id:'claim-a',club_id:'club-a',status:'pending',requester_email:'claimant@example.invalid',requester_player_id:8,full_name:'Claimant',
- primary_role:'owner',created_at:'2026-11-01T00:00:00Z'};
+ primary_role:'owner',contact_phone:null,notes:null,created_at:'2026-11-01T00:00:00Z'};
 const group={id:'group-a',name:'Fixture group',slug:'fixture-group',status:'published',share_logo:true,share_website:true,logo_url:'https://example.invalid/group.png',website_url:'https://example.invalid/'};
-if(['claim','stale-claim','queue'].includes(fixture.mode))application.status='unclaimed';
+if(['claim','stale-claim','stale-club','queue'].includes(fixture.mode))application.status='unclaimed';
 const member={id:'member-a',club_id:'club-a',player_id:9,user_email:'member@example.invalid',role:'staff',created_at:'2026-11-02T00:00:00Z',players:{name:'Original member'}};
 const now='2026-11-01T00:00:00Z';
 const database={organisations:[{id:'org-a',name:'Fixture organiser',status:'approved'}],club_organisations:[],clubs:[application,{...application,id:'club-b',name:'Other venue',status:'published'}],club_groups:[group],
@@ -25,6 +25,25 @@ const base=value=>typeof value==='object'&&value!==null?JSON.stringify(value):St
 export const client={
  auth:{async getUser(){return {data:{user:actor}}},async signInWithOtp(params){fixture.calls.push(['otp',params]);return {data:{}}}},
  async rpc(name,args){fixture.calls.push(['rpc',name,args]);
+   if(name==='admin_reviewed_club_decision'){
+     const club = database.clubs.find(row=>row.id===args.p_club_id);
+     const isClaim = args.p_kind==='claim';
+     const claim = isClaim ? database.club_claim_requests.find(row=>row.id===args.p_claim_id&&row.club_id===club.id) : null;
+     const matches = (snapshot,row) => row && Object.entries(snapshot).every(([key,value])=>base(row[key])===base(value));
+     if (!matches(args.p_expected_club,club) || isClaim && !matches(args.p_expected_claim,claim)) {
+       return {error:{message:'The decision could not be confirmed.'}};
+     }
+     if (fixture.mode==='owner-failure') return {error:{message:'Owner access could not be assigned.'}};
+     const approved = args.p_decision==='approved';
+     const publish = approved && (!isClaim || ['unclaimed','draft','archived'].includes(club.status));
+     const owner = approved && Boolean(isClaim ? claim.requester_email : club.contact_email);
+     if (publish) Object.assign(club,{status:'published',verified:true});
+     else if (!isClaim) club.status=args.p_decision;
+     if (claim) Object.assign(claim,{status:args.p_decision,rejection_notes:args.p_rejection_notes});
+     if (owner) database.club_members.push({id:'approved-owner',club_id:club.id,role:'owner',
+       player_id:isClaim ? claim.requester_player_id : club.created_by,user_email:isClaim ? claim.requester_email : club.contact_email});
+     return {data:{club_id:club.id,claim_id:args.p_claim_id,status:!isClaim&&approved?'published':args.p_decision,club_published:publish,owner_granted:owner}};
+   }
    if(name==='admin_club_group_team_access'){
      if(!args.p_group_id)return {data:{can_assign:fixture.mode==='group-team'}};
      return {data:{group_id:args.p_group_id,player_id:args.p_player_id,role:args.p_role,changed:['club-a'],preserved:['club-b']}};
@@ -46,7 +65,6 @@ export const client={
       if(operation){
         fixture.calls.push([operation,table,selected.map(row=>row.id),patch]);
         if(operation==='insert'){
-          if(table==='club_members'&&fixture.mode==='owner-failure')return {error:{message:'Mock denial'}};
           const row={id:'synthetic-new',created_at:now,...patch};
           if(table==='club_claim_invites'){row.status='pending';row.token='synthetic-invite-token'}
           selected=[row];database[table].push(row);
@@ -118,7 +136,7 @@ async function withPage(mode, run) {
   } finally { await page.close(); }
 }
 
-const writes = page => page.evaluate(() => window.fixture.calls.filter(([kind]) => kind !== 'rpc'));
+const writes = page => page.evaluate(() => window.fixture.calls.filter(([kind,name]) => kind !== 'rpc' || name === 'admin_reviewed_club_decision'));
 const text = (page, value) => page.waitForFunction(value => document.body.innerText.includes(value), {}, value);
 async function click(page, label, selector='button') {
   await page.waitForFunction((label,selector) => [...document.querySelectorAll(selector)].some(node =>
@@ -145,15 +163,19 @@ test('application approval publishes, assigns the reviewed owner, and sends the 
     await click(page,'Confirm decision');
     await text(page,'Notification submitted.');
     const actions = await writes(page);
-    assert.deepEqual(actions.map(([action,table]) => [action,table]),[['update','clubs'],['insert','club_members'],['function','send-email']]);
-    assert.deepEqual(actions[0][2],['club-a']);
-    assert.equal(actions[1][3].role,'owner');
-    assert.equal(actions[2][2].template,'club_approved');
+    assert.deepEqual(actions.map(action => action.slice(0,2)),[['rpc','admin_reviewed_club_decision'],['function','send-email']]);
+    assert.equal(actions[0][2].p_club_id,'club-a');
+    assert.equal(actions[0][2].p_expected_club.updated_at,'2026-11-02T00:00:00Z');
+    assert.equal(actions[0][2].p_expected_club.contact_email,'applicant@example.invalid');
+    assert.equal(actions[1][2].template,'club_approved');
   });
   await withPage('owner-failure', async page => {
     await click(page,'Review decision'); await click(page,'Confirm decision');
-    await text(page,'Decision saved. Check club publication');
-    assert.equal((await writes(page)).some(([kind])=>kind==='function'),false);
+    await text(page,'Owner access could not be assigned.');
+    assert.deepEqual((await writes(page)).map(action=>action.slice(0,2)),[['rpc','admin_reviewed_club_decision']]);
+    const saved = await page.evaluate(()=>({status:window.fixture.data.clubs[0].status,
+      ownership:window.fixture.data.club_members.some(row=>row.user_email==='applicant@example.invalid')}));
+    assert.deepEqual(saved,{status:'pending',ownership:false});
   });
 });
 test('claim rejection saves escaped feedback, and a changed claim cannot grant access', async () => {
@@ -163,15 +185,26 @@ test('claim rejection saves escaped feedback, and a changed claim cannot grant a
     await page.locator('textarea').fill('Review <feedback>');
     await click(page,'Review decision'); await click(page,'Confirm decision'); await text(page,'Notification submitted.');
     const actions=await writes(page);
-    assert.deepEqual(actions[0].slice(0,3),['update','club_claim_requests',['claim-a']]);
-    assert.equal(actions[0][3].rejection_notes,'Review <feedback>');
+    assert.deepEqual(actions[0].slice(0,2),['rpc','admin_reviewed_club_decision']);
+    assert.equal(actions[0][2].p_claim_id,'claim-a');
+    assert.equal(actions[0][2].p_rejection_notes,'Review <feedback>');
     assert.equal(actions[1][2].variables.notes,'Review &lt;feedback&gt;');
   });
   await withPage('stale-claim', async page => {
     await click(page,'Load members and claims'); await click(page,'Claims (1)'); await click(page,'Review claim'); await click(page,'Review decision');
     await page.evaluate(()=>{window.fixture.data.club_claim_requests[0].status='rejected'});
     await click(page,'Confirm decision'); await text(page,'The decision could not be confirmed.');
-    assert.deepEqual((await writes(page)).map(row=>row.slice(0,3)),[['update','club_claim_requests',[]]]);
+    assert.deepEqual((await writes(page)).map(row=>row.slice(0,2)),[['rpc','admin_reviewed_club_decision']]);
+  });
+  await withPage('stale-club', async page => {
+    await click(page,'Load members and claims'); await click(page,'Claims (1)'); await click(page,'Review claim'); await click(page,'Review decision');
+    await text(page,'Recorded applicant');
+    await page.evaluate(()=>{window.fixture.data.clubs[0].name='Renamed club'});
+    await click(page,'Confirm decision'); await text(page,'The decision could not be confirmed.');
+    const [rpc] = await writes(page);
+    assert.equal(rpc[2].p_expected_club.name,'Fixture venue');
+    assert.equal((await writes(page)).length,1);
+    assert.equal(await page.evaluate(()=>window.fixture.data.club_claim_requests[0].status),'pending');
   });
 });
 test('club members can be added, changed and removed without touching a different club', async () => {
@@ -249,12 +282,14 @@ test('pending queue reviews and approves only the selected venue claim', async (
     await click(page,'Confirm decision');
     await text(page,'Decision saved. Notification submitted.');
     const actions=await writes(page);
-    assert.deepEqual(actions.map(row=>row.slice(0,2)),[['update','club_claim_requests'],['update','clubs'],['insert','club_members'],['function','send-email']]);
-    assert.deepEqual(actions[0][2],['claim-a']);
-    assert.deepEqual(actions[1][2],['club-a']);
-    assert.equal(actions[1][3].status,'published');
-    assert.deepEqual(actions[2][3],{club_id:'club-a',player_id:8,role:'owner',user_email:'claimant@example.invalid'});
-    assert.equal(actions[3][2].template,'club_claim_approved');
+    assert.deepEqual(actions.map(row=>row.slice(0,2)),[['rpc','admin_reviewed_club_decision'],['function','send-email']]);
+    assert.equal(actions[0][2].p_claim_id,'claim-a');
+    assert.equal(actions[0][2].p_club_id,'club-a');
+    assert.equal(actions[0][2].p_expected_claim.requester_player_id,8);
+    assert.equal(actions[0][2].p_expected_club.status,'unclaimed');
+    assert.equal(actions[1][2].template,'club_claim_approved');
+    assert.equal(await page.evaluate(()=>window.fixture.data.clubs[0].status),'published');
+    assert.equal(await page.evaluate(()=>window.fixture.data.club_claim_requests.find(row=>row.id==='claim-b').status),'pending');
     await click(page,'Close decision');
     await text(page,'No pending claims match this view.');
     await page.locator('input[aria-label="Search pending claims"]').fill('Other venue');

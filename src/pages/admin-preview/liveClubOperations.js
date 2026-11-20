@@ -7,8 +7,9 @@ import { CLUB_INVITATION_FIELDS, normalizeClubInvitationEmail } from './clubInvi
 import { entityEqual } from './organisationFederationData.js';
 import { readAll } from './playersData.js';
 
-const applicationFields = 'id,name,status,contact_email,contacts,created_by';
+const applicationFields = 'id,name,status,contact_email,contacts,created_by,updated_at';
 const claimFields = 'id,club_id,full_name,requester_email,requester_player_id,primary_role,status,created_at';
+const claimReviewFields = `${claimFields},contact_phone,notes,clubs(id,name,status,updated_at)`;
 const memberFields = 'id,club_id,player_id,user_email,role,created_at';
 const publicSite = 'https://4mpadel.co.za';
 const available = () => true;
@@ -41,7 +42,7 @@ async function clubEmail(client, to, template, variables) {
 
 export function clubApplicantEmail(club) {
   const contacts = Array.isArray(club?.contacts) ? club.contacts : [];
-  const raw = club?.contact_email || (contacts.find(contact => contact?.is_primary) || contacts[0])?.email;
+  const raw = club?.contact_email || (contacts.find(contact => contact?.is_primary === true) || contacts[0])?.email;
   return raw ? normalizeClubInvitationEmail(raw) : '';
 }
 async function exactPlayer(client, id, email) {
@@ -57,25 +58,17 @@ async function clubMemberByEmail(client, clubId, email) {
   if (exact.length > 1) throw new Error('Multiple memberships use the recorded email. Review the existing members first.');
   return exact[0] || null;
 }
-async function checkOwnerTarget(client, clubId, playerId, email) {
-  await exactPlayer(client, playerId, email);
-  const existing = await clubMemberByEmail(client, clubId, email);
-  if (existing?.player_id != null && playerId != null && String(existing.player_id) !== String(playerId)) {
-    throw new Error('The membership is linked to a different player. Review the existing member first.');
-  }
-  return existing;
-}
-async function grantOwner(client, clubId, playerId, email, existing) {
-  if (existing?.role === 'owner' && (playerId == null || existing.player_id === playerId)) return;
-  const patch = { role: 'owner', player_id: playerId ?? existing?.player_id ?? null };
-  const mutation = existing ? exactClubFields(client.from('club_members').update(patch), existing)
-    : client.from('club_members').insert({ ...patch, club_id: clubId, user_email: email });
-  await confirmRow(mutation.select('id'), 'Owner access could not be confirmed.');
-}
-
-async function loadApplication({ client, scopeId, userId, clubId }) {
+async function loadDecision({ client, scopeId, userId, kind, clubId, claimId }) {
   await verifyPlatformClubAction(client, scopeId, userId);
+  if (kind === 'claim') {
+    const row = await confirmRow(client.from('club_claim_requests').select(claimReviewFields)
+      .eq('id', claimId).eq('club_id', clubId), 'The club claim is no longer available.');
+    if (row.id !== claimId || row.club_id !== clubId || row.clubs?.id !== clubId) throw new Error('Reload the exact club claim before reviewing.');
+    claimDecisionArguments(row, 'approved');
+    return row;
+  }
   const row = await confirmRow(client.from('clubs').select(applicationFields).eq('id', clubId), 'The club application is no longer available.');
+  if (row.id !== clubId) throw new Error('Reload the exact club application before reviewing.');
   applicationDecisionArguments(row, 'approved');
   return row;
 }
@@ -89,60 +82,37 @@ export async function loadPendingClubClaims({ client, scopeId, userId, signal })
   return rows;
 }
 
-async function submitDecision({ client, scopeId, userId, kind, args, isCurrent }) {
+async function submitDecision({ client, scopeId, userId, kind, original, args, isCurrent }) {
   await verifyPlatformClubAction(client, scopeId, userId, isCurrent);
-  const approved = args?.p_decision === 'approved';
+  if (!['claim', 'application'].includes(kind)) throw new Error('Choose an application or club claim.');
   const claim = kind === 'claim';
-  if (!claim && kind !== 'application') throw new Error('Choose an application or club claim.');
+  const club = claim ? original?.clubs : original;
   const clubId = claim ? args.p_expected_club_id : args.p_club_id;
-  if (!clubId) throw new Error('Reload the club before reviewing.');
-  const club = await confirmRow(client.from('clubs').select(applicationFields).eq('id', clubId), 'The reviewed club is no longer available.');
-  let email, playerId, mutation, expected;
-  const reviewedAt = new Date().toISOString();
-  if (claim) {
-    const snapshot = args.p_expected_claim;
-    if (!snapshot || snapshot.club_id !== clubId || !args.p_claim_id) throw new Error('Reload the exact claim before reviewing.');
-    expected = claimDecisionArguments({ ...snapshot, id: args.p_claim_id }, args.p_decision, args.p_rejection_notes ?? '');
-    email = normalizeClubInvitationEmail(snapshot.requester_email);
-    playerId = snapshot.requester_player_id;
-    mutation = () => exactClubFields(client.from('club_claim_requests').update({
-      status: args.p_decision, reviewed_at: reviewedAt, rejection_notes: expected.p_rejection_notes,
-    }).eq('id', expected.p_claim_id), expected.p_expected_claim);
-  } else {
-    expected = applicationDecisionArguments(club, args.p_decision, args.p_rejection_notes ?? '');
-    if (!entityEqual(expected.p_expected_application, args.p_expected_application)) throw new Error('The application changed after you opened the review.');
-    email = clubApplicantEmail(club);
-    playerId = club.created_by;
-    mutation = () => exactClubFields(client.from('clubs').update(approved
-      ? { status: 'published', verified: true, approved_at: reviewedAt, rejection_notes: null }
-      : { status: 'rejected', rejection_notes: expected.p_rejection_notes }).eq('id', club.id), expected.p_expected_application);
+  if (!clubId || club?.id !== clubId || !Object.hasOwn(club, 'updated_at')) throw new Error('Reload the exact club before confirming.');
+  const approved = args.p_decision === 'approved';
+  const email = claim ? normalizeClubInvitationEmail(original.requester_email) : clubApplicantEmail(original);
+  const expectedClub = claim ? { name: club.name, status: club.status } : args.p_expected_application;
+  const { data, error } = await client.rpc('admin_reviewed_club_decision', {
+    p_kind: kind, p_club_id: clubId, p_decision: args.p_decision,
+    p_expected_club: { ...expectedClub, updated_at: club.updated_at },
+    p_claim_id: claim ? args.p_claim_id : null, p_expected_claim: claim ? args.p_expected_claim : null,
+    p_rejection_notes: args.p_rejection_notes,
+  });
+  if (error) throw new Error(error.message || 'The decision could not be confirmed.');
+
+  const status = approved && !claim ? 'published' : args.p_decision;
+  const published = approved && (!claim || ['unclaimed', 'draft', 'archived'].includes(club.status));
+  if (data?.club_id !== clubId || data.claim_id !== (claim ? args.p_claim_id : null)
+    || data.status !== status || data.club_published !== published || data.owner_granted !== Boolean(approved && email)) {
+    throw new Error('The saved decision could not be verified.');
   }
-  const existing = approved && email ? await checkOwnerTarget(client, clubId, playerId, email) : null;
-  await verifyPlatformClubAction(client, scopeId, userId, isCurrent);
-  const targetStatus = approved && !claim ? 'published' : args.p_decision;
-  const result = await confirmRow(mutation().select('id,status'), 'The decision could not be confirmed. The record may have changed.');
-  if (result.status !== targetStatus || result.id !== (claim ? expected.p_claim_id : club.id)) throw new Error('The saved decision could not be verified.');
-  const receipt = { status: targetStatus, notification: 'not_requested', warning: '' };
-  try {
-    requireCurrent(isCurrent);
-    if (approved) {
-      if (claim && ['unclaimed', 'draft', 'archived'].includes(club.status)) {
-        await confirmRow(client.from('clubs').update({ status: 'published', verified: true, approved_at: reviewedAt })
-          .eq('id', club.id).eq('status', club.status).select('id'), 'Club publication could not be confirmed.');
-        receipt.clubUpdate = { id: club.id, status: 'published', verified: true };
-      }
-      requireCurrent(isCurrent);
-      if (email) await grantOwner(client, clubId, playerId, email, existing);
-    }
-    requireCurrent(isCurrent);
-  } catch {
-    return { ...receipt, warning: 'Decision saved. Check club publication and the recorded owner before notifying the applicant.' };
-  }
+  const receipt = { status, notification: 'not_requested' };
+  if (claim && published) receipt.clubUpdate = { id: clubId, status: 'published', verified: true };
   if (email) {
     const template = `club_${claim ? 'claim_' : ''}${args.p_decision}`;
     const variables = { clubName: esc(club.name) };
-    if (!approved) variables.notes = esc(expected.p_rejection_notes);
-    receipt.notification = await clubEmail(client, email, template, variables);
+    if (!approved) variables.notes = esc(args.p_rejection_notes);
+    receipt.notification = isCurrent?.() === false ? 'unconfirmed' : await clubEmail(client, email, template, variables);
   }
   return receipt;
 }
@@ -229,7 +199,7 @@ async function submitInvitation({ client, scopeId, userId, args, isCurrent }) {
 }
 const invitationFieldsWithToken = `${CLUB_INVITATION_FIELDS},token`;
 
-export const liveClubDecisionApi = { enabled: available, live: true, load: loadApplication, submit: submitDecision };
+export const liveClubDecisionApi = { enabled: available, live: true, load: loadDecision, submit: submitDecision };
 export const liveClubMemberApi = { enabled: available, live: true, submit: submitMember };
 export const liveClubMemberAddApi = { enabled: available, live: true, search: searchClubMemberPlayers, submit: submitMemberAdd };
 export const liveClubInvitationApi = { enabled: available, live: true, prepare: prepareClubInvitationCreation, submit: submitInvitation };

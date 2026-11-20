@@ -16,7 +16,10 @@ export default function ClubApplicationDecision({ record, kind = 'application', 
     if (lock.current || blocked) return;
     const token = generation.current; lock.current = true; setBusy(true); latest.current.onBusyChange?.(true);
     try {
-      const original = kind === 'application' && enabled ? await decisionApi.load({ client, scopeId, userId: session?.user?.id, clubId: record.id }) : record;
+      const original = enabled && (kind === 'application' || decisionApi.live)
+        ? await decisionApi.load({ client, scopeId, userId: session?.user?.id, kind,
+          clubId: kind === 'claim' ? record.club_id : record.id, claimId: kind === 'claim' ? record.id : null })
+        : record;
       const args = kind === 'claim' ? (enabled ? claimDecisionArguments(original, decision, notes) : clubClaimDecisionArguments(original, decision, notes)) : applicationDecisionArguments(original, decision, notes);
       const recipient = kind === 'claim' ? original.requester_email : clubApplicantEmail(original);
       if (token === generation.current) { setReview({ original: structuredClone(original), args, recipient }); setError(''); }
@@ -29,7 +32,7 @@ export default function ClubApplicationDecision({ record, kind = 'application', 
     const isCurrent = () => token === generation.current && latest.current.recordId === identity.recordId && latest.current.userId === identity.userId && latest.current.scopeId === identity.scopeId && latest.current.client === identity.client;
     lock.current = true; setBusy(true); latest.current.onBusyChange?.(true);
     try {
-      const outcome = await decisionApi.submit({ client, scopeId, userId: session?.user?.id, kind, args: review.args, isCurrent });
+      const outcome = await decisionApi.submit({ client, scopeId, userId: session?.user?.id, kind, original: review.original, args: review.args, isCurrent });
       if (isCurrent()) { setResult(outcome); latest.current.onSaved?.(outcome); }
     } catch (err) { if (isCurrent()) { setError(`${err.message} Reload the record before trying again.`); setBlocked(true); } }
     finally { lock.current = false; setBusy(false); latest.current.onBusyChange?.(false); }

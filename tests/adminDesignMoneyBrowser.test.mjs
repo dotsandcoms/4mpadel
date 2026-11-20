@@ -161,11 +161,14 @@ export const supabase = {
         ]}};
         if(name==='confirm-manual-payment')return {data:{processed:true}};
         if(name==='admin-paystack-backfill') {
+            const ordered = /^bulk-[0-9]+$/.test(args.body.reference) ? Number(args.body.reference.slice(5)) : null;
+            const token = ordered == null ? 'a'.repeat(64) : ordered.toString(16).padStart(64,'0');
             if(args.body.action==='review') {
                 if(retrievalFailures.delete(args.body.reference))return {error:new Error('Fixture verification temporarily unavailable')};
                 if(tables.payments.some(row=>row.id==='backfilled-'+args.body.reference))return {data:{state:'already_recorded'}};
-                return {data:{state:'review',token:'a'.repeat(64),kind:'unallocated',reference:args.body.reference,amountMinor:4500,payer:player.email}};
+                return {data:{state:'review',token,kind:'unallocated',reference:args.body.reference,amountMinor:4500,payer:player.email}};
             }
+            if (args.body.token!==token) return {data:{state:'changed',message:'Fixture token did not match the reviewed receipt'}};
             tables.payments.push({...pay, reference:String(700000+tables.payments.length),id:'backfilled-'+args.body.reference,event_id:null,payment_type:'other',amount:45,
                  checkout_source:'admin_paystack_backfill',client_reference:args.body.reference,verified_gateway_amount_minor:'4500'});
             if(gatewayBulk && args.body.reference==='bulk-11')return {error:new Error('Fixture recording response lost')};
@@ -442,6 +445,7 @@ test('gateway bulk reviews every matching page in bounded confirmed batches and 
         await includesText(page,'Record as unallocated funds.');
         assert.deepEqual(await reviewed(),expected.slice(0,10));
         assert.deepEqual(await recorded(),[]);
+        await click(page,'Select all ready receipts');
         await input(page,'section[aria-label="Review missing Paystack receipts"] textarea','Reviewed first batch');
         await click(page,'Confirm receipt recording');
         await includesText(page,'Receipt recording results');
@@ -454,6 +458,7 @@ test('gateway bulk reviews every matching page in bounded confirmed batches and 
         await click(page,'Retry batch verification');
         await page.waitForFunction(()=>document.querySelectorAll('section[aria-label="Review missing Paystack receipts"] li').length>=2
             && [...document.querySelectorAll('section[aria-label="Review missing Paystack receipts"] li')].filter(row=>row.innerText.includes('Record as unallocated funds.')).length===2);
+        await click(page,'Select all ready receipts');
         await input(page,'section[aria-label="Review missing Paystack receipts"] textarea','Verified remaining receipts');
         await click(page,'Confirm receipt recording');
         await includesText(page,'Receipt recording results');
@@ -467,6 +472,65 @@ test('gateway bulk reviews every matching page in bounded confirmed batches and 
         await click(page,'Review all missing receipts');
         await includesText(page,'There are no unmatched successful receipts in these results.');
         assert.deepEqual(await recorded(),expected);
+    });
+});
+
+test('bulk recovery writes only checked receipt evidence and can review later batches while earlier receipts stay unmatched',async()=>{
+    await withPage('gateway-bulk',platform,'all',async page=>{
+        await page.setOfflineMode(true);
+        const panel = 'section[aria-label="Review missing Paystack receipts"]';
+        const recordCalls = async () => (await calls(page)).filter(([name,args])=>name==='admin-paystack-backfill'&&args.action==='record').map(([,args])=>args);
+        const choose = reference => page.click(`${panel} input[aria-label="Select receipt ${reference}"]`);
+        const isConfirmDisabled = () => page.$eval(panel,section=>[...section.querySelectorAll('button')].find(button=>button.textContent==='Confirm receipt recording').disabled);
+        const expected = (reference, number, reason) => ({ action:'record', reference, scopeId:'all', token:number.toString(16).padStart(64,'0'), reason });
+
+        await click(page,'Paystack gateway');
+        await input(page,'input[aria-label="Search gateway transactions"]','bulk-');
+        await includesText(page,'Page 1 of 2');
+        await click(page,'Review all missing receipts');
+        await includesText(page,'0 of 10 ready receipts selected.');
+        await input(page,`${panel} textarea`,'Reason without a selection');
+        assert.equal(await isConfirmDisabled(),true);
+        assert.equal(await page.$$eval(`${panel} button`,buttons=>buttons.some(button=>button.textContent==='Review next batch'&&!button.disabled)),true);
+        await choose('bulk-02');
+        await click(page,'Clear selection');
+        await includesText(page,'0 of 10 ready receipts selected.');
+        assert.deepEqual(await recordCalls(),[]);
+
+        await choose('bulk-02');
+        await input(page,`${panel} textarea`,'Reviewed exact second receipt');
+        await click(page,'Confirm receipt recording');
+        await includesText(page,'0 of 9 ready receipts selected.');
+        assert.deepEqual(await recordCalls(),[expected('bulk-02',2,'Reviewed exact second receipt')]);
+
+        await choose('bulk-05');
+        await input(page,`${panel} textarea`,'Reviewed exact fifth receipt');
+        await click(page,'Confirm receipt recording');
+        await includesText(page,'0 of 8 ready receipts selected.');
+        const recordedFirstBatch = [expected('bulk-02',2,'Reviewed exact second receipt'),expected('bulk-05',5,'Reviewed exact fifth receipt')];
+        assert.deepEqual(await recordCalls(),recordedFirstBatch);
+
+        await choose('bulk-03');
+        await input(page,`${panel} textarea`,'Deferred despite a selection');
+        await click(page,'Review next batch');
+        await includesText(page,'Batch 2 of 2.');
+        await includesText(page,'0 of 1 ready receipts selected.');
+        assert.equal(await page.$(`${panel} input[aria-label="Select receipt bulk-12"]`),null);
+        await click(page,'Earlier batch results','summary');
+        await includesText(page,'bulk-03 · Left for later review.');
+        assert.deepEqual(await recordCalls(),recordedFirstBatch);
+
+        await choose('bulk-11');
+        await input(page,`${panel} textarea`,'Reviewed later receipt');
+        await click(page,'Confirm receipt recording');
+        await page.waitForFunction(selector=>document.querySelector(selector)?.querySelector('h2')?.textContent==='Receipt recording results',{},panel);
+        const recorded = [...recordedFirstBatch,expected('bulk-11',11,'Reviewed later receipt')];
+        assert.deepEqual(await recordCalls(),recorded);
+
+        await click(page,'Close and refresh gateway');
+        await click(page,'Review all missing receipts');
+        await includesText(page,'9 missing receipts in the filtered results. Batch 1 of 1.');
+        assert.deepEqual(await recordCalls(),recorded);
     });
 });
 
