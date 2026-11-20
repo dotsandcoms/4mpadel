@@ -94,6 +94,7 @@
     },
     "plugins": [
       "./plugins/with-display-name",
+      "./plugins/with-optional-android-hardware",
       [
         "expo-build-properties",
         {
