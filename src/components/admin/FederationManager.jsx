@@ -192,7 +192,7 @@ const serialiseCommittees = (list) => (list || [])
  * Platform Federations admin — sits above Organisations.
  * Profile CRUD, members, manual org assignment, federation-scoped sanctioning.
  */
-const FederationManager = ({ permissions }) => {
+const FederationManager = ({ permissions, restrictToMembership = false }) => {
     const isSuper = permissions?.role === 'super_admin';
     const [loading, setLoading] = useState(true);
     const [federations, setFederations] = useState([]);
@@ -233,10 +233,13 @@ const FederationManager = ({ permissions }) => {
     const loadFederations = useCallback(async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase
-                .from('federations')
-                .select('*')
-                .order('name', { ascending: true });
+            let query = supabase.from('federations').select('*').order('name', { ascending: true });
+            if (restrictToMembership) {
+                const ids = (permissions.federations || []).filter(row => ['owner', 'admin'].includes(row.member_role)).map(row => row.id);
+                if (!ids.length) return;
+                query = query.in('id', ids);
+            }
+            const { data, error } = await query;
             if (error) throw error;
             setFederations(data || []);
             if (!selectedId && data?.length) {
@@ -248,7 +251,7 @@ const FederationManager = ({ permissions }) => {
         } finally {
             setLoading(false);
         }
-    }, [selectedId]);
+    }, [selectedId, permissions.federations, restrictToMembership]);
 
     const loadFederationScoped = useCallback(async (federationId) => {
         if (!federationId) {
@@ -270,7 +273,7 @@ const FederationManager = ({ permissions }) => {
                     .select('id, name, slug, status, contact_email, created_by, verified, sapa_sanctioned')
                     .eq('federation_id', federationId)
                     .order('name'),
-                supabase
+                restrictToMembership ? Promise.resolve({ data: [] }) : supabase
                     .from('organisations')
                     .select('id, name, slug, status')
                     .is('federation_id', null)
@@ -312,7 +315,7 @@ const FederationManager = ({ permissions }) => {
             console.error(err);
             toast.error('Failed to load federation organisations / sanctions');
         }
-    }, []);
+    }, [restrictToMembership]);
 
     useEffect(() => {
         loadFederations();
@@ -1061,7 +1064,7 @@ const FederationManager = ({ permissions }) => {
                                             <button
                                                 type="button"
                                                 onClick={handleAssignOrg}
-                                                disabled={!assignOrgId}
+                                                disabled={restrictToMembership || !assignOrgId}
                                                 className="px-3 py-2 rounded-xl bg-white/10 text-white text-sm font-bold flex items-center gap-1 disabled:opacity-40"
                                             >
                                                 <Link2 size={14} /> Assign

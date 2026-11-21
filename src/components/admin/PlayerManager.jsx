@@ -1,3 +1,4 @@
+import { adminPublicOrigin } from '../../utils/adminPublicOrigin';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
 import { MAX_PLAYER_GALLERY_PHOTOS } from '../../utils/playerGallery';
@@ -50,7 +51,9 @@ const StatCard = ({ title, value, subtext, icon: Icon, color = 'padel-green', de
     );
 };
 
-const PlayerManager = ({ canManageLicenses = false }) => {
+const legacyLicenseHrefForPlayer = playerId => `/admin?tab=licenses&player=${encodeURIComponent(playerId || '')}`;
+
+const PlayerManager = ({ canManageLicenses = false, licenseHrefForPlayer = legacyLicenseHrefForPlayer }) => {
     const [players, setPlayers] = useState([]);
     const { clubs, loading: loadingClubs } = useClubs();
     const [loading, setLoading] = useState(true);
@@ -378,7 +381,7 @@ const PlayerManager = ({ canManageLicenses = false }) => {
         const { error } = await supabase.auth.signInWithOtp({
             email: player.email,
             options: {
-                emailRedirectTo: window.location.origin + '/profile?new_invite=true',
+                emailRedirectTo: adminPublicOrigin() + '/profile?new_invite=true',
             }
         });
 
@@ -1034,7 +1037,7 @@ const PlayerManager = ({ canManageLicenses = false }) => {
                                                     <Mail size={14} />
                                                 </button>
                                                 {canManageLicenses && <button
-                                                    onClick={() => { window.location.href = `/admin?tab=licenses&player=${player.id}`; }}
+                                                    onClick={() => { window.location.href = licenseHrefForPlayer(player.id); }}
                                                     title="Manage licenses"
                                                     className="p-1.5 bg-sky-500/10 text-sky-400 rounded-lg hover:bg-sky-500 hover:text-white"
                                                 >
@@ -1338,7 +1341,7 @@ const PlayerManager = ({ canManageLicenses = false }) => {
                                         <div className="h-8 w-px bg-white/10 hidden sm:block" />
 
                                         <div className="flex-1 w-full sm:w-auto">
-                                            {canManageLicenses ? <a className="inline-block px-4 py-3 rounded-xl border border-padel-green/30 text-padel-green text-sm" href={`/admin?tab=licenses&player=${formData.id || ''}`}>Manage licenses</a> : <p className="text-sm text-gray-400">A Licenses administrator can manage this player’s coverage.</p>}
+                                            {canManageLicenses ? <a className="inline-block px-4 py-3 rounded-xl border border-padel-green/30 text-padel-green text-sm" href={licenseHrefForPlayer(formData.id)}>Manage licenses</a> : <p className="text-sm text-gray-400">A Licenses administrator can manage this player’s coverage.</p>}
                                         </div>
                                     </div>
                                 </fieldset>

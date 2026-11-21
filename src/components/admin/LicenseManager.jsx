@@ -208,11 +208,15 @@ function SeasonSettings({ onSaved }) {
   </section>;
 }
 
-export default function LicenseManager() {
+const legacyLicensePlayerHref = id => `/admin?tab=licenses&player=${encodeURIComponent(id)}`;
+
+export default function LicenseManager({ navigation } = {}) {
   const [filters, setFilters] = useState(() => ({ year: String(currentYear()), type: '', status: '', source: '', search: '', purchase_year: '', renewed_from_year: '', page: 0, page_size: 10 }));
   const [result, setResult] = useState(null), [error, setError] = useState(''), [loading, setLoading] = useState(false), [exporting, setExporting] = useState(false);
   const [tab, setTab] = useState('overview'), [seasons, setSeasons] = useState([]), [players, setPlayers] = useState([]), [lookup, setLookup] = useState('');
-  const [player, setPlayer] = useState(() => new URLSearchParams(window.location.search).get('player'));
+  const [legacyPlayer, setLegacyPlayer] = useState(() => new URLSearchParams(window.location.search).get('player'));
+  const player = navigation ? navigation.playerId : legacyPlayer;
+  const externalNavigation = Boolean(navigation);
   const [salesYear, setSalesYear] = useState(String(currentYear())), [refreshKey, setRefreshKey] = useState(0);
   const [showExport, setShowExport] = useState(false);
   const request = useRef(0);
@@ -234,9 +238,11 @@ export default function LicenseManager() {
     return () => window.removeEventListener('focus', refreshOnFocus);
   }, [load]);
   useEffect(() => {
-    const sync = () => setPlayer(new URLSearchParams(window.location.search).get('player'));
-    window.addEventListener('popstate', sync); return () => window.removeEventListener('popstate', sync);
-  }, []);
+    if (externalNavigation) return;
+    const sync = () => setLegacyPlayer(new URLSearchParams(window.location.search).get('player'));
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, [externalNavigation]);
   useEffect(() => {
     if (lookup.trim().length < 2) { setPlayers([]); return; }
     let live = true;
@@ -245,8 +251,20 @@ export default function LicenseManager() {
   }, [lookup]);
   function patch(change) { setFilters(v => ({ ...v, ...change, ...('year' in change && !('renewed_from_year' in change) ? { renewed_from_year: '' } : {}), ...('type' in change && change.type !== 'renewal' ? { renewed_from_year: '' } : {}), page: 0 })); }
   function changePage(page) { setFilters(v => ({ ...v, page })); registerRef.current?.scrollIntoView({ block: 'start' }); }
-  function openPlayer(id) { setPlayer(String(id)); window.history.pushState(null, '', `/admin?tab=licenses&player=${id}`); }
-  function back() { setPlayer(null); window.history.replaceState(null, '', '/admin?tab=licenses'); void load(); }
+  function openPlayer(id) {
+    if (navigation) return navigation.openPlayer(id);
+    setLegacyPlayer(String(id));
+    window.history.pushState(null, '', legacyLicensePlayerHref(id));
+  }
+  function back() {
+    if (navigation) {
+      navigation.closePlayer();
+    } else {
+      setLegacyPlayer(null);
+      window.history.replaceState(null, '', '/admin?tab=licenses');
+    }
+    void load();
+  }
   async function download() {
     setExporting(true);
     try {
@@ -260,7 +278,7 @@ export default function LicenseManager() {
     } catch (e) { setError(e.message); } finally { setExporting(false); }
   }
   function refresh() { void load(); setRefreshKey(value => value + 1); }
-  if (player) return <LicensePlayerPanel playerId={player} onBack={back} onSaved={refresh} />;
+  if (player) return <LicensePlayerPanel key={player} playerId={player} onBack={back} onSaved={refresh} />;
   const salesYears = [...new Set([currentYear(), ...seasons.map(season => Number(season.year))])].sort((a, b) => b - a);
   return <div className="license-workspace">
     <header className="license-page-heading"><div><h1>Licenses</h1><p>License years, purchases and player coverage</p></div><div className="flex flex-wrap gap-2">{tab === 'register' && <><button type="button" disabled={loading} onClick={refresh} className={secondary} aria-label="Refresh register and active counts"><RefreshCw size={15} /><span>Refresh</span></button><button type="button" disabled={exporting || !result} onClick={download} className={secondary}><Download size={15} /><span>{exporting ? 'Exporting…' : 'Register CSV'}</span></button></>}<button type="button" className={secondary} aria-expanded={showExport} onClick={() => setShowExport(value => !value)}><Download size={16} />Export Excel</button></div></header>
@@ -285,7 +303,7 @@ export default function LicenseManager() {
         </div>
         {(filters.purchase_year || filters.renewed_from_year) && <div className="license-register-context">{filters.purchase_year && <span>Bought in {filters.purchase_year}</span>}{filters.renewed_from_year && <span>Renewed from {filters.renewed_from_year}</span>}<button type="button" className="license-text-button" onClick={() => patch({ purchase_year: '', renewed_from_year: '' })}>Clear purchase filters <X size={16} strokeWidth={1.5} /></button></div>}
         <RegisterPagination position="top" page={filters.page} pageSize={filters.page_size} total={result?.total || 0} loading={loading} onPage={changePage} onPageSize={size => patch({ page_size: size })} />
-        <div className="license-table-scroll"><table className="license-table license-register-table" aria-label="License register"><thead><tr>{['Player', 'License', 'License year', 'Date bought', 'Valid from / to', 'Status', 'Source', ''].map((h, i) => <th key={i}>{h}</th>)}</tr></thead><tbody>{result?.rows.map(row => <tr key={row.id} onClick={e => { if (!e.target.closest('a,button,input,select')) openPlayer(row.player_id); }}><td><div className="license-register-player"><PlayerAvatar name={row.name} src={row.image_url} small /><div><a href={`/admin?tab=licenses&player=${row.player_id}`} onClick={e => { if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) { e.preventDefault(); openPlayer(row.player_id); } }} className="license-player-link">{row.name}</a><p className="license-player-email">{row.email}</p><p className="license-player-number">{row.license_number}</p></div></div></td><td><LicenseType row={row} /><FullPurchaseKind row={row} />{row.license_type === 'temporary' && <p className="license-event-name">{row.event_name || 'Event license'}</p>}</td><td className="license-register-year">{row.season_year || 'Not recorded'}</td><td className="text-xs"><PurchaseDate row={row} /></td><td className="whitespace-nowrap text-xs"><span className="license-muted">{shortDate(licenseStartDate(row))}</span><span className="mt-1 block">to {shortDate(row.ends_on)}</span></td><td><Status value={row.status} /></td><td className="!text-xs license-muted">{sourceLabel(row.source)}</td><td><ChevronRight size={15} aria-hidden="true" className="text-gray-400" /></td></tr>)}</tbody></table>{!result?.rows.length && <p role="status" className="license-empty">{loading ? 'Loading licenses…' : 'No licenses match these filters.'}</p>}</div>
+        <div className="license-table-scroll"><table className="license-table license-register-table" aria-label="License register"><thead><tr>{['Player', 'License', 'License year', 'Date bought', 'Valid from / to', 'Status', 'Source', ''].map((h, i) => <th key={i}>{h}</th>)}</tr></thead><tbody>{result?.rows.map(row => <tr key={row.id} onClick={e => { if (!e.target.closest('a,button,input,select')) openPlayer(row.player_id); }}><td><div className="license-register-player"><PlayerAvatar name={row.name} src={row.image_url} small /><div><a href={(navigation?.playerHref || legacyLicensePlayerHref)(row.player_id)} onClick={e => { if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) { e.preventDefault(); openPlayer(row.player_id); } }} className="license-player-link">{row.name}</a><p className="license-player-email">{row.email}</p><p className="license-player-number">{row.license_number}</p></div></div></td><td><LicenseType row={row} /><FullPurchaseKind row={row} />{row.license_type === 'temporary' && <p className="license-event-name">{row.event_name || 'Event license'}</p>}</td><td className="license-register-year">{row.season_year || 'Not recorded'}</td><td className="text-xs"><PurchaseDate row={row} /></td><td className="whitespace-nowrap text-xs"><span className="license-muted">{shortDate(licenseStartDate(row))}</span><span className="mt-1 block">to {shortDate(row.ends_on)}</span></td><td><Status value={row.status} /></td><td className="!text-xs license-muted">{sourceLabel(row.source)}</td><td><ChevronRight size={15} aria-hidden="true" className="text-gray-400" /></td></tr>)}</tbody></table>{!result?.rows.length && <p role="status" className="license-empty">{loading ? 'Loading licenses…' : 'No licenses match these filters.'}</p>}</div>
         <RegisterPagination position="bottom" page={filters.page} pageSize={filters.page_size} total={result?.total || 0} loading={loading} onPage={changePage} onPageSize={size => patch({ page_size: size })} />
       </section>
       <div className="license-surface license-find-player"><div><h3>Find any player</h3><p>Look up a player to add or manage their licenses.</p></div><div className="license-lookup"><label className="sr-only" htmlFor="license-player-lookup">Find any player</label><div className="license-search"><Search size={15} /><input id="license-player-lookup" className={input} value={lookup} onChange={e => setLookup(e.target.value)} placeholder="Search name, email or license number" /></div>{players.length > 0 && <div className="license-lookup-results">{players.map(p => <button type="button" key={p.id} onClick={() => openPlayer(p.id)}><span className="license-register-player"><PlayerAvatar name={p.name} src={p.image_url} small /><span>{p.name}<span className="license-player-email block">{p.email}</span></span></span><ArrowUpRight size={14} className="text-gray-400" /></button>)}</div>}</div></div>

@@ -1,3 +1,4 @@
+import { adminPublicOrigin } from '../../utils/adminPublicOrigin';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
@@ -153,7 +154,7 @@ const CollapsibleSection = ({
     </div>
 );
 
-const OrganisationManager = ({ permissions, initialView = 'platform', onViewChange }) => {
+const OrganisationManager = ({ permissions, initialView = 'platform', onViewChange, restrictToOrganisation = false }) => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [activeSection, setActiveSection] = useState('overview'); // overview, create-event, my-events
@@ -281,9 +282,9 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
     const isStandalonePlatformAdmin = permissions?.role === 'custom'
         && !hasOrganisationMembership
         && (permissions?.allowed_tabs || []).includes('organisations');
-    const canAccessPlatformOversight = permissions?.role === 'super_admin'
+    const canAccessPlatformOversight = !restrictToOrganisation && (permissions?.role === 'super_admin'
         || hasExplicitPlatformOversight
-        || isStandalonePlatformAdmin;
+        || isStandalonePlatformAdmin);
     // Linked membership org (host membership), including for super admins
     const membershipOrg = permissions?.org;
     // Platform admins can temporarily open any approved org's host dashboard
@@ -1804,6 +1805,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                ======================================================== */}
             {managingEvent && (
                 <ManualEventRegistrations
+                    allowPlatformActions={!restrictToOrganisation}
                     variant="inline"
                     isOpen
                     event={managingEvent}
@@ -2743,7 +2745,10 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                         onClick={() => {
                                             const slug = selectedOrgDetails.slug;
                                             setSelectedOrgDetails(null);
-                                            navigate(`/organisations/${slug}`);
+                                            const path = `/organisations/${slug}`;
+                                            const origin = adminPublicOrigin();
+                                            if (origin === window.location.origin) navigate(path);
+                                            else window.location.assign(`${origin}${path}`);
                                         }}
                                         className="w-full py-3.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-extrabold text-xs rounded-xl transition-all cursor-pointer text-center flex items-center justify-center gap-2"
                                     >
@@ -2870,6 +2875,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                 divisions, per-division deadlines & ManualEventRegistration
                ======================================================== */}
             <EventBuilder
+                allowPlatformActions={!restrictToOrganisation}
                 isOpen={builderOpen}
                 onClose={() => { setBuilderOpen(false); setBuilderEvent(null); }}
                 onSaved={handleBuilderSaved}
