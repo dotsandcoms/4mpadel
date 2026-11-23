@@ -1,6 +1,7 @@
 import {
     findPaymentForRegistration, getRegistrationEntryFeePaid, isLicensePaymentRow,
     isCompedEntryPayment, isEntryFeeRefund, normalizePaymentMetadata, paymentStrictlyCoversRegistration,
+    hasVerifiedEntryTransfer, hasVerifiedPaymentEntryTransfers, isDivisionSwitchPayment, verifiedDivisionSwitchAmount,
 } from './paymentRegistrationMatch.js';
 import { fetchAllRows } from './fetchAllRows.js';
 
@@ -12,25 +13,38 @@ const fullyRefundedForAnotherRegistration = (payment, reg, refunds) => {
     return Number(payment.amount) > 0 && refunded >= Number(payment.amount) - 0.01;
 };
 
-// Financial reports must not attach an old checkout to a replacement registration.
+function findWithdrawnOriginalPayment(payments, reg, refunds) {
+    if (reg.status !== 'withdrawn') return null;
+    const originals = new Map(payments.filter(payment =>
+        !isDivisionSwitchPayment(payment) && !isLicensePaymentRow(payment)).map(payment => [payment.id, payment]));
+    const refund = refunds.find(row => row.event_registration_id === reg.id && row.status !== 'failed'
+        && normalizePaymentMetadata(row.metadata).cover_type !== 'license' && originals.has(row.payment_id));
+    return refund ? originals.get(refund.payment_id) : null;
+}
+
+// Financial reports need an exact original entry link for a transferred checkout.
 export function findFinancePayment(payments, reg, refunds = []) {
-    if (reg.status === 'withdrawn') {
-        const refund = refunds.find((r) => r.event_registration_id === reg.id && r.status !== 'failed'
-            && normalizePaymentMetadata(r.metadata).cover_type !== 'license');
-        const original = refund && payments.find((p) => p.id === refund.payment_id && p.status === 'success' && !isLicensePaymentRow(p));
-        if (original) return original;
-    }
+    const withdrawnOriginal = findWithdrawnOriginalPayment((payments || []).filter(p => p.status === 'success'), reg, refunds);
+    if (withdrawnOriginal) return withdrawnOriginal;
     const candidates = (payments || []).filter((p) => {
         const meta = normalizePaymentMetadata(p.metadata);
-        return p.status === 'success' && !isLicensePaymentRow(p)
-            && (!meta.registration_id || meta.registration_id === reg.id)
+        return p.status === 'success' && !isLicensePaymentRow(p) && !isDivisionSwitchPayment(p)
+            && (!meta.registration_id || meta.registration_id === reg.id || hasVerifiedEntryTransfer(p, reg))
             && !(Number(meta.unallocated_credit_amount) > 0 && Number(meta.unallocated_credit_amount) >= Number(p.amount))
             // Email + division also match a later re-entry. A fully refunded
             // receipt stays with its original entry, even if the re-entry is pending.
             && !fullyRefundedForAnotherRegistration(p, reg, refunds);
     });
     const latest = (rows) => [...rows].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0] || null;
-    const direct = latest(candidates.filter((p) => normalizePaymentMetadata(p.metadata).registration_id === reg.id));
+    if ((payments || []).some(payment => verifiedDivisionSwitchAmount(payment, reg) > 0)) {
+        const originals = candidates.filter(payment => paymentStrictlyCoversRegistration(payment, reg));
+        if (originals.length) return originals.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))[0];
+    }
+    const direct = latest(candidates.filter(p => {
+        const meta = normalizePaymentMetadata(p.metadata);
+        return hasVerifiedEntryTransfer(p, reg) || (meta.registration_id === reg.id
+            && (!hasVerifiedPaymentEntryTransfers(p) || paymentStrictlyCoversRegistration(p, reg)));
+    }));
     if (direct) return direct;
     const strict = latest(candidates.filter((p) => paymentStrictlyCoversRegistration(p, reg)));
     if (strict) return strict;
@@ -42,17 +56,16 @@ export function findFinancePayment(payments, reg, refunds = []) {
 export function buildFinanceAllocations(registrations, payments, refunds = []) {
     const byPayment = new Map();
     for (const reg of registrations) {
-        const historicalRefund = reg.status === 'withdrawn'
-            ? refunds.find((r) => r.event_registration_id === reg.id && r.status !== 'failed'
-                && normalizePaymentMetadata(r.metadata).cover_type !== 'license') : null;
-        const payment = (historicalRefund && payments.find((p) => p.id === historicalRefund.payment_id))
-            || findFinancePayment(payments, reg, refunds);
-        if (!payment || isLicensePaymentRow(payment) || isCompedEntryPayment(payment)) continue;
-        const amount = getRegistrationEntryFeePaid(payment, reg, 0);
-        if (amount <= 0) continue;
-        const list = byPayment.get(payment.id) || [];
-        list.push({ registration: reg, payment, amount });
-        byPayment.set(payment.id, list);
+        const original = findWithdrawnOriginalPayment(payments, reg, refunds) || findFinancePayment(payments, reg, refunds);
+        const topUps = payments.filter(payment => verifiedDivisionSwitchAmount(payment, reg) > 0);
+        for (const payment of [original, ...topUps]) {
+            if (!payment || isLicensePaymentRow(payment) || isCompedEntryPayment(payment)) continue;
+            const amount = getRegistrationEntryFeePaid(payment, reg, 0);
+            if (amount <= 0) continue;
+            const list = byPayment.get(payment.id) || [];
+            list.push({ registration: reg, payment, amount });
+            byPayment.set(payment.id, list);
+        }
     }
     const allocations = [];
     for (const payment of payments) {

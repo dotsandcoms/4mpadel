@@ -1,3 +1,5 @@
+import { hasVerifiedPaymentEntryTransfers, normalizePaymentMetadata } from './paymentRegistrationMatch.js';
+
 const normalize = (value) => String(value || '').trim().toLowerCase();
 
 export const addPublicPlayerPaymentStatuses = (participants, registrations, division, { isWeekly = false } = {}) => {
@@ -46,3 +48,23 @@ export const addPublicPlayerPaymentStatuses = (participants, registrations, divi
 
 export const publicPlayerPaymentLabel = (status) => status == null ? null
     : status === 'paid' ? 'Paid & Confirmed' : 'Payment Pending';
+
+
+export function directPaidDivisions(payments, { playerId, email, name, matchesName }) {
+    const divisions = new Set();
+    for (const payment of payments || []) {
+        // Once a roster slot is transferred, the live registration owns its status.
+        // The receipt still describes the person and division at the time of purchase.
+        if (hasVerifiedPaymentEntryTransfers(payment)) continue;
+        const metadata = normalizePaymentMetadata(payment.metadata);
+        const entries = Array.isArray(metadata.line_items)
+            ? metadata.line_items.filter(item => item?.type === 'entry_fee' || item?.type === 'entry')
+            : [];
+        if (!(playerId && payment.player_id === playerId) && !(email && normalize(metadata.email) === normalize(email))
+            && !(name && entries.some(item => matchesName(name, normalize(item.player))))) continue;
+        for (const division of [metadata.division, ...entries.map(item => item.division)]) {
+            if (division && String(division).trim()) divisions.add(String(division).trim());
+        }
+    }
+    return [...divisions];
+}

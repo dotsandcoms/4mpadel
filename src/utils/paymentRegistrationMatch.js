@@ -51,9 +51,88 @@ export function getPaymentMetadataLayers(metadata = {}) {
     return { top, inner };
 }
 
+export function isDivisionSwitchPayment(payment) {
+    return normalizePaymentMetadata(payment?.metadata).source === 'division_switch';
+}
+
+// The database projects this allocation only after the charged move commits.
+export function verifiedDivisionSwitchAmount(payment, reg) {
+    const meta = normalizePaymentMetadata(payment?.metadata);
+    const allocation = meta.verified_division_switch;
+    const amount = Number(payment?.amount);
+    if (meta.source !== 'division_switch' || payment.status !== 'success'
+        || payment.payment_type !== 'event_entry_fee' || payment.payment_method !== 'paystack'
+        || payment.is_test || meta.is_test || !allocation || !reg?.id
+        || !Number.isFinite(amount) || amount <= 0 || Number(allocation.amount) !== amount
+        || !allocation.from_division_id || !allocation.division_id
+        || !allocation.event_id || !reg.event_id
+        || String(payment.event_id) !== String(allocation.event_id)
+        || String(reg.event_id) !== String(allocation.event_id)
+        || reg.id !== allocation.registration_id) return 0;
+    const archived = reg.status === 'withdrawn' && !reg.division_id && reg.division === `__archived__/${reg.id}`;
+    return reg.division_id === allocation.division_id || archived ? amount : 0;
+}
+
+const verifiedEntryTransfer = Symbol('verified entry transfer');
+
+export function hasVerifiedPaymentEntryTransfers(payment) {
+    const transfers = normalizePaymentMetadata(payment?.metadata).verified_entry_transfers;
+    return Array.isArray(transfers) && transfers.length > 0;
+}
+
 export function paymentEntryCoversFor(metadata = {}) {
     const { top, inner } = getPaymentMetadataLayers(metadata);
-    return [...(top.covers || []), ...(inner.covers || [])];
+    const topCovers = Array.isArray(top.covers) ? top.covers : [];
+    const innerCovers = Array.isArray(inner.covers) ? inner.covers : [];
+    const transfers = Array.isArray(top.verified_entry_transfers) ? top.verified_entry_transfers : [];
+    if (!transfers.length) return [...topCovers, ...innerCovers];
+    const byPosition = new Map(transfers.map(transfer => [Number(transfer?.cover_position), transfer]));
+    let entryPosition = 0;
+    const projected = topCovers.map(cover => {
+        if (cover?.type !== 'entry') return cover;
+        const position = ++entryPosition;
+        if (!byPosition.has(position)) return cover;
+        const transfer = byPosition.get(position);
+        const sourceDivision = transfer?.original_division ?? transfer?.division;
+        const sourceDivisionId = transfer?.original_division !== undefined ? transfer.original_division_id : transfer?.division_id;
+        if (transfer?.cover_position !== position || !transfer.registration_id || !transfer.event_id
+            || (transfer.email !== undefined && !norm(transfer.email))
+            || (cover.division_id && String(cover.division_id) !== String(sourceDivisionId))
+            || (!cover.division_id && cover.division !== sourceDivision)) return null;
+        return { ...cover, email: transfer.email, registration_id: transfer.registration_id,
+            division: transfer.division, division_id: transfer.division_id,
+            [verifiedEntryTransfer]: { ...transfer, originalEmail: cover.email, originalDivision: sourceDivision } };
+    }).filter(Boolean);
+    // Only top-level entry covers are part of the verified checkout quote.
+    // A nested gateway snapshot can still carry the old player or division.
+    return [...projected, ...innerCovers.filter(cover => cover && cover.type !== 'entry')];
+}
+
+function verifiedCoverMatches(cover, reg) {
+    const transfer = cover?.[verifiedEntryTransfer];
+    return Boolean(transfer && reg?.id && reg.event_id != null && norm(reg.email)
+        && (transfer.email === undefined || norm(reg.email) === norm(transfer.email))
+        && String(reg.id) === String(transfer.registration_id) && String(reg.event_id) === String(transfer.event_id)
+        && (transfer.division_id ? String(reg.division_id) === String(transfer.division_id)
+            : (reg.division || reg.class_name) === transfer.division));
+}
+
+export function hasVerifiedEntryTransfer(payment, reg) {
+    return paymentEntryCoversFor(payment?.metadata).some(cover => verifiedCoverMatches(cover, reg));
+}
+
+function directlyMatchesRegistration(meta, reg) {
+    if (meta.registration_id !== reg.id) return false;
+    const transfers = Array.isArray(meta.verified_entry_transfers) ? meta.verified_entry_transfers : [];
+    if (!transfers.length) return true;
+    if (transfers.some(transfer => transfer?.registration_id === reg.id)) {
+        return paymentEntryCoversFor(meta).some(cover => verifiedCoverMatches(cover, reg));
+    }
+    return paymentEntryCoversFor(meta).some(cover => cover?.type === 'entry' && !cover[verifiedEntryTransfer]
+        && (!cover.registration_id || String(cover.registration_id) === String(reg.id))
+        && norm(cover.email) === norm(reg.email)
+        && (cover.division_id ? String(cover.division_id) === String(reg.division_id)
+            : cover.division === (reg.division || reg.class_name)));
 }
 
 export function paymentEmailsFor(metadata = {}) {
@@ -99,6 +178,7 @@ const paymentRegistrationRows = (meta = {}) => {
  */
 export function entryCoverMatchesRegistration(cover, reg, meta = {}) {
     if (!cover || cover.type !== 'entry' || !reg) return false;
+    if (cover[verifiedEntryTransfer]) return verifiedCoverMatches(cover, reg);
     const email = norm(reg.email);
     const division = reg.division || reg.class_name;
     if (!email) return false;
@@ -122,6 +202,7 @@ export function paymentMatchesRegistration(payment, reg) {
     // for an entry-fee payment — they only cover SAPA license and carry the
     // "License portion split from REGEV-…" note that was leaking into Manual.
     if (isLicensePaymentRow(payment)) return false;
+    if (isDivisionSwitchPayment(payment)) return verifiedDivisionSwitchAmount(payment, reg) > 0;
 
     const meta = normalizePaymentMetadata(payment.metadata);
     const email = norm(reg.email);
@@ -129,7 +210,7 @@ export function paymentMatchesRegistration(payment, reg) {
 
     if (!email) return false;
 
-    if (meta.registration_id === reg.id) return true;
+    if (directlyMatchesRegistration(meta, reg)) return true;
 
     if (
         (meta.source === 'manual_event_admin' || meta.source === 'admin_add_player')
@@ -146,7 +227,7 @@ export function paymentMatchesRegistration(payment, reg) {
 
     // When covers[] list who was paid for, do not treat registration_rows partners
     // (booked but not covered by this payment) as matches.
-    if (entryCovers.length > 0) return false;
+    if (entryCovers.length > 0 || hasVerifiedPaymentEntryTransfers(payment)) return false;
 
     if (!paymentEmailsFor(meta).has(email)) return false;
 
@@ -164,15 +245,17 @@ export function paymentMatchesRegistration(payment, reg) {
 export function paymentHasEntryCoverForRegistration(payment, reg, opts = {}) {
     const { requireDivision = true } = opts;
     if (!payment || payment.status !== 'success' || isLicensePaymentRow(payment)) return false;
+    if (isDivisionSwitchPayment(payment)) return verifiedDivisionSwitchAmount(payment, reg) > 0;
 
     const meta = normalizePaymentMetadata(payment.metadata);
     const email = norm(reg.email);
     const division = reg.division || reg.class_name;
     if (!email) return false;
-    if (meta.registration_id === reg.id) return true;
+    if (directlyMatchesRegistration(meta, reg)) return true;
 
     return paymentEntryCoversFor(meta).some((cover) => {
         if (cover.type !== 'entry') return false;
+        if (cover[verifiedEntryTransfer]) return verifiedCoverMatches(cover, reg);
         if (requireDivision) {
             if (!division) return false;
             return entryCoverMatchesRegistration(cover, reg, meta) && cover.division === division;
@@ -206,6 +289,7 @@ export function getRegistrationEntryFeePaid(payment, reg, fallbackFee = 0) {
     const fallback = Number(fallbackFee) || 0;
     if (!reg) return fallback;
     if (!payment || String(payment.status || '').toLowerCase() !== 'success') return fallback;
+    if (isDivisionSwitchPayment(payment)) return verifiedDivisionSwitchAmount(payment, reg);
 
     const meta = normalizePaymentMetadata(payment.metadata);
     const paymentWithMeta = { ...payment, metadata: meta };
@@ -215,8 +299,12 @@ export function getRegistrationEntryFeePaid(payment, reg, fallbackFee = 0) {
 
     const email = norm(reg.email);
     const division = reg.division || reg.class_name || '';
-    const fullName = String(reg.full_name || '').trim().toLowerCase();
     const entryCovers = paymentEntryCoversFor(meta).filter((cover) => cover.type === 'entry');
+    const transferred = entryCovers.find(cover => verifiedCoverMatches(cover, reg))?.[verifiedEntryTransfer];
+    const snapshot = transferred && paymentRegistrationRows(meta).find(row =>
+        norm(row.email) === norm(transferred.originalEmail) && row.division === transferred.originalDivision);
+    const fullName = norm(snapshot?.full_name || reg.full_name);
+    const pricedDivision = transferred?.originalDivision || division;
     const paymentAmount = Number(payment.amount || 0);
 
     if (Array.isArray(meta.line_items) && meta.line_items.length > 0) {
@@ -228,13 +316,13 @@ export function getRegistrationEntryFeePaid(payment, reg, fallbackFee = 0) {
             if (!(fullName === namePart || fullName.startsWith(namePart) || namePart.startsWith(fullName))) {
                 return false;
             }
-            return !division || label.includes(division);
+            return !pricedDivision || label.includes(pricedDivision);
         });
         if (nameMatch?.amount != null) return Number(nameMatch.amount) || 0;
 
         if (entryItems.length === 1 && entryItems[0].amount != null) {
-            const coversSelf = meta.registration_id === reg.id
-                || entryCovers.some((c) => norm(c.email) === email);
+            const coversSelf = directlyMatchesRegistration(meta, reg)
+                || entryCovers.some((c) => c[verifiedEntryTransfer] ? verifiedCoverMatches(c, reg) : norm(c.email) === email);
             if (coversSelf || entryCovers.length <= 1) {
                 return Number(entryItems[0].amount) || 0;
             }
@@ -242,16 +330,16 @@ export function getRegistrationEntryFeePaid(payment, reg, fallbackFee = 0) {
 
         // Team checkout: match this player's share from entry line items by cover count
         if (entryItems.length > 1 && email) {
-            const coverIndex = entryCovers.findIndex((c) => norm(c.email) === email
-                && (!division || !c.division || c.division === division));
+            const coverIndex = transferred ? transferred.cover_position - 1 : entryCovers.findIndex((c) => !c[verifiedEntryTransfer]
+                && norm(c.email) === email && (!division || !c.division || c.division === division));
             if (coverIndex >= 0 && entryItems[coverIndex]?.amount != null) {
                 return Number(entryItems[coverIndex].amount) || 0;
             }
         }
     }
 
-    if (division && meta.division_entry_fees) {
-        const snapped = meta.division_entry_fees[division];
+    if (pricedDivision && meta.division_entry_fees) {
+        const snapped = meta.division_entry_fees[pricedDivision];
         if (snapped != null && snapped !== '') return Number(snapped) || 0;
     }
 
@@ -293,6 +381,7 @@ export function findPaystackEntryViaLicenseSplit(payments, reg) {
         // License was for this player on this checkout — trust parent REGEV when
         // it still lists them on registration_rows / registrant.
         const meta = normalizePaymentMetadata(parent.metadata);
+        if (Array.isArray(meta.verified_entry_transfers) && meta.verified_entry_transfers.length) continue;
         const named = paymentRegistrationRows(meta).some(
             (row) => norm(row?.email) === email || namesMatch(row?.full_name, reg.full_name),
         );
@@ -322,7 +411,8 @@ export function findStrictPaystackEntryPayment(payments, reg) {
 
     const exact = paystackEntries.filter((payment) => paymentStrictlyCoversRegistration(payment, reg));
     if (exact.length > 0) {
-        return [...exact].sort((a, b) => scorePayment(b) - scorePayment(a))[0];
+        const original = exact.filter(payment => !isDivisionSwitchPayment(payment));
+        return (original.length ? original : exact).sort((a, b) => scorePayment(b) - scorePayment(a))[0];
     }
 
     // Same player, entry cover email match after an admin division move.
@@ -437,7 +527,7 @@ export function isCompedEntryPayment(payment) {
 export function registrationIsCompedEntry(reg, payments) {
     if (!reg) return false;
     const candidates = (payments || []).filter((p) => {
-        if (p.status !== 'success') return false;
+        if (p.status !== 'success' || isDivisionSwitchPayment(p)) return false;
         if (!isCompedEntryPayment(p)) return true;
         const meta = normalizePaymentMetadata(p.metadata);
         if (meta.registration_id && meta.registration_id !== reg.id) return paymentStrictlyCoversRegistration(p, reg);
@@ -486,7 +576,7 @@ export function paymentExplicitlyCoversEmail(payment, email) {
     const meta = normalizePaymentMetadata(payment?.metadata);
     const target = norm(email);
     if (!target) return false;
-    return paymentEntryCoversFor(meta).some((c) => norm(c?.email) === target);
+    return paymentEntryCoversFor(meta).some((c) => !c?.[verifiedEntryTransfer] && norm(c?.email) === target);
 }
 
 /**
@@ -514,7 +604,7 @@ export function resolveRegistrationPayer(payment, reg) {
         return { isPartnerPaid: false, payerEmail: payerEmail || null };
     }
 
-    const explicitlyCovers = meta.registration_id === reg.id
+    const explicitlyCovers = directlyMatchesRegistration(meta, reg)
         || paymentStrictlyCoversRegistration(payment, reg)
         || paymentExplicitlyCoversEmail(payment, selfEmail);
     if (!explicitlyCovers) {

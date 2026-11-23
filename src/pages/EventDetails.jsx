@@ -57,7 +57,7 @@ import TournamentProgressBar from '../components/TournamentProgressBar';
 import VideoModal from '../components/VideoModal';
 import EventMediaGallery from '../components/EventMediaGallery';
 import { divisionRankingSource, resolvePlayerRanking } from '../utils/playerRankingSelection';
-import { addPublicPlayerPaymentStatuses, publicPlayerPaymentLabel } from '../utils/publicPlayerPayment';
+import { addPublicPlayerPaymentStatuses, directPaidDivisions, publicPlayerPaymentLabel } from '../utils/publicPlayerPayment';
 
 const formatPlayerName = (fullName) => {
     if (!fullName) return '';
@@ -1843,33 +1843,10 @@ const EventDetails = () => {
                 .eq('status', 'success')
                 .eq('payment_type', 'event_entry_fee');
 
-            const directPayments = (allEventPayments || []).filter(pay => {
-                if (profile?.id && pay.player_id === profile.id) return true;
-                if (userEmail && pay.metadata?.email?.toLowerCase().trim() === userEmail) return true;
-                if (userName && pay.metadata?.line_items && Array.isArray(pay.metadata.line_items)) {
-                    return pay.metadata.line_items.some(item =>
-                        (item.type === 'entry_fee' || item.type === 'entry') &&
-                        playerNamesMatch(userName, item.player?.toLowerCase().trim())
-                    );
-                }
-                return false;
-            });
-
             const paidDivs = Array.from(new Set([
                 ...(legacyRegs || []).filter(r => r.payment_status === 'paid').map(r => (r.division || '').trim()),
                 ...(localParts || []).filter(p => p.is_paid).map(p => (p.class_name || '').trim()),
-                ...(directPayments || []).flatMap((p) => {
-                    const divs = [];
-                    if (p.metadata?.division) divs.push(String(p.metadata.division).trim());
-                    if (Array.isArray(p.metadata?.line_items)) {
-                        p.metadata.line_items.forEach((item) => {
-                            if ((item.type === 'entry_fee' || item.type === 'entry') && item.division) {
-                                divs.push(String(item.division).trim());
-                            }
-                        });
-                    }
-                    return divs;
-                }),
+                ...directPaidDivisions(allEventPayments, { playerId: profile?.id, email: userEmail, name: userName, matchesName: playerNamesMatch }),
             ].filter(Boolean)));
 
             const isDivPaid = (divName) => paidDivs.some((pd) => divisionsMatch(pd, divName));

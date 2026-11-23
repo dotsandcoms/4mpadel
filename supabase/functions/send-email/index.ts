@@ -1,4 +1,5 @@
 import { registrationEmailAllowed } from './registration-payment.ts';
+import { broadcastBatchSize, broadcastCapability, emailBroadcastAuthorized, reviewedBroadcastBatch } from './broadcast-authority.mjs';
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -1197,7 +1198,6 @@ const SUPER_ADMINS = ['bradein@dotsandcoms.co.za', 'brad@dotsandcoms.co.za', 'ad
 
 const ADMIN_ONLY_TEMPLATES = new Set([
   'entry_comped',
-  'broadcast',
   'org_approved',
   'org_rejected',
   'club_approved',
@@ -1228,15 +1228,17 @@ function isTrustedServiceCaller(authHeader: string | null): boolean {
   return !!serviceKey && authHeader === `Bearer ${serviceKey}`;
 }
 
-async function getAuthenticatedUser(authHeader: string) {
-  const supabaseUserClient = createClient(
+function buildEmailCaller(authHeader: string) {
+  return createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-    { global: { headers: { Authorization: authHeader } } },
+    { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false } },
   );
-  const { data: { user }, error } = await supabaseUserClient.auth.getUser();
-  if (error || !user) return null;
-  return user;
+}
+
+async function getAuthenticatedUser(authHeader: string) {
+  const { data: { user }, error } = await buildEmailCaller(authHeader).auth.getUser();
+  return error || !user ? null : user;
 }
 
 async function isAdminCaller(supabaseAdmin: ReturnType<typeof createClient>, email: string | undefined): Promise<boolean> {
@@ -1266,14 +1268,8 @@ serve(async (req: Request) => {
       throw new Error('RESEND_API_KEY is not configured in Edge Function secrets');
     }
 
-    let { to, template, variables, bcc } = await req.json();
-
-    if (!to && !bcc) {
-      throw new Error('Missing recipient email (to or bcc)');
-    }
-    if (!template) {
-      throw new Error('Missing email template identifier');
-    }
+    const { action, broadcastRequestId, ...input } = await req.json();
+    let { to, template, variables, bcc } = input;
 
     // Initialize Supabase Admin Client
     supabaseAdmin = createClient(
@@ -1281,14 +1277,39 @@ serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    const authHeader = req.headers.get('Authorization');
+    const trustedService = isTrustedServiceCaller(authHeader);
+    const isBroadcast = template === 'broadcast';
+    const verifiedSender = Deno.env.get('RESEND_VERIFIED_SENDER') || 'notifications.4mpadel.co.za';
+    if (action === 'broadcast_capability' || isBroadcast) {
+      const caller = authHeader && !trustedService ? buildEmailCaller(authHeader) : null;
+      const allowed = trustedService || await emailBroadcastAuthorized(caller, supabaseAdmin);
+      if (!allowed) {
+        return new Response(JSON.stringify({ error: 'Broadcast permission required' }), { status: 403, headers: corsHeaders });
+      }
+      if ((action === 'broadcast_capability' || broadcastRequestId !== undefined) && verifiedSender === 'onboarding@resend.dev') {
+        return new Response(JSON.stringify({ error: 'Broadcast delivery requires a verified sender domain' }), { status: 503, headers: corsHeaders });
+      }
+      if (action === 'broadcast_capability') {
+        return new Response(JSON.stringify({ version: broadcastCapability, batchSize: broadcastBatchSize }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      if (broadcastRequestId !== undefined) {
+        if (!reviewedBroadcastBatch({ id: broadcastRequestId, to, bcc, subject: variables?.subject, message: variables?.message })) {
+          return new Response(JSON.stringify({ error: 'A valid reviewed BCC broadcast batch is required' }), { status: 400, headers: corsHeaders });
+        }
+        bcc = bcc.map((address: string) => address.trim().toLowerCase());
+      }
+    }
+    if (!to && !bcc) throw new Error('Missing recipient email (to or bcc)');
+    if (!template) throw new Error('Missing email template identifier');
+
     // --- Authorization -------------------------------------------------
     // Trusted server-to-server callers (service-role key) skip straight
     // through. Public application templates (org apply confirmation + admin
     // notify) may be sent by guests with the anon key. Everything else
     // requires a logged-in user; admin-only templates additionally need
     // an admin caller.
-    const authHeader = req.headers.get('Authorization');
-    if (!isTrustedServiceCaller(authHeader)) {
+    if (!trustedService && !isBroadcast) {
       const user = authHeader ? await getAuthenticatedUser(authHeader) : null;
       const isPublicApplication = PUBLIC_APPLICATION_TEMPLATES.has(template);
 
@@ -1344,7 +1365,6 @@ serve(async (req: Request) => {
     const { subject, html } = await generateEmailBody(supabaseAdmin, template, emailVars);
 
     // Check if verified sender domain exists, otherwise fallback to custom domain
-    const verifiedSender = Deno.env.get('RESEND_VERIFIED_SENDER') || 'notifications.4mpadel.co.za';
     const fromAddress = verifiedSender === 'onboarding@resend.dev' 
       ? '"4M Padel SA" <onboarding@resend.dev>' 
       : verifiedSender.includes('@')
@@ -1424,6 +1444,7 @@ serve(async (req: Request) => {
       headers: {
         'Authorization': `Bearer ${resendApiKey}`,
         'Content-Type': 'application/json',
+        ...(isBroadcast && broadcastRequestId ? { 'Idempotency-Key': `reviewed-email-broadcast/${broadcastRequestId}` } : {}),
       },
       body: JSON.stringify(payload),
     });

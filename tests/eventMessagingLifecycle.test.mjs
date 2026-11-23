@@ -22,8 +22,8 @@ export const supabase={
   window.__calls.push({action,data});
   if(action==='status')return result({enabled:true,rulesAccepted:true,interactive:true,supportAllowed:true});
   if(action==='messaging_event_directory')return result([{id:'100',title:'First event'},{id:'200',title:'Second event'}]);
-  if(action==='open_event')return result([{id:data.eventId+'-announcements',kind:'event_announcements',canSend:true},{id:data.eventId+'-discussion',kind:'event_discussion',canSend:true}]);
-  if(action==='messaging_event_analytics')return result({event:{id:args.p_event,title:args.p_event===100?'First event':'Second event'},summary:{}});
+  if(action==='open_event')return result([{id:data.eventId+'-announcements',kind:'event_announcements',canSend:true,manager:!window.__onlyParticipant},{id:data.eventId+'-discussion',kind:'event_discussion',canSend:true,manager:!window.__onlyParticipant}]);
+  if(action==='messaging_event_analytics')return args.p_event===window.__deniedEvent?{error:{code:'42501',message:'Event messaging access denied.'}}:result({event:{id:args.p_event,title:args.p_event===100?'First event':'Second event'},summary:{}});
   if(action==='read'){const page={messages:[{id:'message-'+data.conversationId,seq:1,body:'Messages for '+data.conversationId}],next:null};if(window.__delayReads)return new Promise(resolve=>window.__releaseReads.push(()=>resolve(result(page))));return result(page);}
   if(action==='audience')return result({allCount:1,selectedCount:1,divisions:[]});
   return result({});
@@ -53,6 +53,22 @@ test('selecting an event retains verified access and opens its messages',async()
   await click(page,'Open Second event');await messages(page,'200-announcements');
   assert.doesNotMatch(await page.$eval('[data-testid="event-messages"]',node=>node.textContent),/100-announcements/);
   await click(page,'Show discussion');await messages(page,'200-discussion');
+ }finally{await page.close();}
+});
+test('Admin does not read a foreign event after its manager grant is revoked',async()=>{
+ const page=await open();try{
+  await click(page,'Open First event');await messages(page,'100-announcements');
+  await page.evaluate(()=>{window.__deniedEvent=100;window.__calls=[];});await click(page,'Refresh');
+  await page.waitForFunction(()=>document.querySelector('[role="alert"]')?.textContent.includes('Event messaging access denied.'));
+  assert.doesNotMatch(await page.$eval('[data-testid="event-messages"]',node=>node.textContent),/100-announcements/);
+  assert.deepEqual(await page.evaluate(()=>window.__calls.map(call=>call.action)),['messaging_event_analytics']);
+ }finally{await page.close();}
+});
+test('a participant response cannot replace a manager conversation',async()=>{
+ const page=await open();try{
+  await page.evaluate(()=>{window.__onlyParticipant=true;});await click(page,'Open First event');
+  await page.waitForFunction(()=>document.querySelector('[role="alert"]')?.textContent.includes('Event messaging access denied.'));
+  assert.equal(await page.evaluate(()=>window.__calls.some(call=>call.action==='read')),false);
  }finally{await page.close();}
 });
 test('opening another event cannot cancel a delayed authenticator check',async()=>{

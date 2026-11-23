@@ -1,20 +1,28 @@
+import { generateAccessCode, getAccessCodeError, saveEventAccessCode } from '../../utils/eventAccessCode';
+import SearchableDropdown from "../SearchableDropdown";
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
     X, Save, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Plus, Trash2, UploadCloud, Loader2,
     Info, Layers, FileText, ImageIcon, Check, Eye, EyeOff, Copy, Pencil, ClipboardList, Shield, AlertTriangle,
-    Bold, Italic, Underline, List, ListOrdered, Heading, UserPlus, RefreshCcw, ExternalLink, Repeat
+    UserPlus, RefreshCcw, ExternalLink, Repeat
 } from 'lucide-react';
 import CancelEventButton from './CancelEventButton';
 import CancelEventDialog from './CancelEventDialog';
 import { supabase } from '../../supabaseClient';
+import { FOURM_PUBLIC_ORIGIN } from '../../constants/site.js';
+import { reviewedWeeklyMembers, scopeWeeklyOccurrence } from '../../utils/calendarWeeklySeries.js';
+import { weeklyEventDraftRequest } from '../../utils/weeklyEventDrafts.js';
+import { uploadToGallery, uploadEventAsset } from '../../utils/eventMedia';
+import { uploadOrganisationEventAttachment } from '../../utils/organisationEventAttachments.js';
 import { useClubs } from '../../hooks/useClubs';
 import { useAdminPermissions } from '../../hooks/useAdminPermissions';
 import { getDefaultBackgroundForStatus } from '../../utils/imageUtils';
 import { buildRankedinTournamentUrl, downloadRankedinSkipReport, extractRankedinId } from '../../utils/rankedinLink';
 import { loadGoogleMaps } from '../../utils/googleMaps';
-import { generateAccessCode, getAccessCodeError, saveEventAccessCode } from '../../utils/eventAccessCode';
+import RichTextEditor from './EventRichTextEditor';
+import './EventBuilderPreview.css';
 import {
     isCalendarEventFinished,
     isRecentResultsAutoTier,
@@ -145,7 +153,7 @@ const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 const looksLikeEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
 
 /** Chip + player type-ahead for event_co_admins (stored as comma-separated emails). */
-const CoAdminsPicker = ({ value, onChange }) => {
+export const CoAdminsPicker = ({ value, onChange, renderContent }) => {
     const emails = useMemo(() => parseCoAdminEmails(value), [value]);
     const [query, setQuery] = useState('');
     const [results, setResults] = useState([]);
@@ -241,6 +249,8 @@ const CoAdminsPicker = ({ value, onChange }) => {
             addEmail(results[0].email);
         }
     };
+
+    if (renderContent) return renderContent({ emails, query, setQuery, results, open, setOpen, searching, wrapRef, selectedRef, addEmail, removeEmail, commitTyped, looksLikeEmail });
 
     return (
         <div className="space-y-2">
@@ -342,7 +352,7 @@ const CoAdminsPicker = ({ value, onChange }) => {
 };
 
 // Styled dropdown (matches the Venue / Club dropdown) for fixed option lists.
-const SelectMenu = ({ value, onChange, options, placeholder = 'Select...' }) => {
+const SelectMenu = ({ value, onChange, options, placeholder = 'Select...', searchable = false }) => {
     const [open, setOpen] = useState(false);
     const ref = useRef(null);
     useEffect(() => {
@@ -353,6 +363,10 @@ const SelectMenu = ({ value, onChange, options, placeholder = 'Select...' }) => 
     const opts = options.map((o) => (typeof o === 'string' ? { value: o, label: o } : o));
     const selected = opts.find((o) => o.value === value);
     const hasValue = selected && selected.label;
+    if (searchable) return <SearchableDropdown value={value ?? ''} onChange={event => onChange(event.target.value)} className={inputClass}>
+        {!opts.some(option => option.value === '') && <option value="" disabled>{placeholder}</option>}
+        {opts.map(option => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label || '—'}</option>)}
+    </SearchableDropdown>;
     return (
         <div className="relative" ref={ref}>
             <button type="button" onClick={() => setOpen((v) => !v)} className={`${inputClass} flex items-center justify-between text-left`}>
@@ -412,62 +426,6 @@ const ComboBox = ({ value, onChange, options, placeholder = 'Select or type' }) 
 
 // Lightweight WYSIWYG editor (no external dependency) producing simple HTML so the
 // formatted layout is preserved when shown on the public event page.
-const RichTextEditor = ({ value, onChange, placeholder = 'Type here...', minHeight = 130 }) => {
-    const ref = useRef(null);
-
-    // Sync external value into the editor without clobbering the caret while typing.
-    useEffect(() => {
-        if (ref.current && ref.current.innerHTML !== (value || '')) {
-            ref.current.innerHTML = value || '';
-        }
-    }, [value]);
-
-    const emit = () => onChange(ref.current ? ref.current.innerHTML : '');
-    const exec = (command, arg = null) => {
-        ref.current?.focus();
-        document.execCommand(command, false, arg);
-        emit();
-    };
-
-    const ToolBtn = ({ onClick, title, children }) => (
-        <button
-            type="button"
-            title={title}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={onClick}
-            className="p-1.5 rounded text-gray-300 hover:bg-padel-green hover:text-black transition-colors"
-        >
-            {children}
-        </button>
-    );
-
-    return (
-        <div className="border border-white/10 rounded-lg overflow-hidden bg-black/40 focus-within:border-padel-green">
-            <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-white/10 bg-white/5">
-                <ToolBtn title="Bold" onClick={() => exec('bold')}><Bold size={15} /></ToolBtn>
-                <ToolBtn title="Italic" onClick={() => exec('italic')}><Italic size={15} /></ToolBtn>
-                <ToolBtn title="Underline" onClick={() => exec('underline')}><Underline size={15} /></ToolBtn>
-                <span className="w-px h-5 bg-white/10 mx-1" />
-                <ToolBtn title="Heading" onClick={() => exec('formatBlock', '<h3>')}><Heading size={15} /></ToolBtn>
-                <ToolBtn title="Bullet list" onClick={() => exec('insertUnorderedList')}><List size={15} /></ToolBtn>
-                <ToolBtn title="Numbered list" onClick={() => exec('insertOrderedList')}><ListOrdered size={15} /></ToolBtn>
-                <span className="w-px h-5 bg-white/10 mx-1" />
-                <ToolBtn title="Clear formatting" onClick={() => exec('removeFormat')}><X size={15} /></ToolBtn>
-            </div>
-            <div
-                ref={ref}
-                contentEditable
-                suppressContentEditableWarning
-                onInput={emit}
-                onBlur={emit}
-                data-placeholder={placeholder}
-                className="rte-content px-4 py-3 text-white text-sm leading-relaxed focus:outline-none overflow-y-auto custom-scrollbar"
-                style={{ minHeight }}
-            />
-        </div>
-    );
-};
-
 const emptyDivision = (licenseRequired = false, scoringPoint = 'golden') => ({
     _key: Math.random().toString(36).slice(2),
     id: null,
@@ -531,75 +489,6 @@ const formatEventDates = (start, end) => {
     return `${s.getDate()} ${s.toLocaleString('default', { month: 'short' })} - ${e.getDate()} ${e.toLocaleString('default', { month: 'short' })} ${e.getFullYear()}`;
 };
 
-const resizeImage = (file, maxWidth = 1200, quality = 0.8, preserveAlpha = false) =>
-    new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (ev) => {
-            const img = new Image();
-            img.src = ev.target.result;
-            img.onload = () => {
-                let { width, height } = img;
-                if (width > maxWidth) {
-                    height = Math.round((height * maxWidth) / width);
-                    width = maxWidth;
-                }
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                if (preserveAlpha) {
-                    ctx.clearRect(0, 0, width, height);
-                }
-                ctx.drawImage(img, 0, 0, width, height);
-                const mime = preserveAlpha ? 'image/png' : 'image/jpeg';
-                canvas.toBlob(
-                    (blob) => {
-                        const baseName = (file.name || 'image').replace(/\.[^.]+$/, '');
-                        resolve(new File(
-                            [blob],
-                            `${baseName}.${preserveAlpha ? 'png' : 'jpg'}`,
-                            { type: mime, lastModified: Date.now() }
-                        ));
-                    },
-                    mime,
-                    quality
-                );
-            };
-            img.onerror = reject;
-        };
-        reader.onerror = reject;
-    });
-
-const uploadResizedImage = async (file, prefix, { bucket = 'gallery', folder = prefix } = {}) => {
-    const preserveAlpha = prefix === 'sponsors' || prefix === 'org-logos';
-    const resized = await resizeImage(file, 1200, 0.8, preserveAlpha);
-    const ext = preserveAlpha ? 'png' : 'jpg';
-    const fileName = `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}.${ext}`;
-    const filePath = `${folder}/${fileName}`;
-    const storage = supabase.storage.from(bucket);
-    const { error } = await storage.upload(filePath, resized, { upsert: false });
-    if (error) throw error;
-    const { data: { publicUrl } } = storage.getPublicUrl(filePath);
-    return publicUrl;
-};
-
-const uploadEventAsset = async (file, prefix, maxBytes = 10 * 1024 * 1024) => {
-    if (!file) throw new Error('Choose a file to upload');
-    if (file.size > maxBytes) throw new Error(`File must be smaller than ${Math.round(maxBytes / (1024 * 1024))} MB`);
-    const safeName = String(file.name || 'asset')
-        .toLowerCase()
-        .replace(/[^a-z0-9._-]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-    const filePath = `${prefix}/${Date.now()}_${Math.random().toString(36).slice(2)}_${safeName}`;
-    const { error } = await supabase.storage.from('gallery').upload(filePath, file, {
-        contentType: file.type || undefined,
-        upsert: false,
-    });
-    if (error) throw error;
-    const { data: { publicUrl } } = supabase.storage.from('gallery').getPublicUrl(filePath);
-    return publicUrl;
-};
 
 /** Unique trimmed venue names, order preserved. */
 const normalizeVenues = (list) => {
@@ -856,12 +745,26 @@ const ageFromDivisionName = (name) => {
     return '';
 };
 
-const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisation = null }) => {
+const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, initialDate, organisation = null, organisationClubs, renderEditor, beforeSave, theme, reviewedWeeklySeries, reloadSavedEvent, allowWeeklyDrafts = false, weeklyDraft }) => {
+    const previewTheme = theme === 'preview';
+    const organisationBound = previewTheme && Boolean(organisation?.id);
+    const guardedEditor = Boolean(renderEditor || previewTheme);
+    const previewWriteFailed = useRef(false);
+    const previewRoot = useRef(null);
+    useEffect(() => {
+        if (!previewTheme || !isOpen) return;
+        const trigger = document.activeElement, overflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        previewRoot.current?.focus();
+        return () => { document.body.style.overflow = overflow; if (trigger?.isConnected) trigger.focus(); };
+    }, [previewTheme, isOpen]);
     // Tracks the event currently being edited inside this session (survives first create
     // when the parent still has editingEvent=null, so Save can keep the modal open).
     const [workingEvent, setWorkingEvent] = useState(null);
     const activeEvent = workingEvent;
     const isEditing = !!activeEvent?.id;
+    const weeklyDraftId = useRef(null);
+    const privateWeekly = allowWeeklyDrafts && !isEditing;
     const [step, setStep] = useState(1);
     const [form, setForm] = useState(blankForm);
     const [divisions, setDivisions] = useState([emptyDivision()]);
@@ -874,14 +777,22 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const [showPrizeBreakdown, setShowPrizeBreakdown] = useState(false);
     const [showEventDescription, setShowEventDescription] = useState(false);
     const [saving, setSaving] = useState(false);
+    const saveLock = useRef(false);
+    const [loadingExisting, setLoadingExisting] = useState(Boolean(editingEvent || weeklyDraft));
+    const [loadError, setLoadError] = useState('');
+    const [saveError, setSaveError] = useState('');
+    const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+    // The native headless renderer retains its guarded cancellation controller;
+    // the legacy presentation uses main's shared CancelEventDialog below.
+    const [cancelling, setCancelling] = useState(false);
+    const [cancellationReason, setCancellationReason] = useState('');
+    /** Sibling calendar rows for the weekly series being edited (sorted by start_date). */
+    const [seriesSiblings, setSeriesSiblings] = useState([]);
     const [showAccessCode, setShowAccessCode] = useState(false);
     const [accessCodeError, setAccessCodeError] = useState('');
     const [savedAccessCode, setSavedAccessCode] = useState(null);
-    const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-    /** Sibling calendar rows for the weekly series being edited (sorted by start_date). */
-    const [seriesSiblings, setSeriesSiblings] = useState([]);
     const hasExistingAccessCode = activeEvent?.registration_access === 'code'
-        && (!form.is_weekly || !seriesSiblings.some((event) => event.registration_access !== 'code'));
+        && (!form.is_weekly || !seriesSiblings.some(event => event.registration_access !== 'code'));
     const [uploadingCover, setUploadingCover] = useState(false);
     const coverUploadRef = useRef(null);
     const [uploadingPoster, setUploadingPoster] = useState(false);
@@ -930,7 +841,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const [showPreview, setShowPreview] = useState(false);
     const [syncingRankedin, setSyncingRankedin] = useState(false);
 
-    const { clubs } = useClubs();
+    const { clubs: publicClubs } = useClubs(!organisationBound);
+    const clubs = organisationBound ? organisationClubs || [] : publicClubs;
     const [venueOpen, setVenueOpen] = useState(false);
     const [venueQuery, setVenueQuery] = useState('');
     const [orgSuggestions, setOrgSuggestions] = useState([]);
@@ -1078,7 +990,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
     // Google Places autocomplete on the address field (step 1, when Date & Venue is open).
     useEffect(() => {
-        if (!isOpen || step !== 1 || (!openPanels.venue && !openPanels.identity)) return;
+        if (renderEditor || !isOpen || step !== 1 || (!openPanels.venue && !openPanels.identity)) return;
         let cancelled = false;
         // Allow the collapsible panel to mount the input before attaching.
         const timer = setTimeout(() => {
@@ -1123,7 +1035,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             clearTimeout(timer);
             autocompleteRef.current = null;
         };
-    }, [isOpen, step, openPanels.venue, openPanels.identity]);
+    }, [isOpen, step, openPanels.venue, openPanels.identity, renderEditor]);
 
     useEffect(() => {
         setShowAccessCode(false);
@@ -1135,6 +1047,14 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             setSeriesSiblings([]);
             return;
         }
+        let disposed = false;
+        weeklyDraftId.current = weeklyDraft?.id || null;
+        setShowAccessCode(false);
+        setAccessCodeError('');
+        setSavedAccessCode(null);
+        setLoadError('');
+        setSaveError('');
+        setLoadingExisting(Boolean(editingEvent || weeklyDraft));
         setSeriesSiblings([]);
         setStep(1);
         licenseDefaultTouchedRef.current = false;
@@ -1169,14 +1089,24 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             const resolvedEvent = draft ? { ...editingEvent, ...draft.payload } : editingEvent;
             setWorkingEvent(resolvedEvent);
             setRemovedDivisionIds(draft?.removed_division_ids || []);
-            loadExisting(resolvedEvent, draft?.divisions || null);
+            loadExisting(resolvedEvent, draft?.divisions || null)
+                .catch(error => { if (!disposed) setLoadError(error.message || 'Event setup could not be loaded.'); })
+                .finally(() => { if (!disposed) setLoadingExisting(false); });
+        } else if (weeklyDraft) {
+            setWorkingEvent(null);
+            regCloseTouchedRef.current = true;
+            regOpenTouchedRef.current = true;
+            loadExisting({ ...weeklyDraft.fields, is_weekly: true, weekly_count: weeklyDraft.weeks }, [])
+                .catch(error => { if (!disposed) setLoadError(error.message || 'The weekly draft could not be loaded.'); })
+                .finally(() => { if (!disposed) setLoadingExisting(false); });
         } else {
             setWorkingEvent(null);
             regCloseTouchedRef.current = false;
             regOpenTouchedRef.current = false;
             pointsTouchedRef.current = false;
             // New events start with the standard SAPA content pre-filled (editable per event).
-            const base = { ...blankForm, ...SAPA_DEFAULTS, is_weekly: false, weekly_count: 8 };
+            const base = { ...blankForm, ...SAPA_DEFAULTS, is_weekly: false, weekly_count: 8,
+                ...(initialDate && { start_date: initialDate, end_date: initialDate }) };
             // Org portal mode: prefill organiser identity from the organisation
             setForm(organisation ? {
                 ...base,
@@ -1196,10 +1126,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             setDivisions([emptyDivision(base.license_required_default)]);
             setShowPrizeBreakdown(false);
         }
-        return () => { coverUploadRef.current = null; };
+        return () => { disposed = true; coverUploadRef.current = null; };
         // Only re-init when the modal opens or a different event is loaded — not after in-session saves.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen, editingEvent?.id]);
+    }, [isOpen, editingEvent?.id, weeklyDraft?.id, initialDate]);
 
     const parsePrizeBreakdownField = (raw) => {
         if (Array.isArray(raw)) return raw;
@@ -1301,30 +1231,34 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             rankedin_id: ev.rankedin_id ? String(ev.rankedin_id) : '',
             rankedin_url: ev.rankedin_url || '',
             is_weekly: !!ev.is_weekly,
-            weekly_count: 8,
+            weekly_count: ev.weekly_count ?? 8,
             weekly_payment_policy: ev.weekly_payment_policy === 'allow_reserve' ? 'allow_reserve' : 'pay_now',
             series_id: ev.series_id || null,
             entry_fee: ev.entry_fee != null && ev.entry_fee !== '' ? String(ev.entry_fee) : '',
         });
         if (ev.is_weekly && ev.series_id) {
-            const { data: siblings, error: seriesErr } = await supabase
-                .from('calendar')
-                .select('id, start_date, slug, event_name, registration_access')
-                .eq('series_id', ev.series_id)
-                .eq('is_weekly', true)
-                .order('start_date', { ascending: true });
-            if (seriesErr) {
-                console.error('[EventBuilder] load series siblings failed:', seriesErr.message);
-                setSeriesSiblings([]);
+            let list;
+            if (reviewedWeeklySeries) {
+                list = reviewedWeeklyMembers(ev, reviewedWeeklySeries, { editable: true });
             } else {
-                const list = siblings || [];
-                setSeriesSiblings(list);
-                setForm((prev) => ({
-                    ...prev,
-                    weekly_count: Math.max(2, list.length || 8),
-                    series_id: ev.series_id,
-                }));
+                const { data, error } = await supabase
+                    .from('calendar')
+                    .select('id, start_date, slug, event_name, registration_access')
+                    .eq('series_id', ev.series_id)
+                    .eq('is_weekly', true)
+                    .order('start_date', { ascending: true });
+                if (error) {
+                    if (guardedEditor) throw error;
+                    console.error('[EventBuilder] load series siblings failed:', error.message);
+                }
+                list = data || [];
             }
+            setSeriesSiblings(list);
+            setForm(prev => ({
+                ...prev,
+                weekly_count: Math.max(2, list.length || 8),
+                series_id: ev.series_id,
+            }));
         } else {
             setSeriesSiblings([]);
         }
@@ -1354,6 +1288,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             .select('*')
             .eq('event_id', ev.id)
             .order('sort_order', { ascending: true });
+        if (error && guardedEditor) throw error;
         if (!error && data && data.length > 0) {
             setDivisions(data.map((d) => mapDivisionRow(d, d.id)));
             if (ev.entry_fee != null && ev.entry_fee !== '') {
@@ -1369,12 +1304,21 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
     const setField = (name, value) => setForm((prev) => ({ ...prev, [name]: value }));
 
+    const authorizeMutation = async (operation, payload, mode) => {
+        if (guardedEditor && (loadingExisting || loadError)) throw new Error(loadError || 'Wait for event setup to finish loading.');
+        if (guardedEditor && typeof beforeSave !== 'function') throw new Error('Event editor access could not be verified.');
+        const result = await beforeSave?.({ operation, event: activeEvent, sourceEvent: editingEvent, form, divisions, removedDivisionIds, seriesSiblings, payload, mode });
+        if (result === false) throw new Error('The event change was not authorised.');
+        return result?.verifyContinuing || (async () => {});
+    };
+
     /**
      * Enable/disable weekly social occurrence mode and apply non-SAPA defaults.
      * Turning OFF restores standard SAPA starter content for new events only.
      * @param {boolean} enabled
      */
     const setWeeklyMode = (enabled) => {
+        if (!enabled && weeklyDraft) return;
         setForm((prev) => {
             if (!enabled) {
                 if (isEditing) {
@@ -1744,10 +1688,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         coverUploadRef.current = request;
         setUploadingCover(true);
         try {
+            const checkpoint = await authorizeMutation('upload-cover');
             const folder = activeEvent?.id
                 ? `events/${activeEvent.id}`
                 : `drafts/${organisation?.id || form.organisation_id || 'calendar'}`;
-            const url = await uploadResizedImage(file, 'cover', { bucket: 'event-covers', folder });
+            const url = await uploadToGallery(file, 'cover', checkpoint, { bucket: 'event-covers', folder });
             if (coverUploadRef.current !== request) return;
             setField('custom_image_url', url);
             toast.success('Cover photo uploaded');
@@ -1767,16 +1712,27 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         }
     };
 
+    const uploadHostAttachment = (kind, file, checkpoint) => uploadOrganisationEventAttachment({
+        client: supabase, organisationId: organisation.id, eventId: activeEvent?.id, kind, file, checkpoint,
+    });
+
     const handlePosterUpload = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
         try {
             setUploadingPoster(true);
-            if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-                const url = await uploadEventAsset(file, 'event-posters');
+            const checkpoint = await authorizeMutation('upload-poster');
+            if (organisationBound) {
+                const media = await uploadHostAttachment('poster', file, checkpoint);
+                setForm(prev => ({ ...prev,
+                    poster_document_url: media.contentType === 'application/pdf' ? media.url : '',
+                    poster_image_url: media.contentType === 'application/pdf' ? '' : media.url,
+                }));
+            } else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+                const url = await uploadEventAsset(file, 'event-posters', undefined, checkpoint);
                 setForm((prev) => ({ ...prev, poster_document_url: url, poster_image_url: '' }));
             } else {
-                const url = await uploadResizedImage(file, 'posters');
+                const url = await uploadToGallery(file, 'posters', checkpoint);
                 setForm((prev) => ({ ...prev, poster_image_url: url, poster_document_url: '' }));
             }
             toast.success('Event poster uploaded');
@@ -1793,7 +1749,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!file) return;
         try {
             setUploadingKit(true);
-            const url = await uploadEventAsset(file, 'event-kits');
+            const checkpoint = await authorizeMutation('upload-organiser-kit');
+            const url = organisationBound
+                ? (await uploadHostAttachment('organiser-kit', file, checkpoint)).url
+                : await uploadEventAsset(file, 'event-kits', undefined, checkpoint);
             setField('organiser_kit_url', url);
             toast.success('Event organiser document uploaded');
         } catch (err) {
@@ -1809,8 +1768,13 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!files.length) return;
         try {
             setUploadingGallery(true);
+            const checkpoint = await authorizeMutation('upload-gallery');
             const urls = [];
-            for (const file of files) urls.push(await uploadResizedImage(file, 'event-media'));
+            for (const file of files) {
+                const url = organisationBound ? (await uploadHostAttachment('gallery', file, checkpoint)).url
+                    : await uploadToGallery(file, 'event-media', checkpoint);
+                urls.push(url);
+            }
             setForm((prev) => ({
                 ...prev,
                 media_gallery_urls: [...(prev.media_gallery_urls || []), ...urls],
@@ -1829,11 +1793,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!file) return;
         try {
             setUploadingOrgLogo(true);
-            const url = await uploadResizedImage(file, 'org-logos');
+            const checkpoint = await authorizeMutation('upload-organiser-logo');
+            const url = await uploadToGallery(file, 'org-logos', checkpoint);
             setField('organiser_logo_url', url);
             toast.success('Organisation logo uploaded');
         } catch (err) {
-            toast.error('Failed to upload organisation logo');
+            toast.error(err.message || 'Failed to upload organisation logo');
         } finally {
             setUploadingOrgLogo(false);
         }
@@ -1846,8 +1811,13 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!files.length) return;
         try {
             setUploadingSponsor(true);
+            const checkpoint = await authorizeMutation('upload-sponsor');
             const urls = [];
-            for (const file of files) urls.push(await uploadResizedImage(file, 'sponsors'));
+            for (const file of files) {
+                const url = organisationBound ? (await uploadHostAttachment('sponsor', file, checkpoint)).url
+                    : await uploadToGallery(file, 'sponsors', checkpoint);
+                urls.push(url);
+            }
             setForm((prev) => {
                 const current = [...(prev.sponsor_logos || [])];
                 if (asMain) {
@@ -1859,7 +1829,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             });
             toast.success(`${urls.length} sponsor logo(s) uploaded`);
         } catch (err) {
-            toast.error('Failed to upload sponsor logo');
+            toast.error(err.message || 'Failed to upload sponsor logo');
         } finally {
             setUploadingSponsor(false);
             e.target.value = '';
@@ -1886,8 +1856,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             if (!form.start_time) { toast.error('Start time is required for weekly events'); return false; }
             if (!isEditing) {
                 const count = Number(form.weekly_count);
-                if (!Number.isFinite(count) || count < 2 || count > 26) {
-                    toast.error('Weekly count must be between 2 and 26');
+                if (!Number.isInteger(count) || count < 2 || count > 26) {
+                    toast.error('Choose a whole number between 2 and 26 weeks');
                     return false;
                 }
             }
@@ -1956,8 +1926,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         return false;
     };
 
-    const persistAccessCode = (eventId, protectedBefore = activeEvent?.registration_access === 'code') =>
-        saveEventAccessCode(supabase, eventId, accessCodeOptions(protectedBefore));
+    const persistAccessCode = async (eventId, protectedBefore = activeEvent?.registration_access === 'code', checkpoint = async () => {}) => {
+        await checkpoint();
+        return saveEventAccessCode(supabase, eventId, accessCodeOptions(protectedBefore));
+    };
 
     const rememberSavedAccessCode = () => {
         if (!form.require_access_code) setSavedAccessCode(null);
@@ -1977,15 +1949,15 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     };
 
     const validateDraft = () => {
-        if (!validateAccessCode()) return false;
+        if (!(privateWeekly && form.is_weekly) && !validateAccessCode()) return false;
         if (!form.event_name.trim()) { toast.error('Event name is required'); return false; }
         if (!form.start_date) { toast.error('Start date is required'); return false; }
         if (form.is_weekly) {
             if (!form.start_time) { toast.error('Start time is required for weekly events'); return false; }
             if (!isEditing) {
                 const count = Number(form.weekly_count);
-                if (!Number.isFinite(count) || count < 2 || count > 26) {
-                    toast.error('Weekly count must be between 2 and 26');
+                if (!Number.isInteger(count) || count < 2 || count > 26) {
+                    toast.error('Choose a whole number between 2 and 26 weeks');
                     return false;
                 }
             }
@@ -2007,6 +1979,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
     const validatePublish = () => {
         if (!validateDraft()) return false;
+        if (privateWeekly && form.is_weekly && !validateAccessCode()) return false;
         if (!form.registration_opens_at) { toast.error('Registration opens date is required'); return false; }
         if (!form.registration_closes_at) { toast.error('Registration closes date is required'); return false; }
         if (!form.partner_requirement) { toast.error('Partner requirement is required'); return false; }
@@ -2047,14 +2020,17 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         const warnings = [];
         const codeError = getAccessCodeError(accessCodeOptions());
         if (codeError) errors.push(codeError);
+        divisions.forEach(d => {
+            if (d.entry_limit !== '' && d.entry_limit != null && (!Number.isInteger(Number(d.entry_limit)) || Number(d.entry_limit) < 1)) errors.push(`Maximum teams must be a positive whole number: ${d.name || 'Unnamed division'}`);
+        });
         if (!form.event_name?.trim()) errors.push('Event name is required');
         if (!form.start_date) errors.push('Start date is required');
         if (form.is_weekly) {
             if (!form.start_time) errors.push('Start time is required for weekly events');
             if (!isEditing) {
                 const count = Number(form.weekly_count);
-                if (!Number.isFinite(count) || count < 2 || count > 26) {
-                    errors.push('Weekly count must be between 2 and 26');
+                if (!Number.isInteger(count) || count < 2 || count > 26) {
+                    errors.push('Choose a whole number between 2 and 26 weeks');
                 }
             }
             const fee = resolveWeeklyEntryFee();
@@ -2264,6 +2240,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 payload.featured_event = false;
                 payload.show_in_recent_results = false;
             }
+            if (organisationBound) {
+                if (mode === 'draft') payload.is_visible = activeEvent?.is_visible === true;
+                else if (!isWeekly) payload.is_visible = true;
+            }
         } else {
             payload.organisation_id = form.organisation_id || null;
             if (!isEditing) {
@@ -2342,7 +2322,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         setSyncingRankedin(true);
         const toastId = toast.loading('Syncing with RankedIn…');
         try {
+            const checkpoint = await authorizeMutation('sync-rankedin');
             // Persist the link before calling the edge function
+            await checkpoint();
             await supabase
                 .from('calendar')
                 .update({
@@ -2351,6 +2333,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 })
                 .eq('id', eventId);
 
+            await checkpoint();
             const { data, error } = await supabase.functions.invoke('sync-to-rankedin', {
                 body: { eventId, rankedinId },
             });
@@ -2435,18 +2418,24 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         }
     };
 
-    const persistDivisions = async (eventId) => {
+    const persistDivisions = async (eventId, checkpoint = async () => {}) => {
         if (removedDivisionIds.length) {
-            await supabase.from('tournament_divisions').delete().in('id', removedDivisionIds);
+            await checkpoint();
+            const query = supabase.from('tournament_divisions').delete().in('id', removedDivisionIds);
+            const { error } = await (organisationBound ? query.eq('event_id', eventId) : query);
+            if (error) throw error;
         }
         const rows = divisions.filter((d) => d.name.trim());
         for (let i = 0; i < rows.length; i++) {
             const d = rows[i];
             const record = { event_id: eventId, ...divisionRecord(d, i) };
             if (d.id) {
-                const { error } = await supabase.from('tournament_divisions').update(record).eq('id', d.id);
+                await checkpoint();
+                const query = supabase.from('tournament_divisions').update(record).eq('id', d.id);
+                const { error } = await (organisationBound ? query.eq('event_id', eventId) : query);
                 if (error) throw error;
             } else {
+                await checkpoint();
                 const { error } = await supabase.from('tournament_divisions').insert([record]);
                 if (error) throw error;
             }
@@ -2459,6 +2448,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             .select('*')
             .eq('event_id', eventId)
             .order('sort_order', { ascending: true });
+        if (error && guardedEditor) throw error;
         if (!error && data) {
             setDivisions(
                 data.length > 0
@@ -2469,6 +2459,19 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         setRemovedDivisionIds([]);
     };
 
+    const updateCalendarEvent = async (event, payload) => {
+        const update = supabase.from('calendar').update(payload).eq('id', event.id);
+        if (!organisationBound) {
+            const { error } = await update;
+            if (error) throw error;
+            return;
+        }
+        const scoped = update.eq('organisation_id', organisation.id).eq('is_manual', true);
+        const query = event.club_id == null ? scoped.is('club_id', null) : scoped.eq('club_id', event.club_id);
+        const { data, error } = await query.select('id').single();
+        if (error || String(data?.id) !== String(event.id)) throw error || new Error('Could not verify the event update.');
+    };
+
     /**
      * Apply a weekly edit to every occurrence in the series.
      * Shared fields copy from the edited form; dates/reg windows stay week-offset
@@ -2476,16 +2479,18 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
      * @param {object} payload - built calendar payload for the edited occurrence
      * @param {{ id: number|string, start_date?: string, series_id?: string }} editedEvent
      */
-    const persistWeeklySeriesUpdate = async (payload, editedEvent) => {
+    const persistWeeklySeriesUpdate = async (payload, editedEvent, checkpoint = async () => {}) => {
         const seriesId = payload.series_id || editedEvent.series_id || form.series_id;
         if (!seriesId) {
-            await persistAccessCode(editedEvent.id);
-            const { error } = await supabase.from('calendar').update(payload).eq('id', editedEvent.id);
-            if (error) throw error;
+            await persistAccessCode(editedEvent.id, undefined, checkpoint);
+            await checkpoint();
+            await updateCalendarEvent(editedEvent, payload);
             return 1;
         }
 
-        let siblings = seriesSiblings;
+        let siblings = reviewedWeeklySeries
+            ? reviewedWeeklyMembers(editedEvent, reviewedWeeklySeries, { editable: true })
+            : seriesSiblings;
         if (!siblings.length) {
             const { data, error } = await supabase
                 .from('calendar')
@@ -2498,9 +2503,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             setSeriesSiblings(siblings);
         }
         if (!siblings.length) {
-            await persistAccessCode(editedEvent.id);
-            const { error } = await supabase.from('calendar').update(payload).eq('id', editedEvent.id);
-            if (error) throw error;
+            await persistAccessCode(editedEvent.id, undefined, checkpoint);
+            await checkpoint();
+            await updateCalendarEvent(editedEvent, payload);
             return 1;
         }
 
@@ -2511,7 +2516,16 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
         for (let j = 0; j < siblings.length; j += 1) {
             const sibling = siblings[j];
-            await persistAccessCode(sibling.id, sibling.registration_access === 'code');
+            if (reviewedWeeklySeries) {
+                await checkpoint();
+                const { data: current, error } = await scopeWeeklyOccurrence(
+                    supabase.from('calendar').select('id,registration_access'), sibling,
+                ).single();
+                if (error || !current || current.registration_access !== sibling.registration_access) {
+                    throw new Error('A reviewed weekly occurrence changed. Close and reopen the series.');
+                }
+            }
+            await persistAccessCode(sibling.id, sibling.registration_access === 'code', checkpoint);
             const weekOffsetDays = (j - editIdx) * 7;
             const occurrenceDate = addDaysToDate(form.start_date, weekOffsetDays);
             const instancePayload = {
@@ -2532,11 +2546,15 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             // Keep existing slug so public links stay stable
             delete instancePayload.slug;
 
-            const { error } = await supabase
-                .from('calendar')
-                .update(instancePayload)
-                .eq('id', sibling.id);
-            if (error) throw error;
+            await checkpoint();
+            const update = supabase.from('calendar').update(instancePayload);
+            if (reviewedWeeklySeries) {
+                const { data, error } = await scopeWeeklyOccurrence(update, sibling).select('id').single();
+                if (error || String(data?.id) !== String(sibling.id)) throw error || new Error('Could not verify the updated weekly occurrence.');
+            } else {
+                const { error } = await update.eq('id', sibling.id);
+                if (error) throw error;
+            }
         }
         setSeriesSiblings(siblings.map((event) => ({
             ...event, registration_access: form.require_access_code ? 'code' : 'public',
@@ -2550,17 +2568,50 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
      */
     const handleSave = async (mode = 'publish', { stayOpen = true } = {}) => {
         if (coverUploadRef.current) return;
-        if (mode === 'draft') {
-            if (!validateDraft()) return;
-        } else {
-            if (!validatePublish()) return;
+        if (organisationBound && (uploadingPoster || uploadingKit || uploadingGallery || uploadingOrgLogo || uploadingSponsor)) {
+            toast.error('Wait for the attachment upload to finish before saving.');
+            return { success: false, mutationAttempted: false };
         }
-        if (!confirmLowFees()) return;
+        if (previewTheme && previewWriteFailed.current) { toast.error('Close and refresh before retrying this save.'); return { success: false, error: 'Close and refresh before retrying.', mutationAttempted: true }; }
+        if (saveLock.current) return { success: false, reason: 'busy', mutationAttempted: false };
+        if (guardedEditor && (loadingExisting || loadError)) return { success: false, error: loadError || 'Wait for event setup to finish loading.', mutationAttempted: false };
+        if (guardedEditor && form.is_weekly && activeEvent?.pending_changes?.payload && ['pending', 'rejected'].includes(activeEvent.pending_changes_status)) {
+            if (previewTheme) toast.error('Weekly-series amendments need an explicit approval workflow before saving here.');
+            return { success: false, error: 'Weekly-series amendments need an explicit approval workflow before saving here.', mutationAttempted: false };
+        }
+        if (mode === 'draft') {
+            if (!validateDraft()) return { success: false, reason: 'validation', mutationAttempted: false };
+        } else {
+            if (!validatePublish()) return { success: false, reason: 'validation', mutationAttempted: false };
+        }
+        if (!confirmLowFees()) return { success: false, reason: 'cancelled', mutationAttempted: false };
 
+        saveLock.current = true;
+        setSaveError('');
         setSaving(true);
+        let mutationAttempted = false;
         const wasNew = !activeEvent?.id;
         try {
             const payload = buildPayload(mode);
+            const checkpoint = await authorizeMutation('save', payload, mode);
+            await checkpoint();
+            mutationAttempted = true;
+            if (privateWeekly && form.is_weekly) {
+                const publishing = mode === 'publish';
+                const id = (weeklyDraftId.current ||= crypto.randomUUID());
+                const weeks = Number(form.weekly_count);
+                const revision = weeklyDraft?.revision ?? 0;
+                const saved = await weeklyEventDraftRequest(supabase, publishing ? 'publish' : 'save', {
+                    host: organisation?.id, id, revision, weeks,
+                    fields: { ...payload, entry_fee: resolveWeeklyEntryFee(), is_visible: !!form.is_visible },
+                    code: publishing && form.require_access_code ? form.access_code.trim() : undefined,
+                });
+                toast.success(publishing ? `Created ${saved.published_ids.length} weekly events` : 'Weekly draft saved');
+                const result = { weeklyDraftId: id, eventId: saved.published_ids?.[0], seriesCount: saved.published_ids?.length, mode };
+                onSaved?.(result);
+                if (!onSaved) onClose?.();
+                return { success: true, mutationAttempted: true, ...result };
+            }
             let eventId = activeEvent?.id;
             const applyingPendingAmendment = !!activeEvent?.pending_changes?.payload
                 && ['pending', 'rejected'].includes(activeEvent.pending_changes_status);
@@ -2585,12 +2636,13 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 if (form.is_weekly) {
                     payload.series_id = payload.series_id || activeEvent.series_id || form.series_id || null;
                     const updatedCount = await persistWeeklySeriesUpdate(payload, {
-                        id: activeEvent.id,
+                        ...activeEvent,
                         start_date: activeEvent.start_date || form.start_date,
                         series_id: payload.series_id,
-                    });
+                    }, checkpoint);
                     eventId = activeEvent.id;
-                    setWorkingEvent((prev) => ({
+                    const savedEvent = await reloadSavedEvent?.(eventId);
+                    setWorkingEvent((prev) => savedEvent || ({
                         ...(prev || activeEvent || {}),
                         id: eventId,
                         event_name: payload.event_name,
@@ -2615,12 +2667,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                         seriesCount: updatedCount,
                     });
                     if (!stayOpen) onClose?.();
-                    return;
+                    return { success: true, eventId, seriesCount: updatedCount, mutationAttempted: true };
                 }
-                await persistAccessCode(eventId);
-                const { error } = await supabase.from('calendar').update(payload).eq('id', activeEvent.id);
-                if (error) throw error;
-                await persistDivisions(eventId);
+                await persistAccessCode(eventId, undefined, checkpoint);
+                await checkpoint();
+                await updateCalendarEvent(activeEvent, payload);
+                await persistDivisions(eventId, checkpoint);
             } else if (form.is_weekly && mode === 'publish') {
                 const weeklyDates = buildWeeklyDates(form.start_date, form.weekly_count);
                 if (weeklyDates.length < 2) {
@@ -2659,6 +2711,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                         `${payload.slug || form.event_name}-${occurrenceDate}`,
                         { startDate: occurrenceDate },
                     );
+                    await checkpoint();
                     const { data, error } = await supabase
                         .from('calendar')
                         .insert([instancePayload])
@@ -2666,8 +2719,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                         .single();
                     if (error) throw error;
                     createdIds.push(data.id);
-                    await persistAccessCode(data.id, false);
+                    await persistAccessCode(data.id, false, checkpoint);
                     if (divisionRows.length > 0) {
+                        await checkpoint();
                         const { error: divErr } = await supabase
                             .from('tournament_divisions')
                             .insert(divisionRows.map((row) => ({ ...row, event_id: data.id })));
@@ -2675,7 +2729,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                     }
                 }
                 eventId = createdIds[0];
-                setWorkingEvent({
+                const savedEvent = await reloadSavedEvent?.(eventId);
+                setWorkingEvent(savedEvent || {
                     id: eventId,
                     event_name: payload.event_name,
                     slug: payload.slug,
@@ -2696,20 +2751,22 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                     seriesCount: createdIds.length,
                 });
                 if (!stayOpen) onClose?.();
-                return;
+                return { success: true, eventId, seriesCount: createdIds.length, mutationAttempted: true };
             } else {
                 payload.slug = await ensureUniqueSlug(payload.slug || form.event_name, {
                     startDate: form.start_date,
                 });
+                await checkpoint();
                 const { data, error } = await supabase.from('calendar').insert([payload]).select('id').single();
                 if (error) throw error;
                 eventId = data.id;
-                await persistAccessCode(eventId, false);
-                await persistDivisions(eventId);
+                await persistAccessCode(eventId, false, checkpoint);
+                await persistDivisions(eventId, checkpoint);
             }
 
             // Stay in edit mode for this session and sync division IDs so the next save updates rows.
-            setWorkingEvent((prev) => ({
+            const savedEvent = await reloadSavedEvent?.(eventId);
+            setWorkingEvent((prev) => savedEvent || ({
                 ...(prev || activeEvent || {}),
                 id: eventId,
                 event_name: payload.event_name,
@@ -2734,10 +2791,15 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             );
             onSaved?.({ eventId, isNew: wasNew, eventName: payload.event_name, mode, stayOpen });
             if (!stayOpen) onClose?.();
+            return { success: true, eventId, mutationAttempted: true };
         } catch (err) {
             console.error('Error saving manual event:', err);
             toast.error(`Failed to save: ${err.message}`);
+            setSaveError(err.message || 'Event could not be saved.');
+            if (previewTheme && mutationAttempted) previewWriteFailed.current = true;
+            return { success: false, error: err.message || 'Event could not be saved.', mutationAttempted };
         } finally {
+            saveLock.current = false;
             setSaving(false);
         }
     };
@@ -2764,11 +2826,84 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         </button>
     );
 
+    const handleCancelEvent = async () => {
+        if (!activeEvent?.id || cancelling) return;
+        setCancelling(true);
+        try {
+            const checkpoint = await authorizeMutation('cancel-event');
+            await checkpoint();
+            const { data, error } = await supabase.functions.invoke('paystack-refund', {
+                body: {
+                    action: 'cancel_event',
+                    event_id: activeEvent.id,
+                    cancellation_reason: cancellationReason.trim() || undefined,
+                },
+            });
+            if (error) throw error;
+            if (data?.error) throw new Error(data.error);
+
+            const cancelledAt = new Date().toISOString();
+            setWorkingEvent((prev) => ({
+                ...(prev || activeEvent),
+                event_status: 'cancelled',
+                cancelled_at: cancelledAt,
+                cancellation_reason: cancellationReason.trim() || null,
+                cancellation_refund_status: data?.refund_status || 'complete',
+            }));
+            setShowCancelConfirm(false);
+            const refundMessage = data?.refund_status === 'needs_attention'
+                ? 'Event cancelled. Some refunds need administrator attention.'
+                : `Event cancelled. ${data?.registrations_processed || 0} player entr${data?.registrations_processed === 1 ? 'y' : 'ies'} processed.`;
+            data?.refund_status === 'needs_attention' ? toast.warning(refundMessage) : toast.success(refundMessage);
+            onSaved?.({ eventId: activeEvent.id, cancelled: true });
+        } catch (err) {
+            console.error('Event cancellation failed:', err);
+            toast.error(err?.message || 'Could not cancel the event');
+        } finally {
+            setCancelling(false);
+        }
+    };
 
     if (!isOpen) return null;
 
     const namedDivisions = divisions.filter((d) => d.name.trim());
-    const reviewIssues = step === 6 ? getReviewIssues() : { errors: [], warnings: [] };
+    const publicEventLink = `${previewTheme ? FOURM_PUBLIC_ORIGIN : window.location.origin}/calendar/${encodeURIComponent(activeEvent?.slug || form.slug || slugify(form.event_name) || 'event')}`;
+    const reviewIssues = renderEditor || step === 6 ? getReviewIssues() : { errors: [], warnings: [] };
+
+    // One headless engine, two presentations. All transformations, validation,
+    // persistence and side effects above remain the existing live workflow.
+    if (renderEditor) return renderEditor({
+        form, setForm, setField, handleInput, divisions, setDivisions,
+        showAccessCode, setShowAccessCode, accessCodeError, setAccessCodeError, savedAccessCode, hasExistingAccessCode, generateAccessCode, copyAccessCode,
+        activeEvent, sourceEvent: editingEvent, organisation, isEditing, isSuperAdmin,
+        ready: !loadingExisting && !loadError, loading: loadingExisting, loadError,
+        saving, saveError, buildPayload, divisionRecord, handleSave, getReviewIssues,
+        reviewIssues, validateBasics, validateDraft, validatePublish, confirmLowFees,
+        removedDivisionIds, updateDivision, addDivision, duplicateDivision, removeDivision,
+        standardPrice, setStandardPrice, bulkCloseDate, setBulkCloseDate,
+        applyStandardPrice, applyLicenseToAll, applyScoringToAll, applyCloseDateToAll,
+        divisionMultiOpen, setDivisionMultiOpen, pendingDivisionPicks, setPendingDivisionPicks,
+        openDivisionMultiSelect, togglePendingDivision, applyPendingDivisions,
+        createStandardSapaDivisions, namedDivisions, namedDivisionCount,
+        expandedDivisionKey, setExpandedDivisionKey,
+        clubs, selectedVenues, addVenue, removeVenue,
+        orgSearchRef, orgSuggestions, orgSearchOpen, setOrgSearchOpen, searchingOrgs,
+        selectOrganisation, clearOrganisationLink, handleOrganiserNameChange,
+        setWeeklyMode, seriesSiblings, buildWeeklyDates, addDaysToDate,
+        federations, selectedFederation, selectedFederationIsSapa, rankingTiers,
+        handleSanctionRequestedChange, handleFederationChange, handleSapaStatusChange,
+        handleCourtTypeChange, handleRankedinIdChange, handleSyncToRankedin, syncingRankedin,
+        togglePlayerGift, showPrizeBreakdown, setShowPrizeBreakdown,
+        addPrizeRow, updatePrizeRow, removePrizeRow, syncPrizeBreakdownToDivisions,
+        handleCoverUpload, handlePosterUpload, handleOrganiserKitUpload, handleGalleryUpload,
+        handleOrgLogoUpload, removeOrgLogo, handleSponsorUpload, removeSponsor, moveSponsor,
+        uploadingCover, uploadingPoster, uploadingKit, uploadingGallery, uploadingOrgLogo, uploadingSponsor,
+        CoAdminsPicker, step, setStep, next, back,
+        showCancelConfirm, setShowCancelConfirm, cancellationReason, setCancellationReason,
+        cancelling, handleCancelEvent,
+        options: { DIVISION_GROUPS, STANDARD_DIVISIONS, FORMATS, GENDERS, AGE_CATEGORIES,
+            SAPA_STATUSES, SAPA_WINNER_POINTS, PAYMENT_METHODS, PLAYER_GIFTS, SCORING_POINTS, TOURNAMENT_TAGS },
+    });
 
     return (
         <AnimatePresence>
@@ -2776,8 +2911,20 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[1100] flex items-center justify-center p-4"
-                onClick={onClose}
+                className={`fixed inset-0 bg-black/80 backdrop-blur-sm z-[1100] flex items-center justify-center p-4 ${previewTheme ? 'ap-live-event-editor' : ''}`}
+                role="dialog" aria-modal="true" aria-label="Edit event"
+                ref={previewRoot} tabIndex={-1}
+                onKeyDown={e => {
+                    if (!previewTheme) return;
+                    if (e.key === 'Escape' && !saving && !cancelling) { e.preventDefault(); onClose?.(); }
+                    if (e.key === 'Tab') {
+                        const items = [...e.currentTarget.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [contenteditable=true]')].filter(item => item.getClientRects().length && item.tabIndex !== -1);
+                        const first = items[0], last = items[items.length - 1];
+                        if (e.shiftKey && (document.activeElement === first || document.activeElement === e.currentTarget)) { e.preventDefault(); last?.focus(); }
+                        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+                    }
+                }}
+                onClick={() => !saving && !cancelling && onClose?.()}
             >
                 <motion.div
                     initial={{ opacity: 0, scale: 0.97, y: 20 }}
@@ -2797,7 +2944,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                 {form.is_weekly ? ' · Weekly series' : ''}
                             </p>
                         </div>
-                        <button onClick={onClose} className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5">
+                        <button aria-label="Close event editor" disabled={saving || cancelling} onClick={onClose} className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5">
                             <X size={20} />
                         </button>
                     </div>
@@ -2834,9 +2981,18 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                     </div>
 
                     {/* Body */}
-                    <div className="flex-1 overflow-y-auto px-6 py-6 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto px-6 py-6 custom-scrollbar" inert={previewTheme && (loadingExisting || !!loadError || saving) ? true : undefined}>
+                        {previewTheme && (loadingExisting || loadError || saveError) && <p role="status">{loadError || saveError || 'Loading event settings…'}</p>}
                         {step === 1 && (
                             <div className="space-y-4">
+                                {privateWeekly && <label className="flex items-start gap-3 rounded-xl border border-white/10 p-4">
+                                    <input type="checkbox" className="mt-1 h-5 w-5 accent-padel-green" checked={form.is_weekly}
+                                        disabled={Boolean(weeklyDraft)} onChange={event => setWeeklyMode(event.target.checked)} />
+                                    <span><strong className="block text-sm">Weekly social event</strong>
+                                        <span className="mt-1 block text-xs text-gray-500">{form.is_weekly
+                                            ? 'Drafts are private. Calendar visibility applies when you publish the series.'
+                                            : 'Set up a series of social events on the same day each week.'}</span></span>
+                                </label>}
                                 {isEditing && form.is_weekly && (
                                     <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3">
                                         <p className="text-xs font-bold text-sky-300 flex items-center gap-2">
@@ -2993,7 +3149,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                     <div className="grid grid-cols-1 gap-4 border-t border-white/10 pt-5 md:grid-cols-3">
                                                         <div>
                                                             <label className={labelClass}>Court type *</label>
-                                                            <SelectMenu
+                                                            <SelectMenu searchable={previewTheme}
                                                                 value={form.indoor_outdoor || form.courts}
                                                                 onChange={handleCourtTypeChange}
                                                                 options={['Indoor', 'Outdoor', 'Panoramic', 'Mixed']}
@@ -3081,11 +3237,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                 <>
                                                     <div>
                                                         <label className={labelClass}>SAPA Status</label>
-                                                        <SelectMenu value={form.sapa_status} onChange={handleSapaStatusChange} options={SAPA_STATUSES} />
+                                                        <SelectMenu searchable={previewTheme} value={form.sapa_status} onChange={handleSapaStatusChange} options={SAPA_STATUSES} />
                                                     </div>
                                                     <div>
                                                         <label className={labelClass}>Event Series / Tag</label>
-                                                        <SelectMenu value={form.tournament_tag} onChange={(v) => setField('tournament_tag', v)} options={TOURNAMENT_TAGS} />
+                                                        <SelectMenu searchable={previewTheme} value={form.tournament_tag} onChange={(v) => setField('tournament_tag', v)} options={TOURNAMENT_TAGS} />
                                                     </div>
                                                     <div className="md:col-span-2">
                                                         <label className={labelClass}>Event subtitle / badge text</label>
@@ -3116,33 +3272,33 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                     name="organiser_name"
                                                     value={form.organiser_name}
                                                     onChange={(e) => {
-                                                        if (organisation) {
+                                                        if (organisation || weeklyDraft) {
                                                             setForm((prev) => ({ ...prev, organiser_name: e.target.value }));
                                                         } else {
                                                             handleOrganiserNameChange(e.target.value);
                                                         }
                                                     }}
-                                                    onFocus={() => { if (!organisation && !form.organisation_id) setOrgSearchOpen(true); }}
-                                                    placeholder={organisation ? undefined : 'Select an organisation or type a custom name…'}
+                                                    onFocus={() => { if (!organisation && !weeklyDraft && !form.organisation_id) setOrgSearchOpen(true); }}
+                                                    placeholder={organisation || weeklyDraft ? undefined : 'Select an organisation or type a custom name…'}
                                                     autoComplete="off"
                                                     className={inputClass}
-                                                    readOnly={!!organisation}
+                                                    readOnly={!!organisation || Boolean(weeklyDraft && form.organisation_id)}
                                                 />
                                                 {!organisation && form.organisation_id && (
                                                     <div className="mt-1.5 flex items-center justify-between gap-2">
                                                         <p className="text-[11px] text-padel-green font-bold">
                                                             Linked to organisation page
                                                         </p>
-                                                        <button
+                                                        {!weeklyDraft && <button
                                                             type="button"
                                                             onClick={clearOrganisationLink}
                                                             className="text-[10px] font-black uppercase tracking-wider text-gray-500 hover:text-red-400 transition-colors"
                                                         >
                                                             Unlink
-                                                        </button>
+                                                        </button>}
                                                     </div>
                                                 )}
-                                                {!organisation && !form.organisation_id && (
+                                                {!organisation && !weeklyDraft && !form.organisation_id && (
                                                     <p className="text-[11px] text-gray-500 mt-1">
                                                         Pick from the list to link their page, or type a custom organiser name.
                                                     </p>
@@ -3180,6 +3336,17 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                     </div>
                                                 )}
                                             </div>
+                                            {form.is_weekly && <>
+                                                <label className={labelClass}>Contact person
+                                                    <input name="contact_details" value={form.contact_details} onChange={handleInput} className={inputClass} />
+                                                </label>
+                                                <label className={labelClass}>Contact email
+                                                    <input type="email" name="organiser_email" value={form.organiser_email} onChange={handleInput} className={inputClass} />
+                                                </label>
+                                                <label className={labelClass}>Contact phone
+                                                    <input type="tel" name="organiser_phone" value={form.organiser_phone} onChange={handleInput} className={inputClass} />
+                                                </label>
+                                            </>}
                                             <div className="md:col-span-2">
                                                 <label className={labelClass}>Organisation Logo</label>
                                                 {(organisation || form.organisation_id) ? (
@@ -3578,7 +3745,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                             </div>
                                             {accessCodeError && <p id="create-event-access-code-error" role="alert" className="mt-2 text-xs text-red-400">{accessCodeError}</p>}
                                             <p id="create-event-access-code-help" className="mt-2 text-[11px] leading-5 text-gray-500">Use 6–64 characters. The code is case-sensitive and cannot be viewed after closing this editor.</p>
-                                            {form.is_weekly && <p className="mt-1 text-[11px] leading-5 text-gray-500">Access-code changes apply to every weekly event in this series.</p>}
+                                            {form.is_weekly && <p className="mt-1 text-[11px] leading-5 text-gray-500">{privateWeekly
+                                                ? 'Enter the code when you publish. It will apply to every week.'
+                                                : 'Access-code changes apply to every weekly event in this series.'}</p>}
                                             {savedAccessCode && renderSavedAccessCode()}
                                         </div>
                                     )}
@@ -3915,7 +4084,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                         </p>
                                                     </div>
                                                 ) : (
-                                                    <select
+                                                    <SearchableDropdown searchable={previewTheme}
                                                         name="partner_requirement"
                                                         value={form.partner_requirement}
                                                         onChange={handleInput}
@@ -3924,7 +4093,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                     <option value="Required">Required</option>
                                                     <option value="Optional">Optional</option>
                                                     <option value="Not required">Not required</option>
-                                                    </select>
+                                                    </SearchableDropdown>
                                                 )}
                                             </div>
                                             <div>
@@ -3941,7 +4110,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                             </div>
                                             <div>
                                                 <label className={labelClass}>Plate / Back Draw</label>
-                                                <select
+                                                <SearchableDropdown searchable={previewTheme}
                                                     name="back_draw_options"
                                                     value={form.back_draw_options}
                                                     onChange={handleInput}
@@ -3949,12 +4118,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                 >
                                                     <option value="Plate Included">Plate Included (Guaranteed 2 Matches)</option>
                                                     <option value="No Plate">No Plate (Direct Elimination Only)</option>
-                                                </select>
+                                                </SearchableDropdown>
                                             </div>
                                             <div className="grid grid-cols-1 gap-3">
                                                 <div>
                                                     <label className={labelClass}>Deciding point (event default)</label>
-                                                    <SelectMenu
+                                                    <SelectMenu searchable={previewTheme}
                                                         value={form.scoring_point || 'golden'}
                                                         onChange={(v) => setField('scoring_point', v)}
                                                         options={SCORING_POINTS}
@@ -4304,15 +4473,15 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                                     </div>
                                                                     <div>
                                                                         <label className={labelClass}>Gender</label>
-                                                                        <SelectMenu value={d.gender} onChange={(v) => updateDivision(d._key, { gender: v })} options={GENDERS.map((g) => ({ value: g, label: g || '—' }))} placeholder="—" />
+                                                                        <SelectMenu searchable={previewTheme} value={d.gender} onChange={(v) => updateDivision(d._key, { gender: v })} options={GENDERS.map((g) => ({ value: g, label: g || '—' }))} placeholder="—" />
                                                                     </div>
                                                                     <div>
                                                                         <label className={labelClass}>Age category</label>
-                                                                        <SelectMenu value={d.age_category} onChange={(v) => updateDivision(d._key, { age_category: v })} options={AGE_CATEGORIES.map((a) => ({ value: a, label: a || '—' }))} placeholder="—" />
+                                                                        <SelectMenu searchable={previewTheme} value={d.age_category} onChange={(v) => updateDivision(d._key, { age_category: v })} options={AGE_CATEGORIES.map((a) => ({ value: a, label: a || '—' }))} placeholder="—" />
                                                                     </div>
                                                                     <div>
                                                                         <label className={labelClass}>Format</label>
-                                                                        <SelectMenu value={d.format} onChange={(v) => updateDivision(d._key, { format: v })} options={FORMATS} />
+                                                                        <SelectMenu searchable={previewTheme} value={d.format} onChange={(v) => updateDivision(d._key, { format: v })} options={FORMATS} />
                                                                     </div>
                                                                     <div>
                                                                         <label className={labelClass}>Entry fee (R)</label>
@@ -4330,19 +4499,19 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                                     {isSuperAdmin && <>
                                                                         <div>
                                                                             <label className={labelClass}>Ranking tier</label>
-                                                                            <select value={d.ranking_tier_id} onChange={(e) => updateDivision(d._key, { ranking_tier_id: e.target.value })} className={inputClass}>
+                                                                            <SearchableDropdown searchable={previewTheme} value={d.ranking_tier_id} onChange={(e) => updateDivision(d._key, { ranking_tier_id: e.target.value })} className={inputClass}>
                                                                                 <option value="">No native points</option>
                                                                                 {rankingTiers.map((tier) => (
                                                                                     <option key={tier.id} value={tier.id}>{tier.name} · max {tier.max_points.toLocaleString()} pts</option>
                                                                                 ))}
-                                                                            </select>
+                                                                            </SearchableDropdown>
                                                                         </div>
                                                                         <div>
                                                                             <label className={labelClass}>Ranking category</label>
-                                                                            <select value={d.ranking_category} onChange={(e) => updateDivision(d._key, { ranking_category: e.target.value })} className={inputClass} disabled={!d.ranking_tier_id}>
+                                                                            <SearchableDropdown searchable={previewTheme} value={d.ranking_category} onChange={(e) => updateDivision(d._key, { ranking_category: e.target.value })} className={inputClass} disabled={!d.ranking_tier_id}>
                                                                                 <option value="">Select category</option>
                                                                                 {[1, 2, 3, 4].map((category) => <option key={category} value={category}>Category {category}</option>)}
-                                                                            </select>
+                                                                            </SearchableDropdown>
                                                                         </div>
                                                                     </>}
                                                                     <div>
@@ -4381,7 +4550,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                                     </div>
                                                                     <div>
                                                                         <label className={labelClass}>Deciding point</label>
-                                                                        <SelectMenu
+                                                                        <SelectMenu searchable={previewTheme}
                                                                             value={d.scoring_point || form.scoring_point || 'golden'}
                                                                             onChange={(v) => updateDivision(d._key, { scoring_point: v })}
                                                                             options={SCORING_POINTS}
@@ -4446,7 +4615,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                                         <div>
                                                             <label className={labelClass}>Federation *</label>
-                                                            <SelectMenu
+                                                            <SelectMenu searchable={previewTheme}
                                                                 value={form.federation_id || ''}
                                                                 onChange={handleFederationChange}
                                                                 options={federations.map((f) => ({ value: f.id, label: f.short_name ? `${f.short_name} — ${f.name}` : f.name }))}
@@ -4456,16 +4625,16 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                         {selectedFederationIsSapa && (
                                                             <div>
                                                                 <label className={labelClass}>SAPA tier *</label>
-                                                                <SelectMenu value={form.sapa_status} onChange={handleSapaStatusChange} options={SAPA_STATUSES.filter((tier) => tier !== 'None')} />
+                                                                <SelectMenu searchable={previewTheme} value={form.sapa_status} onChange={handleSapaStatusChange} options={SAPA_STATUSES.filter((tier) => tier !== 'None')} />
                                                             </div>
                                                         )}
                                                         <div>
                                                             <label className={labelClass}>Default match format</label>
-                                                            <SelectMenu value={form.default_match_format || 'Knockout'} onChange={(value) => setField('default_match_format', value)} options={FORMATS} />
+                                                            <SelectMenu searchable={previewTheme} value={form.default_match_format || 'Knockout'} onChange={(value) => setField('default_match_format', value)} options={FORMATS} />
                                                         </div>
                                                         <div>
                                                             <label className={labelClass}>Deciding point</label>
-                                                            <SelectMenu value={form.scoring_point || 'golden'} onChange={(value) => setField('scoring_point', value)} options={SCORING_POINTS} />
+                                                            <SelectMenu searchable={previewTheme} value={form.scoring_point || 'golden'} onChange={(value) => setField('scoring_point', value)} options={SCORING_POINTS} />
                                                         </div>
                                                         <div className="md:col-span-2">
                                                             <label className={labelClass}>Event badge text</label>
@@ -4500,7 +4669,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                         <div className="grid grid-cols-1 gap-4 rounded-xl border border-white/10 bg-black/20 p-4 md:grid-cols-2">
                                             <div>
                                                 <label className={labelClass}>Event Series / Tag</label>
-                                                <SelectMenu value={form.tournament_tag} onChange={(value) => setField('tournament_tag', value)} options={TOURNAMENT_TAGS} />
+                                                <SelectMenu searchable={previewTheme} value={form.tournament_tag} onChange={(value) => setField('tournament_tag', value)} options={TOURNAMENT_TAGS} />
                                             </div>
                                             <div className="md:col-span-2 grid grid-cols-1 gap-4 md:grid-cols-2">
                                                 <div>
@@ -4823,7 +4992,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                             <button
                                                                 type="button"
                                                                 onClick={() => removeSponsor(0)}
-                                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                aria-label="Remove main sponsor logo"
+                                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                                                             >
                                                                 <X size={12} />
                                                             </button>
@@ -4856,7 +5026,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => removeSponsor(idx)}
-                                                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                        aria-label={`Remove sponsor logo ${idx + 1}`}
+                                                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                                                                     >
                                                                         <X size={12} />
                                                                     </button>
@@ -4916,7 +5087,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                         <input type="file" accept="application/pdf,.doc,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" onChange={handleOrganiserKitUpload} disabled={uploadingKit} />
                                                     </label>
                                                     {form.organiser_kit_url && <a href={form.organiser_kit_url} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-padel-green hover:text-white">Open document</a>}
-                                                    {form.organiser_kit_url && <button type="button" onClick={() => setField('organiser_kit_url', '')} className="text-xs font-bold text-red-400 hover:text-red-300">Remove</button>}
+                                                    {form.organiser_kit_url && <button type="button" onClick={() => setField('organiser_kit_url', '')} className="text-xs font-bold text-red-400 hover:text-red-300">Remove organiser kit</button>}
                                                 </div>
                                                 <p className="mt-1 text-[11px] text-gray-500">Maximum 10 MB.</p>
                                             </div>
@@ -5120,6 +5291,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                 {/* Settings Summary */}
                                 <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
                                     <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Settings Summary</p>
+                                    <p className="text-sm">Entry access: {form.require_access_code ? 'Access code required' : 'Public'}</p>
+                                    <p className="text-sm">Payments after closing: {form.allow_payments_after_close ? 'Allowed for existing entries' : 'Off'}</p>
+                                    {form.require_access_code && (savedAccessCode ? renderSavedAccessCode() : <p className="text-sm">{hasExistingAccessCode && !form.access_code.trim() ? 'The current access code will be kept.' : 'Copy the access code securely before closing the editor. The saved code cannot be displayed later.'}</p>)}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
                                         <p className="text-gray-300"><span className="text-gray-500">Entry payment method:</span> {PAYMENT_METHODS.find((method) => method.value === form.payment_method)?.label || '—'}</p>
                                         <p className="text-gray-300"><span className="text-gray-500">Entry access:</span> {form.require_access_code ? 'Access code required' : 'Public'}</p>
@@ -5166,18 +5340,28 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                     savedAccessCode ? renderSavedAccessCode() : (
                                         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
                                             <p className="text-sm font-bold text-amber-100">Save the access code securely</p>
-                                            <p className="mt-1 text-xs leading-relaxed text-amber-100/80">{hasExistingAccessCode && !form.access_code.trim() ? 'The current access code will be kept.' : 'You can copy the code here after saving. Once this editor closes, you can replace the code by editing the event.'}</p>
+                                            {privateWeekly && form.is_weekly ? <button type="button" className="ap-secondary mt-2"
+                                                disabled={!form.access_code.trim()} onClick={() => copyAccessCode(form.access_code.trim())}>
+                                                <Copy size={14} /> Copy access code
+                                            </button> : <p className="mt-1 text-xs leading-relaxed text-amber-100/80">{hasExistingAccessCode && !form.access_code.trim() ? 'The current access code will be kept.' : 'You can copy the code here after saving. Once this editor closes, you can replace the code by editing the event.'}</p>}
                                         </div>
                                     )
                                 )}
 
-                                <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                {!(privateWeekly && form.is_weekly) && <div className="rounded-xl border border-white/10 bg-black/20 p-4">
                                     <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Event link</p>
                                     <div className="mt-2 flex items-center gap-2">
-                                        <code className="min-w-0 flex-1 truncate rounded-lg bg-black/30 px-3 py-2 text-xs text-gray-300">{`${window.location.origin}/calendar/${form.slug || slugify(form.event_name) || 'event'}`}</code>
-                                        <button type="button" onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/calendar/${form.slug || slugify(form.event_name) || 'event'}`).then(() => toast.success('Event link copied'))} aria-label="Copy event link" className="rounded-lg border border-white/10 p-2.5 text-gray-300 hover:border-padel-green/40 hover:text-padel-green"><Copy size={16} /></button>
+                                        <code className="min-w-0 flex-1 truncate rounded-lg bg-black/30 px-3 py-2 text-xs text-gray-300">{publicEventLink}</code>
+                                        <button type="button" onClick={async () => {
+                                            try {
+                                                await navigator.clipboard.writeText(publicEventLink);
+                                                toast.success('Event link copied');
+                                            } catch {
+                                                toast.error('Select the event link to copy it.');
+                                            }
+                                        }} aria-label="Copy event link" className="rounded-lg border border-white/10 p-2.5 text-gray-300 hover:border-padel-green/40 hover:text-padel-green"><Copy size={16} /></button>
                                     </div>
-                                </div>
+                                </div>}
 
                                 {organisation && (
                                     <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl px-4 py-3 text-xs text-padel-green font-semibold">
@@ -5252,7 +5436,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                         className="bg-padel-green text-black px-5 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors disabled:opacity-50"
                                     >
                                         {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                                        {saving ? 'Saving...' : form.sanction_requested ? 'Submit for approval' : isEditing ? 'Update event' : 'Publish event'}
+                                        {saving ? 'Saving...' : form.sanction_requested ? 'Submit for approval'
+                                            : isEditing && !(organisationBound && activeEvent.is_visible === false && (!form.is_weekly || form.is_visible)) ? 'Update event' : 'Publish event'}
                                     </button>
                                 </>
                             )}
@@ -5263,6 +5448,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 {showCancelConfirm && (
                     <CancelEventDialog
                         event={activeEvent}
+                        theme={theme}
+                        beforeCancel={guardedEditor ? () => authorizeMutation('cancel-event') : undefined}
+                        onBusyChange={setCancelling}
                         onClose={() => setShowCancelConfirm(false)}
                         onCancelled={(updatedEvent) => {
                             setWorkingEvent(updatedEvent);

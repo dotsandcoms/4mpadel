@@ -1,0 +1,164 @@
+import SearchableDropdown from "../../components/SearchableDropdown";
+import React, { useEffect, useRef, useState } from 'react';
+import { saveAs } from 'file-saver';
+import ClubDetails from './ClubDetails.jsx';
+import QuickClubCityDialog from './QuickClubCityDialog.jsx';
+import CreateClubDialog from './CreateClubDialog.jsx';
+import ClubGroupsView from './ClubGroupsView.jsx';
+import ClubClaimsQueue from './ClubClaimsQueue.jsx';
+import ClubGoogleSyncWorkspace from './ClubGoogleSyncWorkspace.jsx';
+import { clubClaimLabels, loadClubClaimStatuses } from './clubClaimStatuses.js';
+import { clubsExcel } from './clubsExport.js';
+import { supabase } from '../../supabaseClient';
+import { canEditClubProfile, canReadClubDirectory, loadClubDirectory, clubStatusLabel, filterClubDirectory, clubDirectoryScope, clubDirectorySummary, verifyClubDirectoryManagement } from './clubsData.js';
+import RecordLoading from './RecordLoading.jsx';
+import './FinanceOverview.css';
+import './ClubsWorkspace.css';
+
+const emptyFilters = { query: '', status: '', province: '', verification: '', claim: '' };
+function ClubLogo({ club }) {
+  const [failed, setFailed] = useState(false);
+  return club.logo_url && !failed ? <img src={club.logo_url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)}/> : <span className="fo-avatar" aria-hidden="true">{(club.name || 'C').slice(0, 1).toUpperCase()}</span>;
+}
+const statusTone = status => ['published', '4m_approved', '4m_premium'].includes(status) ? 'positive' : ['in_review', 'pending'].includes(status) ? 'warning' : status === 'rejected' ? 'danger' : 'neutral';
+const flagLabel = (value, yes, no) => value === true ? yes : value === false ? no : 'Not recorded';
+
+export default function ClubsWorkspace({ session, permissions, scopeId, client = supabase, refreshRevision = 0 }) {
+  const allowed = canReadClubDirectory(session, permissions, scopeId);
+  const platform = permissions?.role === 'super_admin' && scopeId === 'all';
+  const [state, setState] = useState({ loading: true });
+  const [reload, setReload] = useState(0);
+  const [filters, setFilters] = useState(emptyFilters);
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState(null);
+  const [cityEdit, setCityEdit] = useState(null);
+  const [creating, setCreating] = useState(null);
+  const [view, setView] = useState('clubs');
+  const [claimRevision, refreshClaims] = useState(0);
+  const [claimRead, setClaimRead] = useState(null);
+  const [exporting, setExporting] = useState(false), [exportStatus, setExportStatus] = useState('');
+  const exportContext = useRef(null);
+  const context = `${session?.user?.id}-${permissions?.role}-${scopeId}-${reload}-${refreshRevision}`;
+  useEffect(() => {
+    const token = { active: allowed }; exportContext.current = token;
+    setSelected(null); setCityEdit(null); setCreating(null); setExporting(false); setExportStatus('');
+    if (!platform) setView('clubs');
+    return () => { token.active = false; };
+  }, [context, client, allowed, platform]);
+  useEffect(() => {
+    if (!allowed) return;
+    const controller = new AbortController();
+    setState({ context, loading: true });
+    const timer = setTimeout(() => { controller.abort(); setState({ context, error: 'Loading took too long. Please try again.' }); }, 45000);
+    loadClubDirectory(client, session, permissions, scopeId, controller.signal, count => {
+      if (!controller.signal.aborted) setState({ context, loading: true, count });
+    }).then(rows => { if (!controller.signal.aborted) setState({ context, rows }); })
+      .catch(error => { if (!controller.signal.aborted) setState({ context, error: error.message }); })
+      .finally(() => clearTimeout(timer));
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [client, allowed, context]);
+  const directory = state.context === context ? state.rows : null;
+  const showClaimStatus = platform && view === 'clubs';
+  useEffect(() => {
+    if (!showClaimStatus || !directory?.length) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      controller.abort();
+      setClaimRead({ directory, claimRevision, error: 'Claim status could not be loaded. Refresh to try again.' });
+    }, 20000);
+    loadClubClaimStatuses({ client, scopeId, userId: session?.user?.id, clubIds: directory.map(row => row.id), signal: controller.signal })
+      .then(statuses => {
+        if (!controller.signal.aborted) setClaimRead({ directory, claimRevision, statuses });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setClaimRead({ directory, claimRevision, error: 'Claim status could not be loaded. Refresh to try again.' });
+      })
+      .finally(() => clearTimeout(timer));
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [client, scopeId, session?.user?.id, directory, showClaimStatus, claimRevision]);
+  if (!allowed) return <section className="ap-section clubs-notice"><h1>Clubs</h1><p>Choose a club you manage or use an account with Clubs access.</p></section>;
+  const loading = state.context !== context || state.loading;
+  const all = directory || [];
+  const claimReadCurrent = showClaimStatus && claimRead?.directory === directory && claimRead?.claimRevision === claimRevision;
+  const claimStatuses = claimReadCurrent ? claimRead.statuses : null;
+  const claimError = claimReadCurrent ? claimRead.error : null;
+  const currentFilters = showClaimStatus ? filters : { ...filters, claim: '' };
+  const rows = filterClubDirectory(all, currentFilters, claimStatuses);
+  const summary = clubDirectorySummary(all);
+  const pages = Math.max(1, Math.ceil(rows.length / 10)), current = Math.min(page, pages);
+  const update = (key, value) => { setFilters(previous => ({ ...previous, [key]: value })); setPage(1); };
+  const options = key => [...new Set(all.map(row => row[key]).filter(Boolean))].sort();
+  const exportRows = async () => {
+    const token = exportContext.current;
+    if (!token?.active || loading || exporting || !rows.length) return;
+    setExporting(true); setExportStatus('');
+    try {
+      await verifyClubDirectoryManagement(client, session, clubDirectoryScope(permissions, scopeId));
+      if (!token.active) return;
+      const buffer = await clubsExcel(rows, { ...currentFilters, claim: clubClaimLabels[currentFilters.claim] || '' });
+      if (!token.active) return;
+      saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), '4m-clubs.xlsx');
+      setExportStatus(`Excel prepared with ${rows.length} matching clubs across all pages, using filters at export start.`);
+    } catch (error) { if (token.active) setExportStatus(error.message); }
+    finally { if (token.active) setExporting(false); }
+  };
+  const openRelatedClub = (club, { mergeTarget } = {}) => setSelected({
+    club: all.find(row => String(row.id) === String(club.id)) || club, context, mergeTarget,
+  });
+  const updateClub = record => setState(previous => ({ ...previous, rows: previous.rows?.map(row => String(row.id) === String(record.id) ? { ...row, ...record } : row) }));
+  return <section className="fo-root clubs-root">
+    <header className="fo-heading"><div><p className="ap-kicker">Network / Clubs</p><h1>Club directory</h1><p>Find clubs and review their recorded status.</p></div><div className="fo-report-actions">{platform && <button className="ap-primary" disabled={loading} onClick={() => setCreating(context)}>Create club</button>}<button className="ap-secondary" disabled={loading || exporting || !rows.length} onClick={exportRows}>{exporting ? 'Preparing Excel…' : 'Export Excel'}</button><button className="ap-secondary" disabled={loading} onClick={() => setReload(n => n + 1)}>Refresh clubs</button></div></header>
+    {exportStatus && <p className="fo-note" role="status">{exportStatus}</p>}
+    {platform && <nav className="fo-report-actions" aria-label="Club views"><button className={view === 'clubs' ? 'ap-primary' : 'ap-secondary'} aria-pressed={view === 'clubs'} onClick={() => setView('clubs')}>Clubs</button><button className={platform && view === 'groups' ? 'ap-primary' : 'ap-secondary'} aria-pressed={view === 'groups'} onClick={() => setView('groups')}>Club groups</button><button className={view === 'claims' ? 'ap-primary' : 'ap-secondary'} aria-pressed={view === 'claims'} onClick={() => setView('claims')}>Pending claims</button><button className={view === 'google-sync' ? 'ap-primary' : 'ap-secondary'} aria-pressed={view === 'google-sync'} onClick={() => setView('google-sync')}>Google Sync</button></nav>}
+    {!platform && <p className="fo-note">Clubs available to this account.</p>}
+    {loading ? <section className="ap-section"><RecordLoading label="Loading club records…" count={state.context === context ? state.count : undefined} detail="Reading accessible clubs and their directory details. The directory will appear when loading is complete."/></section> : state.error ? <section className="ap-section clubs-notice" role="alert"><h2>Clubs could not be loaded</h2><p>{state.error}</p><button className="ap-secondary" onClick={() => setReload(n => n + 1)}>Try again</button></section> : <>
+      {platform && view === 'groups' ? <ClubGroupsView key={context} client={client} session={session} scopeId={scopeId} onOpenClub={openRelatedClub}/>
+        : platform && view === 'claims' ? <ClubClaimsQueue key={context} client={client} session={session} scopeId={scopeId} onOpenClub={openRelatedClub} onClubUpdated={updateClub}/>
+        : platform && view === 'google-sync' ? <ClubGoogleSyncWorkspace key={context} client={client} session={session} scopeId={scopeId} onOpenClub={openRelatedClub}/>
+        : <><div className="fo-cards clubs-cards">{[['Clubs', summary.total], ['Verified', summary.verified], ['Pending / in review', summary.inReview], ['SAPA registered', summary.sapaRegistered]].map(([label, count]) => <article className="fo-card" key={label}><h2>{label}</h2><strong>{count}</strong></article>)}</div>
+      <section className="ap-section fo-breakdown">
+        <div className="fo-ledger-filters"><label className="fo-search"><input aria-label="Search clubs" placeholder="Search club, location or ID…" value={filters.query} onChange={e => update('query', e.target.value)}/></label>
+          <label className="fo-status-filter">Club status<SearchableDropdown value={filters.status} onChange={e => update('status', e.target.value)}><option value="">All statuses</option>{options('status').map(value => <option key={value} value={value}>{clubStatusLabel(value)}</option>)}</SearchableDropdown></label>
+          <label className="fo-status-filter">Province<SearchableDropdown value={filters.province} onChange={e => update('province', e.target.value)}><option value="">All provinces</option>{options('province').map(value => <option key={value}>{value}</option>)}</SearchableDropdown></label>
+          <label className="fo-status-filter">Verification<SearchableDropdown value={filters.verification} onChange={e => update('verification', e.target.value)}><option value="">All verification records</option><option value="verified">Verified</option><option value="unverified">Not verified</option></SearchableDropdown></label>
+          {showClaimStatus && <label className="fo-status-filter">Claim status<SearchableDropdown
+            disabled={!claimStatuses} value={filters.claim} onChange={e => update('claim', e.target.value)}>
+            <option value="">All claims</option>{Object.entries(clubClaimLabels).map(([value,label]) => <option value={value} key={value}>{label}</option>)}
+          </SearchableDropdown></label>}
+          <button className="ap-secondary" onClick={() => { setFilters(emptyFilters); setPage(1); }}>Reset filters</button>
+        </div>
+        {claimError && <p className="fo-note" role="status">{claimError} <button className="ap-text-button" onClick={() => refreshClaims(value => value + 1)}>Retry claim status</button></p>}
+        {showClaimStatus && !claimStatuses && !claimError && all.length > 0 && <p className="fo-note" role="status">Checking claim status…</p>}
+        <p className="fo-note" role="status">{rows.length} matching clubs · Sorted by name</p>
+        {rows.length > 0 && <p className="fo-note clubs-scroll-hint">Swipe or scroll the table sideways to see location and status details →</p>}
+        {rows.length ? <div className="fo-table-scroll" role="region" aria-label="Club directory" tabIndex={0}><table className="fo-detail-table clubs-table"><colgroup>{[32, 23, 18, 13, 14].map(width => <col key={width} style={{ width: `${width}%` }}/>)}</colgroup><thead><tr><th scope="col">Club</th><th scope="col">Location</th><th scope="col">Club status</th><th scope="col">Verification</th><th scope="col">SAPA registration</th></tr></thead><tbody>{rows.slice((current - 1) * 10, current * 10).map(club => <tr key={club.id} className="clubs-open-row" onClick={event => { if (!event.target.closest('button,a,input,select')) setSelected({ club, context }); }}>
+          <td><div className="fo-player"><ClubLogo key={`${club.id}-${club.logo_url}`} club={club}/><div className="fo-player-copy"><button className="fo-type-link" aria-label={`View club details for ${club.name || 'Unnamed club'}`} onClick={() => setSelected({ club, context })}>{club.name || 'Unnamed club'} →</button>{club.short_name && club.short_name !== club.name && <small>{club.short_name}</small>}<small>{club.club_type || 'Club type not recorded'}</small></div></div></td>
+          <td>{[club.city, club.province].filter(Boolean).join(', ') || 'Location not recorded'}<small>{club.country || 'Country not recorded'}</small>
+            {canEditClubProfile(permissions, scopeId, club.id) && <button type="button" className="ap-text-button"
+              aria-label={`Edit city for ${club.name || 'club'}`} onClick={() => setCityEdit({ club, context })}>Edit city</button>}
+          </td>
+          <td><span className={`ap-status ap-status--${statusTone(club.status)}`}>{clubStatusLabel(club.status)}</span>
+            {claimStatuses?.has(club.id) && <small>Claim · {clubClaimLabels[claimStatuses.get(club.id)]}</small>}</td>
+          <td>{flagLabel(club.verified, 'Verified', 'Not verified')}</td><td>{flagLabel(club.sapa_registered, 'Registered', 'Not registered')}</td>
+        </tr>)}</tbody></table></div> : <div className="clubs-empty"><h2>{all.length ? 'No matching clubs' : 'No clubs available'}</h2><p>{all.length ? 'Try a different search or reset the filters.' : 'No club records were returned for your account.'}</p></div>}
+        <nav className="fo-pagination" aria-label="Club pages"><span>{rows.length ? (current - 1) * 10 + 1 : 0}–{Math.min(current * 10, rows.length)} of {rows.length}</span><button className="ap-secondary" disabled={current === 1} onClick={() => setPage(current - 1)}>Previous</button><span>Page {current} of {pages}</span><button className="ap-secondary" disabled={current === pages} onClick={() => setPage(current + 1)}>Next</button></nav>
+      </section></>}
+      {cityEdit?.context === context && canEditClubProfile(permissions, scopeId, cityEdit.club.id) &&
+        <QuickClubCityDialog key={cityEdit.club.id} club={cityEdit.club} client={client} scopeId={scopeId} userId={session?.user?.id}
+          onClose={() => setCityEdit(null)} onSaved={record => { updateClub(record); setCityEdit(null); }}/>}
+      {selected?.context === context && <ClubDetails key={selected.club.id} club={selected.club} client={client} session={session} permissions={permissions} scopeId={scopeId}
+        clubDirectory={all} initialMergeTarget={selected.mergeTarget} onClose={() => { setSelected(null); if (platform) refreshClaims(value => value + 1); }} onUpdated={updateClub} onLifecycleCompleted={() => {
+          setSelected(null); setReload(value => value + 1);
+        }}/>}
+      {platform && creating === context && <CreateClubDialog key={context} client={client} scopeId={scopeId} session={session} onClose={() => setCreating(null)} onComplete={record => {
+        setCreating(null);
+        setState(previous => ({ ...previous, rows: [...(previous.rows || []).filter(row => String(row.id) !== String(record.id)), record].sort((a, b) => (a.name || '').localeCompare(b.name || '')) }));
+        setSelected({ club: record, context });
+      }} onOpenExisting={id => {
+        const club = all.find(row => String(row.id) === String(id));
+        if (club) { setCreating(null); setSelected({ club, context }); return true; }
+        return false;
+      }}/>}
+    </>}
+  </section>;
+}

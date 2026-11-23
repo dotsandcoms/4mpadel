@@ -411,9 +411,10 @@ export function buildEventFinanceWorkbook(payload) {
     return workbook;
 }
 
-export async function downloadEventFinanceWorkbook(payload) {
+export async function downloadEventFinanceWorkbook(payload, { isCurrent = () => true } = {}) {
     const workbook = buildEventFinanceWorkbook(payload);
     const buffer = await workbook.xlsx.writeBuffer();
+    if (!isCurrent()) throw new Error('The selected event changed. Reopen the report before exporting.');
     const blob = new Blob([buffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });

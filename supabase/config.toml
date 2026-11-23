@@ -33,7 +33,8 @@ entrypoint = "./functions/confirm-manual-payment/index.ts"
 
 [functions.paystack-refund]
 enabled = true
-verify_jwt = true
+# Match the hosted gateway and verify current account and event access in the handler.
+verify_jwt = false
 entrypoint = "./functions/paystack-refund/index.ts"
 
 [functions.send-email]
@@ -61,3 +62,15 @@ entrypoint = "./functions/event-finance-summary/index.ts"
 [functions.admin-authenticator-recovery]
 # The handler validates Auth, then SQL checks the current session and fresh MFA.
 verify_jwt = false
+
+[functions.admin-paystack-backfill]
+enabled = true
+# Validate the caller with Auth in the handler, including newer JWT signing keys.
+verify_jwt = false
+entrypoint = "./functions/admin-paystack-backfill/index.ts"
+
+[functions.organisation-event-attachments]
+enabled = true
+# The handler verifies the caller with Auth before running the scoped host check.
+verify_jwt = false
+entrypoint = "./functions/organisation-event-attachments/index.ts"

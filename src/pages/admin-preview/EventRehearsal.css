@@ -1,0 +1,9 @@
+.ap-rehearsal-dialog { width: min(1320px, calc(100vw - 32px)); }
+.ap-rehearsal-dialog h2 { display: flex; align-items: center; gap: 8px; }
+.ap-rehearsal-dialog header { flex-wrap: wrap; }
+.ap-rehearsal-dialog header h2 + p { margin-top: 8px; }
+.ap-rehearsal-dialog iframe { display: block; width: 100%; height: min(68dvh, 780px); border: 0; }
+.ap-rehearsal-status { padding: 20px; }
+.ap-rehearsal-status :is(p, button) + button { margin: 8px 8px 0 0; }
+.ap-rehearsal-events { padding: 0; list-style: none; }
+.ap-rehearsal-events li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; }
