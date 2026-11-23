@@ -59,11 +59,6 @@ import EventMediaGallery from '../components/EventMediaGallery';
 import { divisionRankingSource, resolvePlayerRanking } from '../utils/playerRankingSelection';
 import { addPublicPlayerPaymentStatuses, publicPlayerPaymentLabel } from '../utils/publicPlayerPayment';
 
-function openRankedinRegistration(url) {
-    trackWebEvent('feature_interaction', { feature: 'registration', action: 'external_registration' });
-    window.open(url, '_blank');
-}
-
 const formatPlayerName = (fullName) => {
     if (!fullName) return '';
     const parts = fullName.trim().split(/\s+/);
@@ -3098,7 +3093,9 @@ const EventDetails = () => {
 
             setRegStep(2);
             setIsRegistered(true);
-            trackWebEvent('registration_complete', { payment_state: 'pending', item_count: selectedDivisions.length });
+            if (event.is_manual && !isTestMode) {
+                trackWebEvent('registration_complete', { payment_state: 'pending', item_count: selectedDivisions.length });
+            }
             toast.success("Registration Successful!");
         } catch (err) {
             console.error("Registration Error:", err);
@@ -3159,7 +3156,9 @@ const EventDetails = () => {
             toast.error('Your checkout could not be saved. Refresh this page and try again.');return;
         }
         const paystackPop = new PaystackPop();
-        trackWebEvent('begin_checkout', { item_category: 'event_registration', currency: 'ZAR', value: pending.amount });
+        if (event.is_manual && !isTestMode) {
+            trackWebEvent('begin_checkout', { item_category: 'event_registration', currency: 'ZAR', value: pending.amount });
+        }
 
         await paystackPop.checkout({
             key: PAYSTACK_PUBLIC_KEY,
@@ -3297,7 +3296,7 @@ const EventDetails = () => {
             if (error || data?.error || (!data?.processed && !data?.alreadyProcessed)) {
                 toast.info('Payment is still being verified. If you have paid, check your entry again shortly.');return;
             }
-            trackWebPaymentConfirmed(paidRef);
+            if (event.is_manual && !isTestMode) trackWebPaymentConfirmed(paidRef);
             setRegStep(2);setIsPaid(true);setIsRegistered(true);refreshParticipants();
             toast.success('Payment verified and registration saved.');
         } catch {
@@ -3382,7 +3381,7 @@ const EventDetails = () => {
                     const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
                     if (rId) {
                         const slugPart = event?.slug ? `/${event.slug}` : '';
-                        openRankedinRegistration(`https://www.rankedin.com/en/tournament/${rId}${slugPart}`);
+                        window.open(`https://www.rankedin.com/en/tournament/${rId}${slugPart}`, '_blank');
                     }
                 }
             }
@@ -3424,10 +3423,10 @@ const EventDetails = () => {
         }
         const rId = event?.rankedin_id || extractRankedinId(event?.rankedin_url);
         if (event?.rankedin_url) {
-            openRankedinRegistration(event.rankedin_url);
+            window.open(event.rankedin_url, '_blank');
         } else if (rId) {
             const slug = event?.slug ? `/${event.slug}` : '';
-            openRankedinRegistration(`https://www.rankedin.com/en/tournament/${rId}${slug}`);
+            window.open(`https://www.rankedin.com/en/tournament/${rId}${slug}`, '_blank');
         } else {
             alert('RankedIn registration link is not available for this event.');
         }

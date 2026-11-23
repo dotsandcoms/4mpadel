@@ -239,7 +239,9 @@ function RegistrationFlow() {
   };
   const [showSavedBanner, setShowSavedBanner] = useState(false);
   const finish = async (pending: boolean) => {
-    void trackEvent('registration_complete', { payment_state: pending ? 'pending' : 'paid', item_count: quote?.entries?.length ?? selected.length });
+    if (mode !== 'pay' && mode !== 'add-partner' && !quote?.isTest) {
+      void trackEvent('registration_complete', { payment_state: pending ? 'pending' : 'paid', item_count: quote?.entries?.length ?? selected.length });
+    }
     setShowSavedBanner(true);
     scroll.current?.scrollTo({ y: 0, animated: true });
     setPaymentPending(pending); setDone(true); setReference(null);
@@ -253,7 +255,7 @@ function RegistrationFlow() {
     const email = await currentEmail();
     const entries = email ? await fetchMyEventRegistrations(Number(id), email) : [];
     if (!entries.length || (payOnly ? !quote?.entries?.length || !quote.entries.every(item => entries.some(r => r.id === item.id && (!item.payForSelf || r.payment_status === 'paid') && (!item.payForPartner || r.partner_payment_status === 'paid'))) : !entries.some(r => r.payment_status === 'paid'))) throw new Error('Your payment is being processed. Wait a moment and check again.');
-    void trackConfirmedPurchase(reference, 'event_registration');
+    if (!quote?.isTest) void trackConfirmedPurchase(reference, 'event_registration');
     await finish(false);
   });
   useEffect(() => {
@@ -398,7 +400,6 @@ function RegistrationFlow() {
             {!!event.rankedin_url && <ActionButton label="Continue to RankedIn ↗" disabled={registrationState(event) !== 'open'} onPress={() => run(async () => {
               const url = new URL(event.rankedin_url!);
               if (url.protocol !== 'https:') throw new Error('Contact the organiser for a registration link.');
-              void trackEvent('feature_interaction', { feature: 'registration', action: 'external_registration' });
               await WebBrowser.openBrowserAsync(url.href);
             })} />}
             {!event.rankedin_url && <Text style={{ color: brand.muted }}>The organiser has not provided a registration link yet.</Text>}

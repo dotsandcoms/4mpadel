@@ -82,14 +82,14 @@ async function screen(mode, eventOptions = {}, savedCheckout = null, quoteError 
   }
   return { find, navigation, requests, cancelled, removed, analytics, browserVisits, flushEffects, updateProfile: patch => { Object.assign(player, patch); if ('playtomic_level' in patch) savedLevel = patch.playtomic_level; }, focus: async () => { render(); focusEffects.forEach(fn => fn()); await flush(); }, flush };
 }
-test('RankedIn clicks are attributed separately from the 4M registration funnel', async () => {
+test('only 4M registration activity enters the registration funnel', async () => {
   const rankedinUrl = 'https://www.rankedin.com/en/tournament/524';
   const external = await screen(undefined, { is_manual: false, rankedin_url: rankedinUrl });
   await external.flushEffects();
-  assert.equal(external.analytics.some(([name]) => name === 'registration_step'), false);
+  assert.deepEqual(external.analytics, []);
   await external.find('ActionButton', props => props.label === 'Continue to RankedIn ↗').props.onPress();
   assert.deepEqual(external.browserVisits, [rankedinUrl]);
-  assert.deepEqual(external.analytics, [['feature_interaction', { feature: 'registration', action: 'external_registration' }]]);
+  assert.deepEqual(external.analytics, []);
 
   const manual = await screen(undefined);
   await manual.flushEffects();

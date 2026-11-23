@@ -28,7 +28,7 @@ const ROUTE_PATTERNS = [
 const CAMPAIGN_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'];
 const EVENT_NAMES = new Set(['content_view', 'engagement_time', 'registration_step', 'registration_complete',
     'begin_checkout', 'payment_confirmed', 'checkout_outcome', 'checkout_exit', 'action_error',
-    'feature_interaction', 'app_store_click']);
+    'feature_interaction', 'app_store_click', 'entry_withdrawal', 'entry_refund_started']);
 const SDK_FIELDS = new Set(['token', 'distinct_id', '$device_id', '$session_id', '$window_id', '$lib', '$lib_version',
     '$anon_distinct_id', '$is_identified', '$process_person_profile', '$browser', '$browser_version', '$os', '$os_version', '$device_type']);
 const PRODUCT_FIELDS = new Set(['platform', 'environment', '$current_url', '$pathname', '$host',
@@ -122,8 +122,7 @@ export function initializeWebAnalytics() {
 
 function capture(name, properties, page) {
     if (!enabled || !accountReady || !page) return;
-    const sendImmediately = ['$pageview', 'engagement_time', 'app_store_click'].includes(name)
-        || (name === 'feature_interaction' && properties.action === 'external_registration');
+    const sendImmediately = ['$pageview', 'engagement_time', 'app_store_click'].includes(name);
     try {
         posthog.capture(name, {
             ...properties, ...campaign, $pathname: page.path,
@@ -142,7 +141,7 @@ export function trackWebEvent(name, properties = {}, page = webAnalyticsRoute(lo
     if (EVENT_NAMES.has(name)) capture(name, properties, page);
 }
 
-export function trackWebPaymentConfirmed(reference, amount) {
+export function trackWebPaymentConfirmed(reference, amount, newEntries) {
     const page = webAnalyticsRoute(location.pathname);
     const account = currentAccount;
     if (!enabled || !accountReady || !page || typeof reference !== 'string' || !/^[a-z0-9_-]{8,180}$/i.test(reference)) return;
@@ -158,6 +157,9 @@ export function trackWebPaymentConfirmed(reference, amount) {
             item_category: 'event_registration', transaction_id: transactionId,
             ...(Number.isFinite(amount) && amount > 0 ? { value: amount, currency: 'ZAR' } : {}),
         }, page);
+        if (Number.isInteger(newEntries) && newEntries > 0) {
+            trackWebEvent('registration_complete', { payment_state: 'paid', item_count: newEntries }, page);
+        }
     }).catch(() => {});
 }
 
