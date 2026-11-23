@@ -15,6 +15,7 @@
     "predev": "node scripts/build-private-draw-rehearsal.mjs",
     "prebuild": "node --test tests/privacyPolicy.test.mjs && node scripts/build-private-draw-rehearsal.mjs && node scripts/build-event-finance-summary.mjs",
     "build": "vite build",
+    "build:admin-review": "node scripts/build-private-draw-rehearsal.mjs && node scripts/build-admin-review.mjs",
     "lint": "eslint .",
     "test:data-api": "node --test tests/migrationAccess.test.mjs",
     "test:data-api:db": "node scripts/test-migration-access.mjs",

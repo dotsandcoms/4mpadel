@@ -1,3 +1,4 @@
+import { adminPublicOrigin } from '../../utils/adminPublicOrigin';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -8,6 +9,7 @@ import EventBuilder from './EventBuilder';
 import QuickEventBuilder from './QuickEventBuilder';
 import { getDefaultBackgroundForStatus } from '../../utils/imageUtils';
 import { promoteFinishedTiersToRecentResults } from '../../utils/recentResults';
+import { scopeCalendarQuery } from '../../utils/adminCalendarScope';
 import {
     PieChart,
     Pie,
@@ -81,7 +83,7 @@ const formatEventDates = (start, end) => {
     }
 };
 
-const CalendarManager = () => {
+const CalendarManager = ({ scopeId = 'all', initialEditEventId = null, createMode = null, onRouteActionOpened, organisation, allowedEvents = [], requireEventScope = false, allowPlatformActions = true }) => {
     const { getTournamentClasses, getTournamentWinners, getTournamentMatches } = useRankedin();
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -103,12 +105,16 @@ const CalendarManager = () => {
     const [orgSearchQuery, setOrgSearchQuery] = useState('');
     const orgSearchRef = useRef(null);
     const orgSelectedRef = useRef(false);
-    const handledEditEventRef = useRef(false);
+    const handledEditEventRef = useRef(null);
+    const canCreateEvent = allowPlatformActions || Boolean(organisation && !allowedEvents.length);
+    const canEditEvent = event => allowPlatformActions || Boolean(event?.is_manual && organisation
+        && event.organisation_id === organisation.id && (!event.is_weekly || !allowedEvents.length));
 
     const openBuilder = (event = null) => {
+        if (event ? !canEditEvent(event) : !canCreateEvent) return;
         setBuilderEvent(event);
-        if (event?.is_quick_event) setIsQuickBuilderOpen(true);
-        else setIsBuilderOpen(true);
+        setIsQuickBuilderOpen(Boolean(event?.is_quick_event));
+        setIsBuilderOpen(!event?.is_quick_event);
     };
 
     // Form State
@@ -158,25 +164,52 @@ const CalendarManager = () => {
         fetchEvents();
     }, []);
 
+    useEffect(() => {
+        if (createMode !== 'full' && createMode !== 'quick') return;
+        if (!canCreateEvent) {
+            toast.error('Event creation is unavailable in this workspace.');
+            onRouteActionOpened?.();
+            return;
+        }
+        setBuilderEvent(null);
+        setIsBuilderOpen(createMode === 'full');
+        setIsQuickBuilderOpen(createMode === 'quick');
+        onRouteActionOpened?.();
+    }, [createMode, onRouteActionOpened, canCreateEvent]);
+
     // Event Finance links here when the calendar icon is clicked. Open the
     // appropriate editable form, then clear the one-time deep-link parameter.
     useEffect(() => {
-        if (handledEditEventRef.current || events.length === 0) return;
-        const editEventId = new URLSearchParams(window.location.search).get('editEvent');
-        if (!editEventId) return;
+        const editEventId = new URLSearchParams(window.location.search).get('editEvent') || initialEditEventId;
+        if (!editEventId) {
+            handledEditEventRef.current = null;
+            return;
+        }
+        if (createMode || handledEditEventRef.current === editEventId) return;
 
         const event = events.find((item) => String(item.id) === editEventId);
-        if (!event) return;
+        if (!event) {
+            if (!loading && onRouteActionOpened) {
+                toast.error('This event is outside your Calendar workspace.');
+                onRouteActionOpened();
+            }
+            return;
+        }
 
-        handledEditEventRef.current = true;
-        if (event.is_manual) openBuilder(event);
-        else handleEdit(event);
+        handledEditEventRef.current = editEventId;
+        if (canEditEvent(event)) {
+            if (event.is_manual) openBuilder(event);
+            else handleEdit(event);
+        } else toast.error('Editing is unavailable for this event in your workspace.');
 
         const params = new URLSearchParams(window.location.search);
-        params.delete('editEvent');
-        const query = params.toString();
-        window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
-    }, [events]);
+        if (onRouteActionOpened) onRouteActionOpened();
+        else if (params.has('editEvent')) {
+            params.delete('editEvent');
+            const query = params.toString();
+            window.history.replaceState(window.history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+        }
+    }, [events, initialEditEventId, createMode, onRouteActionOpened, loading]);
 
     // Type-ahead organisation search for the legacy edit modal
     useEffect(() => {
@@ -244,10 +277,14 @@ const CalendarManager = () => {
     const fetchEvents = async () => {
         try {
             setLoading(true);
-            await promoteFinishedTiersToRecentResults(supabase);
-            const { data, error } = await supabase
-                .from('calendar')
-                .select('*, organisations:organisation_id(id, name, logo_url)')
+            if (requireEventScope && scopeId === 'all' && allowedEvents.length === 0) {
+                setEvents([]);
+                return;
+            }
+            if (allowPlatformActions && scopeId === 'all') await promoteFinishedTiersToRecentResults(supabase);
+            let query = scopeCalendarQuery(supabase.from('calendar').select('*, organisations:organisation_id(id, name, logo_url)'), scopeId);
+            if (allowedEvents.length) query = query.in('id', allowedEvents);
+            const { data, error } = await query
                 .order('start_date', { ascending: true }) // Order by start_date 
                 .order('id', { ascending: true }); // Fallback
 
@@ -284,6 +321,7 @@ const CalendarManager = () => {
     };
 
     const handleForceSync = async (event) => {
+        if (!allowPlatformActions) return;
         const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
         if (!rId) {
             toast.error('No Rankedin URL or ID found for this event');
@@ -343,6 +381,7 @@ const CalendarManager = () => {
     };
 
     const handleSyncAllPastEvents = async () => {
+        if (!allowPlatformActions) return;
         const pastEvents = events.filter(event => {
             const isPassed = new Date(event.end_date || event.start_date) < new Date();
             const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
@@ -492,7 +531,7 @@ const CalendarManager = () => {
     const getEventPublicUrl = (event) => {
         const path = `/calendar/${event.slug || event.id}`;
         if (typeof window !== 'undefined' && window.location?.origin) {
-            return `${window.location.origin}${path}`;
+            return `${adminPublicOrigin()}${path}`;
         }
         return `https://4mpadel.co.za${path}`;
     };
@@ -509,6 +548,7 @@ const CalendarManager = () => {
     };
 
     const toggleVisibility = async (event) => {
+        if (!allowPlatformActions) return;
         try {
             const newVisibility = !event.is_visible;
             if (event.is_weekly && event.series_id) {
@@ -547,6 +587,7 @@ const CalendarManager = () => {
     };
 
     const toggleFinanceManaged = async (event) => {
+        if (!allowPlatformActions) return;
         try {
             const newValue = !event.finance_managed;
             const { error } = await supabase
@@ -725,6 +766,7 @@ const CalendarManager = () => {
     };
 
     const handleDelete = async (id) => {
+        if (!allowPlatformActions) return;
         if (!window.confirm('Delete this event? Its private payout banking snapshots and payout requests will also be permanently deleted.')) return;
 
         try {
@@ -750,6 +792,7 @@ const CalendarManager = () => {
     };
 
     const handleSyncRankedin = async () => {
+        if (!allowPlatformActions) return;
         setIsSyncing(true);
         toast.info('Starting RankedIn Sync...');
 
@@ -1124,35 +1167,35 @@ const CalendarManager = () => {
                     <p className="text-gray-400 text-sm">Manage upcoming tournaments, leagues, and SAPA events</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                    <button
+                    {allowPlatformActions && <button
                         onClick={handleSyncAllPastEvents}
                         disabled={isSyncing}
                         className={`bg-[#ff5500]/10 text-[#ff5500] border border-[#ff5500]/20 px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-[#ff5500] hover:text-white transition-colors ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                         <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
                         {isSyncing ? 'Syncing Past Events...' : 'Sync Past Event Data'}
-                    </button>
-                    <button
+                    </button>}
+                    {allowPlatformActions && scopeId === 'all' && <button
                         onClick={handleSyncRankedin}
                         disabled={isSyncing}
                         className={`bg-[#1a1a1a] text-white border border-white/20 px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10 transition-colors ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                         <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
                         {isSyncing ? 'Syncing...' : 'Sync Event List'}
-                    </button>
-                    <button
+                    </button>}
+                    {canCreateEvent && <button
                         type="button"
                         onClick={() => { setBuilderEvent(null); setIsQuickBuilderOpen(true); }}
                         className="bg-amber-500/10 text-amber-300 border border-amber-500/30 px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-amber-500 hover:text-black transition-colors"
                     >
                         <Trophy size={18} /> Quick Event
-                    </button>
-                    <button
+                    </button>}
+                    {canCreateEvent && <button
                         onClick={() => openBuilder(null)}
                         className="bg-padel-green/10 text-padel-green border border-padel-green/30 px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-padel-green hover:!text-black transition-colors"
                     >
                         <Plus size={18} /> Create Event
-                    </button>
+                    </button>}
                 </div>
             </div>
 
@@ -1399,13 +1442,13 @@ const CalendarManager = () => {
                                             )}
                                         </td>
                                         <td className="py-3 px-1 align-middle text-center">
-                                            <button
+                                            {allowPlatformActions ? <button
                                                 onClick={() => toggleFinanceManaged(event)}
                                                 className={`p-1 rounded-md transition-colors ${event.finance_managed ? 'text-padel-green bg-padel-green/10' : 'text-gray-600 hover:text-gray-400'}`}
                                                 title={event.finance_managed ? 'Finance managed — click to remove from Finance Management' : 'Click to add to Finance Management'}
                                             >
                                                 <Briefcase className="w-4 h-4 mx-auto" />
-                                            </button>
+                                            </button> : <span title={event.finance_managed ? 'Finance managed' : 'Finance unmanaged'}>{event.finance_managed ? 'Yes' : 'No'}</span>}
                                         </td>
                                         <td className="py-3 px-1 align-middle text-center">
                                             {(event.entry_fee != null && event.entry_fee !== '') || (event.category_fees && Object.keys(event.category_fees).length > 0) ? (
@@ -1422,7 +1465,7 @@ const CalendarManager = () => {
                                             )}
                                         </td>
                                         <td className="py-3 px-1 align-middle text-center">
-                                            <button
+                                            {allowPlatformActions ? <button
                                                 onClick={() => toggleVisibility(event)}
                                                 className={`p-1 rounded-md transition-colors ${event.is_visible !== false ? 'text-padel-green bg-padel-green/10' : 'text-gray-600 hover:text-gray-400'}`}
                                                 title={
@@ -1438,7 +1481,7 @@ const CalendarManager = () => {
                                                 ) : (
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.046m4.596-4.596A9.964 9.964 0 0112 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3l18 18" /></svg>
                                                 )}
-                                            </button>
+                                            </button> : <span>{event.is_visible === false ? 'Hidden' : 'Visible'}</span>}
                                         </td>
                                         <td className="py-3 px-2 align-middle text-right">
                                             <div className="flex justify-end gap-1 opacity-100">
@@ -1459,28 +1502,28 @@ const CalendarManager = () => {
                                                 >
                                                     <ExternalLink size={14} />
                                                 </a>
-                                                <button
+                                                {allowPlatformActions && <button
                                                     onClick={() => handleForceSync(event)}
                                                     disabled={isSyncing}
                                                     className="p-1.5 bg-padel-green/10 text-padel-green rounded-lg hover:bg-padel-green hover:text-black disabled:opacity-50"
                                                     title="Force Sync from Rankedin"
                                                 >
                                                     <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />
-                                                </button>
-                                                <button
+                                                </button>}
+                                                {canEditEvent(event) && <button
                                                     onClick={() => (event.is_manual ? openBuilder(event) : handleEdit(event))}
                                                     className="p-1.5 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white"
                                                     title={event.is_manual ? 'Edit Manual Event' : 'Edit Event'}
                                                 >
                                                     <Edit2 size={14} />
-                                                </button>
-                                                <button
+                                                </button>}
+                                                {allowPlatformActions && <button
                                                     onClick={() => handleDelete(event.id)}
                                                     className="p-1.5 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white"
                                                     title="Delete Event"
                                                 >
                                                     <Trash2 size={14} />
-                                                </button>
+                                                </button>}
                                             </div>
                                         </td>
                                     </tr>
@@ -2206,12 +2249,15 @@ const CalendarManager = () => {
             <EventBuilder
                 isOpen={isBuilderOpen}
                 editingEvent={builderEvent}
+                organisation={organisation}
+                allowPlatformActions={allowPlatformActions}
                 onClose={() => { setIsBuilderOpen(false); setBuilderEvent(null); }}
                 onSaved={fetchEvents}
             />
             <QuickEventBuilder
                 isOpen={isQuickBuilderOpen}
                 editingEvent={builderEvent?.is_quick_event ? builderEvent : null}
+                organisation={organisation}
                 onClose={() => { setIsQuickBuilderOpen(false); setBuilderEvent(null); }}
                 onSaved={fetchEvents}
             />

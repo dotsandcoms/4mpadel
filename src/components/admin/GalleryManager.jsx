@@ -6,7 +6,6 @@ import { toast } from 'sonner';
 import SearchableSelect from './SearchableSelect';
 
 const GalleryManager = ({ permissions }) => {
-    console.log('[GalleryManager] permissions:', permissions);
     const isSuperAdmin = permissions?.role === 'super_admin';
     const allowedAlbums = permissions?.module_permissions?.gallery?.allowedAlbums;
     const hasAlbumRestriction = !isSuperAdmin && Array.isArray(allowedAlbums) && allowedAlbums.length > 0;
@@ -46,17 +45,18 @@ const GalleryManager = ({ permissions }) => {
 
     useEffect(() => {
         fetchAlbums();
-        fetchEvents();
-        fetchOrganisations();
+        if (!hasAlbumRestriction) {
+            fetchEvents();
+            fetchOrganisations();
+        }
     }, []);
 
     const fetchAlbums = async () => {
         try {
             setLoading(true);
-            const { data, error } = await supabase
-                .from('albums')
-                .select('*, calendar(event_name), organisations(name, slug)')
-                .order('created_at', { ascending: false });
+            let query = supabase.from('albums').select('*, calendar(event_name), organisations(name, slug)').order('created_at', { ascending: false });
+            if (hasAlbumRestriction) query = query.in('id', allowedAlbums);
+            const { data, error } = await query;
 
             if (error) throw error;
             setAlbums(data || []);

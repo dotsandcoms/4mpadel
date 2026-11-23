@@ -4,7 +4,7 @@ import {
   type PaystackFetchMode,
   resolvePaystackFetchSecrets,
 } from './paystack.ts';
-import { resolveIsAdmin } from '../_shared/refund-engine.ts';
+import { canReadPaystackTransactions } from './access.mjs';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -111,9 +111,8 @@ serve(async (req: Request) => {
     }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceKey);
-    const isAdmin = await resolveIsAdmin(supabaseAdmin, user.email);
-    if (!isAdmin) {
-      return new Response(JSON.stringify({ error: 'Forbidden: admin only' }), {
+    if (!await canReadPaystackTransactions(supabaseUser, supabaseAdmin, user)) {
+      return new Response(JSON.stringify({ error: 'Platform Paystack transactions access required' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 403,
       });

@@ -1,3 +1,4 @@
+import { adminSecurityHref } from '../../utils/adminPublicOrigin';
 import React, { useId } from 'react';
 import { authenticatorQrSource } from '../../utils/messagingAuthenticator';
 
@@ -63,6 +64,6 @@ export default function MessagingAuthenticator({ accountEmail, factor, factors =
                 <p className="leading-6">Use the app and phone you originally connected to 4M Padel. If you’ve lost access, <a href="/contact" target="_blank" rel="noopener noreferrer" className="text-white underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-padel-green">contact 4M support</a> for help recovering access.</p>
             </details>}
         </>}
-        <a href="/admin?tab=security" className="inline-block min-h-11 py-3 text-sm text-white underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-padel-green">Manage authenticators and backup access</a>
+        <a href={adminSecurityHref()} className="inline-block min-h-11 py-3 text-sm text-white underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-padel-green">Manage authenticators and backup access</a>
     </div>;
 }

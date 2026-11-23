@@ -188,7 +188,7 @@ const TeamPlayerRows = ({ players, children }) => (
     </div>
 );
 
-const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEventCancelled, onStartRehearsal, event, variant = 'modal', backLabel = '← Back to Events List' }) => {
+const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEventCancelled, onStartRehearsal, event, initialTab = 'overview', variant = 'modal', backLabel = '← Back to Events List', allowPlatformActions = true }) => {
     const [showCancelDivision, setShowCancelDivision] = useState(false);
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
     const [cancelledEventId, setCancelledEventId] = useState(null);
@@ -250,7 +250,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const [profileLinkResults, setProfileLinkResults] = useState([]);
     const [profileLinkBusy, setProfileLinkBusy] = useState(false);
     const [searchingProfiles, setSearchingProfiles] = useState(false);
-    const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'players', 'list', 'activity', 'statement'
+    const [activeTab, setActiveTab] = useState(initialTab);
     const [expandedDivisions, setExpandedDivisions] = useState({});
     const [openPaymentNoteId, setOpenPaymentNoteId] = useState(null);
     const [updatingWhatsApp, setUpdatingWhatsApp] = useState(null);
@@ -320,7 +320,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         early_bird_ends_at: event?.early_bird_ends_at ?? null,
     }));
     const { permissions } = useAdminPermissions(adminEmail);
-    const isSuperAdmin = permissions?.role === 'super_admin';
+    const isSuperAdmin = allowPlatformActions && permissions?.role === 'super_admin';
 
     useEffect(() => {
         let active = true;
@@ -380,6 +380,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     }, [event?.id]);
 
     const handleAddInterimPayment = async () => {
+        if (!allowPlatformActions) return;
         const amount = Number(String(interimAmount).replace(/[^0-9.]/g, ''));
         if (!Number.isFinite(amount) || amount <= 0 || Math.round(amount * 100) / 100 !== amount) {
             toast.error('Enter a valid interim payment amount');
@@ -424,6 +425,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     };
 
     const handleRemoveInterimPayment = async (paymentId) => {
+        if (!allowPlatformActions) return;
         const target = interimPayments.find((p) => p.id === paymentId);
         if (!target) return;
         if (target.request_id || String(target.note || '').startsWith('Manual payout request ')) {
@@ -3488,7 +3490,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                             </div>
                                                             <div className="flex items-center gap-2 shrink-0">
                                                                 <span className="font-bold text-red-400">−{fmtR(p.amount)}</span>
-                                                                <button
+                                                                {allowPlatformActions && <button
                                                                     type="button"
                                                                     onClick={() => handleRemoveInterimPayment(p.id)}
                                                                     disabled={savingInterim || Boolean(p.request_id) || String(p.note || '').startsWith('Manual payout request ')}
@@ -3496,14 +3498,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                                     title="Remove interim payment"
                                                                 >
                                                                     <Trash2 size={13} />
-                                                                </button>
+                                                                </button>}
                                                             </div>
                                                         </div>
                                                     );
                                                 })}
                                             </div>
                                         )}
-                                        <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-2">
+                                        {allowPlatformActions && <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-2">
                                             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
                                                 Record interim payment to organiser
                                             </p>
@@ -3540,7 +3542,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                     Add
                                                 </button>
                                             </div>
-                                        </div>
+                                        </div>}
                                         {overviewStats.licenseRevenue4M > 0 && (
                                             <p className="text-[10px] text-gray-500">
                                                 SAPA license revenue via 4M (not paid to organiser): {fmtR(overviewStats.licenseRevenue4M)}

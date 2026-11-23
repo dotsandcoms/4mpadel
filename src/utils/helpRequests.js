@@ -7,7 +7,9 @@ export async function helpRequestApi(action, data = {}) {
     if (result.error) {
         if (['PGRST202', '42883'].includes(result.error.code)) throw new Error('Help requests are awaiting their database deployment.');
         const text = result.error.message || '';
-        throw new Error(/^(Sign in again|Choose a help|Choose an available|This (help|payment|event|entry|request|reply)|Write a message|You have reached|Please wait|Verify your authenticator)/.test(text) && text.length < 240 ? text : 'Help requests could not load or save. Please try again.');
+        const error = new Error(/^(Sign in again|Choose a help|Choose an available|This (help|payment|event|entry|request|reply)|Write a message|You have reached|Please wait|Verify your authenticator)/.test(text) && text.length < 240 ? text : 'Help requests could not load or save. Please try again.');
+        error.code = result.error.code;
+        throw error;
     }
     return result.data;
 }

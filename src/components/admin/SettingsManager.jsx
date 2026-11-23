@@ -84,7 +84,7 @@ const quotePreviewLine = (quote, name) => {
     return `${name}: ${formatCurrency(quote.total)}`;
 };
 
-const SettingsManager = () => {
+const SettingsManager = ({ licenceHref = '/admin?tab=licenses' } = {}) => {
     const [loading, setLoading] = useState(false);
     const [commerceSaving, setCommerceSaving] = useState(false);
     const [toasts, setToasts] = useState([]);
@@ -248,7 +248,7 @@ const SettingsManager = () => {
                     </div>
                 ) : (
                     <div className="space-y-8">
-                        <p className="text-sm text-gray-400">License prices and sales availability are managed in the <a href="/admin?tab=licenses" className="text-padel-green underline">Licenses module</a>.</p>
+                        <p className="text-sm text-gray-400">License prices and sales availability are managed in the <a href={licenceHref} className="text-padel-green underline">Licenses module</a>.</p>
                         <div className="border-t border-white/10 pt-8 space-y-6">
                             <h4 className="text-white font-bold flex items-center gap-2">
                                 <Percent size={18} className="text-padel-green" /> Percentage fee

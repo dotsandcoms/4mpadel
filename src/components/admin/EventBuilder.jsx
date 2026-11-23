@@ -1,3 +1,4 @@
+import { adminPublicOrigin } from '../../utils/adminPublicOrigin';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -856,7 +857,7 @@ const ageFromDivisionName = (name) => {
     return '';
 };
 
-const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisation = null }) => {
+const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisation = null, allowPlatformActions = true }) => {
     // Tracks the event currently being edited inside this session (survives first create
     // when the parent still has editingEvent=null, so Save can keep the modal open).
     const [workingEvent, setWorkingEvent] = useState(null);
@@ -904,7 +905,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     });
 
     const { permissions } = useAdminPermissions(adminEmail);
-    const isSuperAdmin = permissions?.role === 'super_admin';
+    const isSuperAdmin = allowPlatformActions && permissions?.role === 'super_admin';
 
     useEffect(() => {
         let active = true;
@@ -1307,12 +1308,13 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             entry_fee: ev.entry_fee != null && ev.entry_fee !== '' ? String(ev.entry_fee) : '',
         });
         if (ev.is_weekly && ev.series_id) {
-            const { data: siblings, error: seriesErr } = await supabase
+            let query = supabase
                 .from('calendar')
                 .select('id, start_date, slug, event_name, registration_access')
                 .eq('series_id', ev.series_id)
-                .eq('is_weekly', true)
-                .order('start_date', { ascending: true });
+                .eq('is_weekly', true);
+            if (!allowPlatformActions && organisation) query = query.eq('organisation_id', organisation.id);
+            const { data: siblings, error: seriesErr } = await query.order('start_date', { ascending: true });
             if (seriesErr) {
                 console.error('[EventBuilder] load series siblings failed:', seriesErr.message);
                 setSeriesSiblings([]);
@@ -1956,8 +1958,22 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         return false;
     };
 
-    const persistAccessCode = (eventId, protectedBefore = activeEvent?.registration_access === 'code') =>
-        saveEventAccessCode(supabase, eventId, accessCodeOptions(protectedBefore));
+    const scopedOrganisationId = !allowPlatformActions ? organisation?.id : null;
+    const persistAccessCode = async (eventId, protectedBefore = activeEvent?.registration_access === 'code') => {
+        if (scopedOrganisationId) {
+            const { data, error } = await supabase.from('calendar').select('id')
+                .eq('id', eventId).eq('organisation_id', scopedOrganisationId).single();
+            if (error || !data) throw new Error('This event is no longer available in your organisation.');
+        }
+        return saveEventAccessCode(supabase, eventId, accessCodeOptions(protectedBefore));
+    };
+
+    const updateCalendarEvent = async (eventId, payload) => {
+        let query = supabase.from('calendar').update(payload).eq('id', eventId);
+        if (scopedOrganisationId) query = query.eq('organisation_id', scopedOrganisationId).select('id').single();
+        const { error } = await query;
+        if (error) throw error;
+    };
 
     const rememberSavedAccessCode = () => {
         if (!form.require_access_code) setSavedAccessCode(null);
@@ -2245,6 +2261,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         delete payload.weekly_count;
         delete payload.require_access_code;
         delete payload.access_code;
+        if (!allowPlatformActions) delete payload.event_co_admins;
         // Lock new registrations before saving the hash, including when the RPC fails.
         if (!isEditing) payload.registration_access = form.require_access_code ? 'code' : 'public';
         // Never invent a series for normal events
@@ -2480,27 +2497,26 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         const seriesId = payload.series_id || editedEvent.series_id || form.series_id;
         if (!seriesId) {
             await persistAccessCode(editedEvent.id);
-            const { error } = await supabase.from('calendar').update(payload).eq('id', editedEvent.id);
-            if (error) throw error;
+            await updateCalendarEvent(editedEvent.id, payload);
             return 1;
         }
 
         let siblings = seriesSiblings;
         if (!siblings.length) {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('calendar')
                 .select('id, start_date, slug, registration_access')
                 .eq('series_id', seriesId)
-                .eq('is_weekly', true)
-                .order('start_date', { ascending: true });
+                .eq('is_weekly', true);
+            if (!allowPlatformActions && organisation) query = query.eq('organisation_id', organisation.id);
+            const { data, error } = await query.order('start_date', { ascending: true });
             if (error) throw error;
             siblings = data || [];
             setSeriesSiblings(siblings);
         }
         if (!siblings.length) {
             await persistAccessCode(editedEvent.id);
-            const { error } = await supabase.from('calendar').update(payload).eq('id', editedEvent.id);
-            if (error) throw error;
+            await updateCalendarEvent(editedEvent.id, payload);
             return 1;
         }
 
@@ -2532,11 +2548,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             // Keep existing slug so public links stay stable
             delete instancePayload.slug;
 
-            const { error } = await supabase
-                .from('calendar')
-                .update(instancePayload)
-                .eq('id', sibling.id);
-            if (error) throw error;
+            await updateCalendarEvent(sibling.id, instancePayload);
         }
         setSeriesSiblings(siblings.map((event) => ({
             ...event, registration_access: form.require_access_code ? 'code' : 'public',
@@ -2618,8 +2630,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                     return;
                 }
                 await persistAccessCode(eventId);
-                const { error } = await supabase.from('calendar').update(payload).eq('id', activeEvent.id);
-                if (error) throw error;
+                await updateCalendarEvent(activeEvent.id, payload);
                 await persistDivisions(eventId);
             } else if (form.is_weekly && mode === 'publish') {
                 const weeklyDates = buildWeeklyDates(form.start_date, form.weekly_count);
@@ -3034,10 +3045,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                             <label className={labelClass}>Contact email</label>
                                                             <input type="email" name="organiser_email" value={form.organiser_email} onChange={handleInput} className={inputClass} />
                                                         </div>
-                                                        <div className="md:col-span-2">
+                                                        {allowPlatformActions && <div className="md:col-span-2">
                                                             <label className={labelClass}>Event co-admins</label>
                                                             <CoAdminsPicker value={form.event_co_admins} onChange={(value) => setField('event_co_admins', value)} />
-                                                        </div>
+                                                        </div>}
                                                     </div>
 
                                                     <div className="space-y-3 border-t border-white/10 pt-5">
@@ -5174,8 +5185,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                 <div className="rounded-xl border border-white/10 bg-black/20 p-4">
                                     <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Event link</p>
                                     <div className="mt-2 flex items-center gap-2">
-                                        <code className="min-w-0 flex-1 truncate rounded-lg bg-black/30 px-3 py-2 text-xs text-gray-300">{`${window.location.origin}/calendar/${form.slug || slugify(form.event_name) || 'event'}`}</code>
-                                        <button type="button" onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/calendar/${form.slug || slugify(form.event_name) || 'event'}`).then(() => toast.success('Event link copied'))} aria-label="Copy event link" className="rounded-lg border border-white/10 p-2.5 text-gray-300 hover:border-padel-green/40 hover:text-padel-green"><Copy size={16} /></button>
+                                        <code className="min-w-0 flex-1 truncate rounded-lg bg-black/30 px-3 py-2 text-xs text-gray-300">{`${adminPublicOrigin()}/calendar/${form.slug || slugify(form.event_name) || 'event'}`}</code>
+                                        <button type="button" onClick={() => navigator.clipboard?.writeText(`${adminPublicOrigin()}/calendar/${form.slug || slugify(form.event_name) || 'event'}`).then(() => toast.success('Event link copied'))} aria-label="Copy event link" className="rounded-lg border border-white/10 p-2.5 text-gray-300 hover:border-padel-green/40 hover:text-padel-green"><Copy size={16} /></button>
                                     </div>
                                 </div>
 

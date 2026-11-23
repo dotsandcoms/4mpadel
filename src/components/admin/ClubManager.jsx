@@ -1,3 +1,4 @@
+import { adminPublicOrigin } from '../../utils/adminPublicOrigin';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../supabaseClient';
@@ -324,7 +325,7 @@ const OwnersAdminsCell = ({ admins, pendingInvite = null, onInvite }) => {
 /**
  * Platform Clubs admin — full club card content editor.
  */
-const ClubManager = ({ permissions }) => {
+const ClubManager = ({ permissions, restrictToMembership = false }) => {
     const isSuper = permissions?.role === 'super_admin';
     // Platform / My Clubs switcher — mirrors the Organisations portal toggle.
     // Only super admins see the toggle (scoped roles already only load their clubs).
@@ -802,7 +803,7 @@ const ClubManager = ({ permissions }) => {
                 .single();
             if (error) throw error;
 
-            const acceptUrl = `${window.location.origin}/claim-club?token=${invite.token}`;
+            const acceptUrl = `${adminPublicOrigin()}/claim-club?token=${invite.token}`;
             await sendEmail(email, 'club_claim_invite', {
                 clubName: inviteClub.name,
                 inviterName: session?.session?.user?.user_metadata?.full_name || '4M Padel Admin',
@@ -811,7 +812,7 @@ const ClubManager = ({ permissions }) => {
 
             // If they don't have a player profile yet, invite them to create it first.
             if (!existingPlayer?.id) {
-                const redirectTo = `${window.location.origin}/profile?new_invite=true&claim_token=${invite.token}`;
+                const redirectTo = `${adminPublicOrigin()}/profile?new_invite=true&claim_token=${invite.token}`;
                 const { error: otpError } = await supabase.auth.signInWithOtp({
                     email,
                     options: { emailRedirectTo: redirectTo },
@@ -1031,9 +1032,10 @@ const ClubManager = ({ permissions }) => {
         try {
             let query = supabase.from('clubs').select('*').order('name', { ascending: true });
 
-            // Scoped: club members only see their clubs (unless super/custom with clubs tab)
-            if (!isSuper && permissions?.clubs?.length) {
-                const ids = permissions.clubs.map((c) => c.id);
+            if (restrictToMembership || (!isSuper && permissions?.clubs?.length)) {
+                const clubs = permissions?.clubs || [];
+                const ids = (restrictToMembership ? clubs.filter(row => ['owner', 'admin'].includes(row.member_role)) : clubs).map(row => row.id);
+                if (!ids.length) return;
                 query = query.in('id', ids);
             }
 
@@ -1053,9 +1055,23 @@ const ClubManager = ({ permissions }) => {
         } finally {
             setLoading(false);
         }
-    }, [isSuper, permissions?.clubs, selectedId, isCreating, loadClubMetrics]);
+    }, [isSuper, permissions?.clubs, selectedId, isCreating, loadClubMetrics, restrictToMembership]);
 
     const loadLookups = useCallback(async () => {
+        if (restrictToMembership) {
+            // Scoped managers keep their current associations and group inheritance.
+            // Platform lookup lists are used only when assigning new associations.
+            const clubs = (permissions?.clubs || []).filter(row => ['owner', 'admin'].includes(row.member_role));
+            const groupIds = [...new Set(clubs.map(row => row.group_id).filter(Boolean))];
+            const clubIds = clubs.map(row => row.id);
+            const [{ data: links }, { data: groups }] = await Promise.all([
+                clubIds.length ? supabase.from('club_organisations').select('organisations(id, name)').in('club_id', clubIds) : { data: [] },
+                groupIds.length ? supabase.from('club_groups').select('id, name, share_logo, share_website, logo_url, website_url').in('id', groupIds) : { data: [] },
+            ]);
+            setApprovedOrgs((links || []).map(row => row.organisations).filter(Boolean));
+            setClubGroups(groups || []);
+            return;
+        }
         const [{ data: feds }, { data: orgs }, groups] = await Promise.all([
             supabase.from('federations').select('id, name, short_name, slug').order('name'),
             supabase.from('organisations').select('id, name, slug, logo_url').eq('status', 'approved').order('name'),
@@ -1064,7 +1080,7 @@ const ClubManager = ({ permissions }) => {
         setFederations(feds || []);
         setApprovedOrgs(orgs || []);
         setClubGroups(Array.isArray(groups) ? groups : []);
-    }, []);
+    }, [permissions?.clubs, restrictToMembership]);
 
     const loadLinkedOrgs = useCallback(async (clubId) => {
         if (!clubId) {
@@ -1238,6 +1254,7 @@ const ClubManager = ({ permissions }) => {
     };
 
     const handleSave = async () => {
+        if (restrictToMembership && (!selectedId || isCreating)) return;
         if (!form.name.trim() || !form.slug.trim()) {
             toast.error('Name and slug are required');
             return;
@@ -1285,6 +1302,9 @@ const ClubManager = ({ permissions }) => {
                 updated_at: new Date().toISOString(),
             };
 
+            if (restrictToMembership) {
+                for (const field of ['group_id', 'federation_id', 'status', 'verified', 'sapa_registered']) delete payload[field];
+            }
             if (isCreating || !selectedId) {
                 const { data, error } = await supabase.from('clubs').insert([payload]).select('*').single();
                 if (error) throw error;
@@ -1318,7 +1338,7 @@ const ClubManager = ({ permissions }) => {
     };
 
     const handleAssignOrg = async () => {
-        if (!selectedId || !assignOrgId) return;
+        if (restrictToMembership || !selectedId || !assignOrgId) return;
         try {
             const { error } = await supabase.from('club_organisations').insert({
                 club_id: selectedId,
@@ -1334,6 +1354,7 @@ const ClubManager = ({ permissions }) => {
     };
 
     const handleUnlinkOrg = async (orgId) => {
+        if (restrictToMembership) return;
         try {
             const { error } = await supabase
                 .from('club_organisations')
@@ -1423,7 +1444,7 @@ const ClubManager = ({ permissions }) => {
                             <Sparkles size={14} /> Google Sync
                         </button>
                     )}
-                    {(isSuper || permissions?.allowed_tabs?.includes('clubs')) && managerView === 'list' && (
+                    {!restrictToMembership && (isSuper || permissions?.allowed_tabs?.includes('clubs')) && managerView === 'list' && (
                         <button
                             type="button"
                             onClick={() => setManagerView('groups')}
@@ -1432,7 +1453,7 @@ const ClubManager = ({ permissions }) => {
                             <Building2 size={14} /> Groups
                         </button>
                     )}
-                    {(isSuper || permissions?.allowed_tabs?.includes('clubs')) && managerView === 'list' && (
+                    {!restrictToMembership && (isSuper || permissions?.allowed_tabs?.includes('clubs')) && managerView === 'list' && (
                         <button
                             type="button"
                             onClick={startCreate}
@@ -2031,7 +2052,7 @@ const ClubManager = ({ permissions }) => {
                                     <label className={labelClass}>
                                         Status
                                         <select
-                                            value={normalizeClubStatus(form.status)}
+                                            disabled={restrictToMembership} value={normalizeClubStatus(form.status)}
                                             onChange={(e) => updateField('status', e.target.value)}
                                             className={inputClass}
                                         >
@@ -2047,7 +2068,7 @@ const ClubManager = ({ permissions }) => {
                                     </label>
                                     <div className="flex items-center gap-4 pt-6">
                                         <label className="flex items-center gap-2 text-xs text-gray-300 font-bold">
-                                            <input type="checkbox" checked={!!form.verified} onChange={(e) => updateField('verified', e.target.checked)} />
+                                            <input type="checkbox" disabled={restrictToMembership} checked={!!form.verified} onChange={(e) => updateField('verified', e.target.checked)} />
                                             Verified
                                         </label>
                                     </div>
@@ -2087,7 +2108,7 @@ const ClubManager = ({ permissions }) => {
                                     <label className={labelClass}>
                                         Club group
                                         <select
-                                            value={form.group_id || ''}
+                                            disabled={restrictToMembership} value={form.group_id || ''}
                                             onChange={(e) => updateField('group_id', e.target.value)}
                                             className={inputClass}
                                         >
@@ -2654,7 +2675,7 @@ const ClubManager = ({ permissions }) => {
                                                         <option key={o.id} value={o.id}>{o.name}</option>
                                                     ))}
                                             </select>
-                                            <button type="button" onClick={handleAssignOrg} disabled={!assignOrgId} className="px-3 py-2 rounded-xl bg-padel-green text-black text-xs font-black disabled:opacity-40">
+                                            <button type="button" onClick={handleAssignOrg} disabled={restrictToMembership || !assignOrgId} className="px-3 py-2 rounded-xl bg-padel-green text-black text-xs font-black disabled:opacity-40">
                                                 Link
                                             </button>
                                         </div>
@@ -2665,7 +2686,7 @@ const ClubManager = ({ permissions }) => {
                                                 return (
                                                     <li key={oid} className="flex items-center justify-between bg-black/30 border border-white/5 rounded-xl px-3 py-2">
                                                         <span className="text-sm text-white font-bold">{org.name}</span>
-                                                        <button type="button" onClick={() => handleUnlinkOrg(oid)} className="text-red-400 text-xs font-bold">Unlink</button>
+                                                        <button type="button" disabled={restrictToMembership} onClick={() => handleUnlinkOrg(oid)} className="text-red-400 text-xs font-bold">Unlink</button>
                                                     </li>
                                                 );
                                             })}
@@ -2678,7 +2699,7 @@ const ClubManager = ({ permissions }) => {
                                 <label className={labelClass}>
                                     Linked federation
                                     <select
-                                        value={form.federation_id || ''}
+                                        disabled={restrictToMembership} value={form.federation_id || ''}
                                         onChange={(e) => updateField('federation_id', e.target.value)}
                                         className={inputClass}
                                     >

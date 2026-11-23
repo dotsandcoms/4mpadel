@@ -582,8 +582,8 @@ const EmailComposer = ({ onBusyChange }) => {
     );
 };
 
-export default function EmailBroadcastManager() {
-    const [channel, setChannel] = useState('email');
+export default function EmailBroadcastManager({ initialChannel = 'email' } = {}) {
+    const [channel, setChannel] = useState(initialChannel);
     const [emailBusy, setEmailBusy] = useState(false);
     const [pushBusy, setPushBusy] = useState(false);
     return <div className="space-y-6">
