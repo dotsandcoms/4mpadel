@@ -21,6 +21,15 @@ test('app-only changes skip web; shared API clients always validate all consumer
   assert.equal(skipWebBuild(['mobile/src/app/settings.tsx']), true);
 });
 
+test('shared analytics helpers are included and trigger web and app checks', () => {
+  const included = readFileSync(path.join(root, '.vercelignore'), 'utf8').split(/\r?\n/);
+  for (const file of ['mobile/src/lib/telemetry-privacy.js', 'mobile/src/lib/entry-analytics.js']) {
+    assert.deepEqual(classifyPaths([file]), { web: true, mobile: true, backend: false, workflow: true });
+    assert.equal(skipWebBuild([file]), false);
+    assert.ok(included.includes(`!${file}`));
+  }
+});
+
 test('web/admin, migrations, unknown inputs and workflow changes get the needed checks', () => {
   assert.equal(classifyPaths(['src/pages/Admin.jsx']).web, true);
   assert.equal(classifyPaths(['supabase/migrations/new.sql']).backend, true);

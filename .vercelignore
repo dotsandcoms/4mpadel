@@ -26,6 +26,8 @@ mobile/src/*
 !mobile/src/lib/
 mobile/src/lib/*
 !mobile/src/lib/protected-data-api.ts
+!mobile/src/lib/telemetry-privacy.js
+!mobile/src/lib/entry-analytics.js
 !mobile/supabase/
 mobile/supabase/*
 !mobile/supabase/functions/
