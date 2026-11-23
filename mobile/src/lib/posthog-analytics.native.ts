@@ -45,13 +45,15 @@ export function capturePostHogScreen(name: string) {
   try { void client?.screen(name, { screen: name }).catch(() => {}); } catch { /* Independent of navigation. */ }
 }
 
-export function identifyPostHogAccount(id: string | null) {
-  if (!client || accountId === (id ?? undefined) && id !== null) return;
+export async function identifyPostHogAccount(id: string | null) {
+  const readyClient = client;
+  if (!readyClient || (id !== null && accountId === id)) return;
   try {
-    const currentId = client.getDistinctId();
-    // Recognize a persisted pseudonym after a cold launch as well as a live account switch.
-    if ((accountId || /^[a-f0-9]{64}$/.test(currentId)) && currentId !== id) client.reset();
-    if (id) client.identify(id);
+    // A fresh SDK instance returns an empty ID until it loads the persisted identity.
+    await readyClient.ready();
+    const currentId = readyClient.getDistinctId();
+    if ((accountId || /^[a-f0-9]{64}$/.test(currentId)) && currentId !== id) readyClient.reset();
+    if (id) readyClient.identify(id);
     accountId = id ?? undefined;
   } catch { /* Independent of authentication. */ }
 }

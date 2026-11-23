@@ -29,7 +29,7 @@ function harness({ storage = new Map(), fail = false } = {}) {
     if (name === './telemetry-privacy') return load('src/lib/telemetry-privacy.js');
     if (name === './posthog-analytics') return {
       initializePostHog: () => {}, capturePostHogEvent: () => {}, capturePostHogScreen: () => {},
-      identifyPostHogAccount: () => {}, resetPostHogAccount: () => {},
+      identifyPostHogAccount: async () => {}, resetPostHogAccount: () => {},
     };
     if (name === 'expo-crypto') return { CryptoDigestAlgorithm: { SHA256: 'sha256' }, digestStringAsync: async (_, text) => crypto.createHash('sha256').update(text).digest('hex') };
     if (name === '@react-native-async-storage/async-storage') return { __esModule: true, default: {
@@ -112,6 +112,34 @@ test('initialization happens once, and identity is hashed and cleared on logout'
   assert.match(h.calls.find(row => row[0] === 'user')[1], /^[a-f0-9]{64}$/);
   assert.ok(!JSON.stringify(h.calls).includes(id));
   assert.deepEqual(h.calls.at(-1), ['user', null]);
+});
+test('cold launch waits for the persisted PostHog identity before switching accounts', async () => {
+  const previous = 'a'.repeat(64), next = 'b'.repeat(64), calls = [];
+  let storedId = '', restoreIdentity;
+  const ready = new Promise(resolve => {
+    restoreIdentity = () => { storedId = previous; resolve(); };
+  });
+  class PostHog {
+    ready() { return ready; }
+    getDistinctId() { return storedId; }
+    reset() { calls.push('reset'); storedId = 'anonymous'; }
+    identify(id) { calls.push(['identify', storedId, id]); storedId = id; }
+  }
+  const adapter = load('src/lib/posthog-analytics.native.ts', name => {
+    if (name === 'react-native') return { Platform: { OS: 'ios' } };
+    if (name === 'posthog-react-native') return { PostHog };
+    if (name === './telemetry-privacy') return load('src/lib/telemetry-privacy.js');
+    throw new Error('Unexpected dependency: ' + name);
+  }, { process: { env: { EXPO_PUBLIC_POSTHOG_PROJECT_TOKEN: 'phc_test' } } });
+
+  adapter.initializePostHog();
+  const identification = adapter.identifyPostHogAccount(next);
+  assert.deepEqual(calls, []);
+  restoreIdentity();
+  await identification;
+  assert.deepEqual(calls, ['reset', ['identify', 'anonymous', next]]);
+  await adapter.identifyPostHogAccount(null);
+  assert.equal(calls.at(-1), 'reset');
 });
 test('SDK failure resolves without breaking navigation or a user action', async () => {
   const h = harness({ fail: true });

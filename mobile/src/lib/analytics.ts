@@ -54,7 +54,7 @@ export function setAnalyticsUser(authId: string | null) {
   return enqueue(async ready => {
     const input = analyticsIdentityInput(authId);
     const id = input ? await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, input) : null;
-    posthog.identifyPostHogAccount(id);
+    await posthog.identifyPostHogAccount(id);
     if (ready) await firebase.identifyAnalyticsUser(id);
   });
 }
