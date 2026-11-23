@@ -1,0 +1,51 @@
+name: Rankedin History Sync
+
+on:
+  schedule:
+    # Hourly from 00:17 to 05:17 South Africa time.
+    - cron: '17 22,23,0-3 * * *'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Supabase archive
+        type: choice
+        options:
+          - staging
+          - production
+        default: staging
+      dry_run:
+        description: Preview public source data without writing to Supabase
+        type: boolean
+        default: true
+      pilot_targets:
+        description: Optional comma-separated player IDs or event IDs such as tournament:74440
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rankedin-history-${{ inputs.target || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.event_name == 'workflow_dispatch' || vars.RANKEDIN_HISTORY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Sync archive batch
+        env:
+          RANKEDIN_HISTORY_TARGET: ${{ inputs.target || 'production' }}
+          RANKEDIN_HISTORY_DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || format('{0}', inputs.dry_run) }}
+          RANKEDIN_HISTORY_PILOT_TARGETS: ${{ inputs.pilot_targets }}
+          RANKEDIN_HISTORY_ENABLED: ${{ vars.RANKEDIN_HISTORY_ENABLED }}
+          RANKEDIN_HISTORY_SUPABASE_URL: ${{ inputs.target != 'staging' && secrets.VITE_SUPABASE_URL || secrets.RANKEDIN_HISTORY_STAGING_URL }}
+          RANKEDIN_HISTORY_SUPABASE_KEY: ${{ inputs.target != 'staging' && secrets.VITE_SUPABASE_SERVICE_ROLE_KEY || secrets.RANKEDIN_HISTORY_STAGING_KEY }}
+        run: node scripts/syncRankedinHistory.mjs
