@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
 const ts = require('typescript');
@@ -46,8 +47,34 @@ test('navigation emits readable screen names and never route IDs, query strings 
   assert.equal(events.analyticsScreen('(tabs)/(calendar)/events/[id]'), 'event_details');
   assert.equal(events.analyticsScreen('(tabs)/profile'), 'my_profile');
   assert.equal(events.analyticsScreen('(auth)/sign-in'), 'sign_in');
+  assert.equal(events.analyticsScreen('players'), 'players');
+  assert.equal(events.analyticsScreen('media'), 'media');
+  assert.equal(events.analyticsScreen('pro/fip/[id]'), 'fip_tournament');
+  assert.equal(events.analyticsScreen('media/index'), 'media');
   assert.equal(events.analyticsScreen('reset-password?token=private'), 'other');
   assert.equal(events.analyticsScreen('players/private@example.com'), 'other');
+  assert.equal(events.analyticsScreen('constructor'), 'other');
+});
+
+test('every app screen resolves to a distinct, fixed reporting name', () => {
+  const routeFiles = fs.readdirSync('src/app', { recursive: true })
+    .filter(file => file.endsWith('.tsx') && !/^[+_]/.test(path.basename(file)))
+    .sort();
+  const screens = new Map();
+  const unmapped = [];
+  for (const file of routeFiles) {
+    // Expo Router returns file segments with the final index omitted.
+    const segments = file.split(path.sep).join('/').replace(/\.tsx$/, '').replace(/(^|\/)index$/, '');
+    const screen = events.analyticsScreen(segments);
+    if (screen === 'other') {
+      unmapped.push(file);
+      continue;
+    }
+    assert.match(screen, /^[a-z][a-z0-9_]+$/);
+    assert.ok(!screens.has(screen), `${file} and ${screens.get(screen)} report the same screen`);
+    screens.set(screen, file);
+  }
+  assert.deepEqual(unmapped, []);
 });
 test('event parameters drop personal details, arbitrary strings and unknown fields', () => {
   assert.deepEqual(plain(events.safeAnalyticsParams('login', {

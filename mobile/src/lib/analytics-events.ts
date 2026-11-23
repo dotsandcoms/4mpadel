@@ -25,28 +25,36 @@ export type PurchaseKind = 'event_registration' | 'entry_balance' | 'licence_ful
 export const PURCHASE_KINDS: readonly PurchaseKind[] = ['event_registration', 'entry_balance', 'licence_full', 'licence_temporary'];
 
 const SCREENS: Record<string, string> = {
-  '': 'home', index: 'home', calendar: 'events', 'events/[id]': 'event_details',
+  '': 'home', calendar: 'events', 'events/[id]': 'event_details',
   explore: 'explore', profile: 'my_profile', rankings: 'rankings',
   onboarding: 'onboarding', 'sign-in': 'sign_in', 'complete-profile': 'complete_profile',
+  'app-tour': 'app_tour', 'email-change': 'email_change',
   settings: 'account_settings', 'edit-profile': 'edit_profile', 'delete-account': 'delete_account',
   license: 'sapa_licence', payments: 'payments', 'my-entries': 'my_entries',
   'events/register': 'event_registration', 'events/pay-balance': 'entry_balance',
-  'events/switch-division': 'switch_division', following: 'following',
+  'events/switch-division': 'switch_division', 'events/points': 'event_points',
+  'event-winners': 'event_winners', followers: 'followers', following: 'following',
   notifications: 'notifications', 'notification-settings': 'notification_settings',
-  'players/index': 'players', 'players/[id]': 'player_profile',
+  players: 'players', 'players/[id]': 'player_profile',
+  clubs: 'clubs', 'clubs/[slug]': 'club', 'claim-club': 'claim_club', 'club-groups/[slug]': 'club_group',
   'pro-padel': 'pro_padel', 'pro/live': 'pro_live', 'pro/match/[id]': 'pro_match',
   'pro/player/[id]': 'pro_player', 'pro/tournament/[id]': 'pro_tournament',
-  'pro/fip/[id]/index': 'fip_tournament', 'pro/fip/[id]/document': 'fip_document',
-  'media/index': 'media', 'media/[id]': 'media_album', 'calendar/[id]': 'calendar_event',
+  'pro/tournament/[id]/pair/[pair]': 'pro_tournament_pair', 'pro/news': 'pro_news',
+  'pro/fip/[id]': 'fip_tournament', 'pro/fip/[id]/document': 'fip_document',
+  media: 'media', 'media/[id]': 'media_album', 'calendar/[id]': 'calendar_event',
   search: 'event_search', help: 'help', legal: 'legal', 'reset-password': 'reset_password',
+  'help/related': 'help_related_entry', 'help/requests': 'help_requests', 'help/request/[id]': 'help_request',
   'match-result': 'match_result', messages: 'messages', 'messages/[id]': 'conversation',
-  'messages/new': 'message_request', 'messages/events': 'event_messages', 'settings/messaging': 'messaging_settings',
+  'messages/new': 'message_request', 'messages/events': 'event_messages',
+  'messages/group': 'group_message', 'messages/group-members': 'group_members',
+  'messages/help/[id]': 'help_conversation', 'settings/messaging': 'messaging_settings',
 };
 
 /** Receives Expo Router segments, whose dynamic parts are templates such as [id]. */
 export function analyticsScreen(segments: string): string {
-  const route = segments.split('/').filter(part => part && !/^\(.*\)$/.test(part)).join('/');
-  return SCREENS[route] ?? 'other';
+  const route = segments.split('/').filter(part => part && !/^\(.*\)$/.test(part)).join('/')
+    .replace(/(^|\/)index$/, '');
+  return Object.hasOwn(SCREENS, route) ? SCREENS[route] : 'other';
 }
 
 const ENUMS: Record<string, readonly string[]> = {
