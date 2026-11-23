@@ -7,6 +7,11 @@ import ErrorBoundary from './components/ErrorBoundary'
 import { supabase } from './supabaseClient'
 import './index.css'
 import App from './App.jsx'
+import { initializeWebAnalytics } from './lib/web-analytics.js'
+import { initializeWebMonitoring } from './lib/web-monitoring.js'
+
+initializeWebMonitoring()
+initializeWebAnalytics()
 
 // Supabase connection check (dev only)
 if (import.meta.env.DEV) {

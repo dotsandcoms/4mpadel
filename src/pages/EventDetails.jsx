@@ -1,3 +1,4 @@
+import { trackWebEvent, trackWebPaymentConfirmed } from '../lib/web-analytics.js';
 import LicensePaymentModal from '../components/LicensePaymentModal';
 import { legacyEventCheckout } from '../utils/legacyEventCheckout';
 import { eventPaymentReference } from '../utils/eventPaymentReference';
@@ -662,6 +663,15 @@ const EventDetails = () => {
     const location = useLocation();
     const [licensePurchase, setLicensePurchase] = useState(() => new URLSearchParams(window.location.search).has('license_payment') ? {} : null);
     const [event, setEvent] = useState(null);
+    const trackedEvent = useRef(null);
+    useEffect(() => {
+        if (!event?.id || trackedEvent.current === event.id) return;
+        trackedEvent.current = event.id;
+        const contentId = String(event.id);
+        trackWebEvent('content_view', { content_type: 'events',
+            ...(/^[1-9]\d{0,11}$/.test(contentId) ? { content_id: 'event:' + contentId } : {}),
+        });
+    }, [event?.id]);
     const { config: commerce } = useCommerceConfig(Number(String(event?.start_date || '').slice(0, 4)) || 2026);
     const isCancelled = event?.event_status === 'cancelled';
     const [loading, setLoading] = useState(true);
@@ -3083,6 +3093,7 @@ const EventDetails = () => {
 
             setRegStep(2);
             setIsRegistered(true);
+            trackWebEvent('registration_complete', { payment_state: 'pending', item_count: selectedDivisions.length });
             toast.success("Registration Successful!");
         } catch (err) {
             console.error("Registration Error:", err);
@@ -3143,6 +3154,7 @@ const EventDetails = () => {
             toast.error('Your checkout could not be saved. Refresh this page and try again.');return;
         }
         const paystackPop = new PaystackPop();
+        trackWebEvent('begin_checkout', { item_category: 'event_registration', currency: 'ZAR', value: pending.amount });
 
         await paystackPop.checkout({
             key: PAYSTACK_PUBLIC_KEY,
@@ -3280,6 +3292,7 @@ const EventDetails = () => {
             if (error || data?.error || (!data?.processed && !data?.alreadyProcessed)) {
                 toast.info('Payment is still being verified. If you have paid, check your entry again shortly.');return;
             }
+            trackWebPaymentConfirmed(paidRef);
             setRegStep(2);setIsPaid(true);setIsRegistered(true);refreshParticipants();
             toast.success('Payment verified and registration saved.');
         } catch {
@@ -4214,7 +4227,10 @@ const EventDetails = () => {
                             return (
                                 <button
                                     key={id}
-                                    onClick={() => setActiveTab(id)}
+                                    onClick={() => {
+                                        if (id !== activeTab) trackWebEvent('feature_interaction', { feature: 'event_details', action: 'tab', selection: id });
+                                        setActiveTab(id);
+                                    }}
                                     className={`flex-1 py-4 text-sm font-semibold border-b-2 transition-all whitespace-nowrap text-center ${active
                                         ? 'text-[#0a0a0a] border-[#0a0a0a]'
                                         : 'border-transparent text-gray-400 hover:text-gray-700 hover:border-gray-300'

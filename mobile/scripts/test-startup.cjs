@@ -66,6 +66,7 @@ function boot(sessionTask, seen = true) {
     setAnalyticsUser: async () => {},
     seenRef: { current: false }, sessionRef: { current: null }, settled: { current: false }, recoveryRoute: { current: false },
     Observe: { reportError: error => calls.push(['error', error.message]) },
+    reportNativeError: () => {},
     router: { replace: path => calls.push(['navigate', path]) },
     watchPushRegistration: () => ({ remove() {} }), addNotificationResponseListener: () => ({ remove() {} }),
     ...Object.fromEntries(['setDataReady', 'setBootError', 'setPendingPushPath'].map(name => [name, value => calls.push([name, value])])),

@@ -3,8 +3,17 @@ module.exports = ({ config }) => {
   // Apple targets read this config during prebuild, before EAS stamps the host
   // plist. Give the widgets/watch targets the same remotely assigned build.
   const iosBuildNumber = process.env.EAS_BUILD_IOS_BUILD_NUMBER?.trim();
+  const sentryProject = process.env.SENTRY_PROJECT?.trim();
+  const sentryOrg = process.env.SENTRY_ORG?.trim();
+  const sentryPlugin = sentryProject && sentryOrg && process.env.SENTRY_AUTH_TOKEN ? [
+    ['@sentry/react-native/expo', {
+      organization: sentryOrg, project: sentryProject,
+      ...(process.env.SENTRY_URL ? { url: process.env.SENTRY_URL } : {}),
+    }],
+  ] : [];
   return {
     ...config,
+    plugins: [...(config.plugins || []), ...sentryPlugin],
     ios: {
       ...config.ios,
       ...(iosBuildNumber ? { buildNumber: iosBuildNumber } : {}),

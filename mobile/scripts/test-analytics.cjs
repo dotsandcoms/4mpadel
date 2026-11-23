@@ -26,6 +26,11 @@ function harness({ storage = new Map(), fail = false } = {}) {
   const app = load('src/lib/analytics.ts', name => {
     if (name === './firebase-analytics') return sdk;
     if (name === './analytics-events') return events;
+    if (name === './telemetry-privacy') return load('src/lib/telemetry-privacy.js');
+    if (name === './posthog-analytics') return {
+      initializePostHog: () => {}, capturePostHogEvent: () => {}, capturePostHogScreen: () => {},
+      identifyPostHogAccount: () => {}, resetPostHogAccount: () => {},
+    };
     if (name === 'expo-crypto') return { CryptoDigestAlgorithm: { SHA256: 'sha256' }, digestStringAsync: async (_, text) => crypto.createHash('sha256').update(text).digest('hex') };
     if (name === '@react-native-async-storage/async-storage') return { __esModule: true, default: {
       getItem: async key => storage.get(key) ?? null,
