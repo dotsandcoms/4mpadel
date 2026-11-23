@@ -14,13 +14,18 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/event-rules.ts', 
 // This checks its button handlers and conditional branches without a native device.
 async function screen(mode, eventOptions = {}, savedCheckout = null, quoteError = null, profileOptions = {}) {
   const values = [], effects = [], focusEffects = [], navigation = [], requests = [], cancelled = [], removed = [];
+  const effectDependencies = [], analytics = [], browserVisits = [];
   const player = { id: '1', name: 'Mark', email: 'mark@example.com', contact_number: '0123', license_type: 'full', paid_registration: true, points: 1729, rankedin_id: 'R1', ...profileOptions };
   let savedLevel = profileOptions.playtomic_level ?? null;
   let cursor = 0, mounted = false;
   const hooks = {
     useState(initial) { const i = cursor++; if (!(i in values)) values[i] = typeof initial === 'function' ? initial() : initial; return [values[i], v => { values[i] = typeof v === 'function' ? v(values[i]) : v; }]; },
     useRef(initial) { const i = cursor++; if (!(i in values)) values[i] = { current: initial }; return values[i]; },
-    useEffect(fn) { cursor++; if (!mounted) effects.push(fn); },
+    useEffect(fn, deps) {
+      const i = cursor++, previous = effectDependencies[i];
+      if (!mounted || !deps || !previous || deps.some((value, index) => !Object.is(value, previous[index]))) effects.push(fn);
+      effectDependencies[i] = deps;
+    },
     useCallback(fn) { cursor++; return fn; },
   };
   const event = { id: 524, event_name: 'Legends', is_manual: true, start_date: '2099-10-02', ...eventOptions };
@@ -31,7 +36,7 @@ async function screen(mode, eventOptions = {}, savedCheckout = null, quoteError 
   const native = Object.fromEntries(['ActivityIndicator', 'Pressable', 'ScrollView', 'Switch', 'Text', 'TextInput', 'View'].map(k => [k, k]));
   const modules = {
     '@/lib/sapa-main-ranking': mainRankings,
-    '@/lib/analytics': { trackEvent() {}, recordAnalyticsCheckout() {}, trackConfirmedPurchase() {} },
+    '@/lib/analytics': { trackEvent: (name, properties) => analytics.push([name, { ...properties }]), recordAnalyticsCheckout() {}, trackConfirmedPurchase() {} },
     '@/components/events/entry-saved-banner': { EntrySavedBanner: 'EntrySavedBanner' },
     '@/components/toast': { Toast: 'Toast' },
     '@/components/events/tshirt-size-picker': { SizePicker: 'SizePicker' },
@@ -44,7 +49,7 @@ async function screen(mode, eventOptions = {}, savedCheckout = null, quoteError 
     '@/lib/foreground-task': { startForegroundTask: () => () => {} },
     'expo-image': { Image: 'Image' }, '@expo/vector-icons': { Ionicons: 'Ionicons' },
     'expo-crypto': { randomUUID: () => 'test-attempt' },
-    'expo-web-browser': { openBrowserAsync: async () => ({ type: 'cancel' }) }, 'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 20, bottom: 20 }) },
+    'expo-web-browser': { openBrowserAsync: async url => { browserVisits.push(url); return { type: 'cancel' }; } }, 'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 20, bottom: 20 }) },
     '@react-native-async-storage/async-storage': { default: { getItem: async () => savedCheckout, setItem: async () => {}, removeItem: async key => removed.push(key) } },
     '@/components/events/event-ui': { ActionButton: 'ActionButton', Chip: 'Chip', Notice: 'Notice' },
     '@/components/events/registration-options': { Choices: 'Choices', DivisionOptions: 'DivisionOptions', LicencePicker: 'LicencePicker' },
@@ -68,14 +73,28 @@ async function screen(mode, eventOptions = {}, savedCheckout = null, quoteError 
   const exports = {};
   vm.runInNewContext(source, { exports, require: name => { assert.ok(name in modules, name); return modules[name]; }, __DEV__: true, console, Error, URL, setInterval: () => 0, clearInterval: () => {} });
   const render = () => { cursor = 0; const component = exports.default().type; const tree = component(); mounted = true; return tree; };
-  render(); effects.forEach(fn => fn());
-  await new Promise(resolve => setImmediate(resolve));
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  const flushEffects = async () => { render(); effects.splice(0).forEach(fn => fn()); await flush(); };
+  await flushEffects();
   function find(type, predicate = () => true) {
     const visit = node => { if (!node || typeof node !== 'object') return; if (Array.isArray(node)) { for (const child of node) { const found = visit(child); if (found) return found; } } else { if ((node.type === type || node.type?.name === type) && predicate(node.props)) return node; return visit(node.props?.children); } };
     return visit(render());
   }
-  return { find, navigation, requests, cancelled, removed, updateProfile: patch => { Object.assign(player, patch); if ('playtomic_level' in patch) savedLevel = patch.playtomic_level; }, focus: async () => { render(); focusEffects.forEach(fn => fn()); await new Promise(resolve => setImmediate(resolve)); }, flush: () => new Promise(resolve => setImmediate(resolve)) };
+  return { find, navigation, requests, cancelled, removed, analytics, browserVisits, flushEffects, updateProfile: patch => { Object.assign(player, patch); if ('playtomic_level' in patch) savedLevel = patch.playtomic_level; }, focus: async () => { render(); focusEffects.forEach(fn => fn()); await flush(); }, flush };
 }
+test('only 4M registration activity enters the registration funnel', async () => {
+  const rankedinUrl = 'https://www.rankedin.com/en/tournament/524';
+  const external = await screen(undefined, { is_manual: false, rankedin_url: rankedinUrl });
+  await external.flushEffects();
+  assert.deepEqual(external.analytics, []);
+  await external.find('ActionButton', props => props.label === 'Continue to RankedIn ↗').props.onPress();
+  assert.deepEqual(external.browserVisits, [rankedinUrl]);
+  assert.deepEqual(external.analytics, []);
+
+  const manual = await screen(undefined);
+  await manual.flushEffects();
+  assert.deepEqual(manual.analytics, [['registration_step', { step: 1, flow: 'register', item_count: 0 }]]);
+});
 test('saved Playtomic level is loaded from private profile details, including zero', async () => {
   for (const level of [0, 3.25]) {
     const app = await screen(undefined, {}, null, null, { playtomic_level: level });

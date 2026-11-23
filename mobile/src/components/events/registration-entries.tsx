@@ -12,6 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { lightBrand as brand } from '@/theme/tokens';
 import { paymentPresentation } from '@/lib/payment-presentation';
 import { PaymentStatus } from './payment-status';
+import { trackEvent } from '@/lib/analytics';
+import { entryWithdrawalAnalytics } from '@/lib/entry-analytics';
 export function RegistrationEntries({ event, divisions, registrations, profiles, onManage, onRefresh, manageRequested, onManageOpened }: { manageRequested?: boolean; onManageOpened?: () => void; event: EventDetail; divisions: Division[]; registrations: EventRegistration[]; profiles: RankedPlayer[]; onManage: (mode?: 'pay') => void; onRefresh: () => Promise<void> }) {
   const router = useRouter();
   const [managing, setManaging] = useState(false);
@@ -46,6 +48,13 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
         throw new Error(payload?.error || payload?.message || failure.message);
       }
       if (data?.error) throw new Error(data.message || data.error);
+      if (action.kind !== 'switch_division') {
+        const summary = entryWithdrawalAnalytics(data);
+        if (summary) {
+          void trackEvent('entry_withdrawal', { item_count: summary.withdrawn });
+          if (summary.refundStarted) void trackEvent('entry_refund_started', { item_count: summary.refundStarted });
+        }
+      }
       setAction(null); await onRefresh();
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not update your entry. Please try again.'); }
     finally { setBusy(false); }

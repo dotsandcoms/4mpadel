@@ -148,3 +148,38 @@ References: [Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/),
 [React Native Firebase](https://rnfirebase.io/),
 [Analytics](https://rnfirebase.io/analytics/usage),
 [Screen tracking](https://rnfirebase.io/analytics/screen-tracking).
+
+## PostHog and Sentry
+
+Web, Android and iOS share one PostHog project. Existing mobile events continue
+to go to Firebase. PostHog also tracks canonical pages and screens, active time,
+store-link clicks, approximate country, platform, campaign tags and the event
+registration funnel. Active time counts intervals in a focused, visible browser
+page or foreground app screen. Sign-in joins web and app with the same hashed 4M
+account identifier. App Store Connect and Google Play Console report downloads.
+The first launch seen by PostHog can include players who already had the app.
+The registration funnel measures entries through 4M.
+
+[4M Padel Product Analytics](https://eu.posthog.com/project/364297/dashboard/1142927)
+shows South Africa and overseas activity, engagement, weekly returns, app store
+clicks, first app launches, the payment funnel, registration completions, confirmed
+entry payments, player withdrawals, refunds started and directory engagement.
+Withdrawal and refund counts come from successful player actions and do not show
+refund settlement or organiser actions. Use the finance ledger for those totals.
+Dashboard charts filter to production. Inspect PostHog Activity for preview and
+test events.
+
+[Sentry](https://4m-padel.sentry.io/projects/) has separate web and app projects.
+Error events include diagnostic context and strip account and request data.
+Server-side IP storage is disabled on both projects. Session replay and broad
+interaction capture are disabled. In a preview, open a public page, navigate
+and background the app, then verify page or screen views and engagement in
+PostHog. Trigger a controlled error in an internal test session and verify its
+platform, app version and stack in Sentry.
+
+Vercel and EAS use the public variables in the respective .env.example files.
+Preview builds use the preview telemetry environment. Sentry source-map and
+debug-symbol upload requires the build-only variables SENTRY_AUTH_TOKEN,
+SENTRY_ORG, SENTRY_PROJECT and SENTRY_URL. Store the auth token in build secrets
+and set the project slug to the matching web or app Sentry project. Configure
+and verify source-map uploads before relying on production stack symbolication.

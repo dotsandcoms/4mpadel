@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
 const ts = require('typescript');
@@ -26,6 +27,11 @@ function harness({ storage = new Map(), fail = false } = {}) {
   const app = load('src/lib/analytics.ts', name => {
     if (name === './firebase-analytics') return sdk;
     if (name === './analytics-events') return events;
+    if (name === './telemetry-privacy') return load('src/lib/telemetry-privacy.js');
+    if (name === './posthog-analytics') return {
+      initializePostHog: () => {}, capturePostHogEvent: () => {}, capturePostHogScreen: () => {},
+      identifyPostHogAccount: async () => {}, resetPostHogAccount: () => {},
+    };
     if (name === 'expo-crypto') return { CryptoDigestAlgorithm: { SHA256: 'sha256' }, digestStringAsync: async (_, text) => crypto.createHash('sha256').update(text).digest('hex') };
     if (name === '@react-native-async-storage/async-storage') return { __esModule: true, default: {
       getItem: async key => storage.get(key) ?? null,
@@ -41,8 +47,34 @@ test('navigation emits readable screen names and never route IDs, query strings 
   assert.equal(events.analyticsScreen('(tabs)/(calendar)/events/[id]'), 'event_details');
   assert.equal(events.analyticsScreen('(tabs)/profile'), 'my_profile');
   assert.equal(events.analyticsScreen('(auth)/sign-in'), 'sign_in');
+  assert.equal(events.analyticsScreen('players'), 'players');
+  assert.equal(events.analyticsScreen('media'), 'media');
+  assert.equal(events.analyticsScreen('pro/fip/[id]'), 'fip_tournament');
+  assert.equal(events.analyticsScreen('media/index'), 'media');
   assert.equal(events.analyticsScreen('reset-password?token=private'), 'other');
   assert.equal(events.analyticsScreen('players/private@example.com'), 'other');
+  assert.equal(events.analyticsScreen('constructor'), 'other');
+});
+
+test('every app screen resolves to a distinct, fixed reporting name', () => {
+  const routeFiles = fs.readdirSync('src/app', { recursive: true })
+    .filter(file => file.endsWith('.tsx') && !/^[+_]/.test(path.basename(file)))
+    .sort();
+  const screens = new Map();
+  const unmapped = [];
+  for (const file of routeFiles) {
+    // Expo Router returns file segments with the final index omitted.
+    const segments = file.split(path.sep).join('/').replace(/\.tsx$/, '').replace(/(^|\/)index$/, '');
+    const screen = events.analyticsScreen(segments);
+    if (screen === 'other') {
+      unmapped.push(file);
+      continue;
+    }
+    assert.match(screen, /^[a-z][a-z0-9_]+$/);
+    assert.ok(!screens.has(screen), `${file} and ${screens.get(screen)} report the same screen`);
+    screens.set(screen, file);
+  }
+  assert.deepEqual(unmapped, []);
 });
 test('event parameters drop personal details, arbitrary strings and unknown fields', () => {
   assert.deepEqual(plain(events.safeAnalyticsParams('login', {
@@ -107,6 +139,34 @@ test('initialization happens once, and identity is hashed and cleared on logout'
   assert.match(h.calls.find(row => row[0] === 'user')[1], /^[a-f0-9]{64}$/);
   assert.ok(!JSON.stringify(h.calls).includes(id));
   assert.deepEqual(h.calls.at(-1), ['user', null]);
+});
+test('cold launch waits for the persisted PostHog identity before switching accounts', async () => {
+  const previous = 'a'.repeat(64), next = 'b'.repeat(64), calls = [];
+  let storedId = '', restoreIdentity;
+  const ready = new Promise(resolve => {
+    restoreIdentity = () => { storedId = previous; resolve(); };
+  });
+  class PostHog {
+    ready() { return ready; }
+    getDistinctId() { return storedId; }
+    reset() { calls.push('reset'); storedId = 'anonymous'; }
+    identify(id) { calls.push(['identify', storedId, id]); storedId = id; }
+  }
+  const adapter = load('src/lib/posthog-analytics.native.ts', name => {
+    if (name === 'react-native') return { Platform: { OS: 'ios' } };
+    if (name === 'posthog-react-native') return { PostHog };
+    if (name === './telemetry-privacy') return load('src/lib/telemetry-privacy.js');
+    throw new Error('Unexpected dependency: ' + name);
+  }, { process: { env: { EXPO_PUBLIC_POSTHOG_PROJECT_TOKEN: 'phc_test' } } });
+
+  adapter.initializePostHog();
+  const identification = adapter.identifyPostHogAccount(next);
+  assert.deepEqual(calls, []);
+  restoreIdentity();
+  await identification;
+  assert.deepEqual(calls, ['reset', ['identify', 'anonymous', next]]);
+  await adapter.identifyPostHogAccount(null);
+  assert.equal(calls.at(-1), 'reset');
 });
 test('SDK failure resolves without breaking navigation or a user action', async () => {
   const h = harness({ fail: true });

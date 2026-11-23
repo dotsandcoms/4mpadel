@@ -1,4 +1,5 @@
 import React, { Component } from 'react';
+import { reportWebError } from '../lib/web-monitoring.js';
 
 class ErrorBoundary extends Component {
     constructor(props) {
@@ -12,6 +13,7 @@ class ErrorBoundary extends Component {
 
     componentDidCatch(error, errorInfo) {
         console.error("Uncaught error:", error, errorInfo);
+        reportWebError(error, 'render');
         this.setState({ errorInfo });
     }
 

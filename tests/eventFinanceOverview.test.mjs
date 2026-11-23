@@ -160,7 +160,8 @@ test('overview counts all entries, payments and licenses beyond 1,000 rows, and 
         assert.equal((await eventRow(page, 'Earlier event')).paid, '975 Paid');
         assert.equal((await eventRow(page, 'RankedIn event')).entries, '1001');
         assert.equal(await page.evaluate(() => window.__queries.some(q => ['event_registrations','payments','tournament_participants','payment_refunds','players'].includes(q.table))), false);
-        assert.deepEqual(await page.evaluate(() => window.__summaryCalls), [[524,525,522,521,520]]);
+        const summaryCalls = await page.evaluate(() => window.__summaryCalls);
+        assert.deepEqual(summaryCalls.map(ids => ids.toSorted((a, b) => a - b)), [[520,521,522,524,525]]);
 
         await page.click(`button[aria-label="Manage registrations for ${eventName}"]`);
         await page.waitForFunction(() => [...document.querySelectorAll('button')].some(b => b.textContent === 'Back to events'));

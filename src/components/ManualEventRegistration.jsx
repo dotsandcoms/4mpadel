@@ -1,3 +1,6 @@
+import { trackWebEvent, trackWebPaymentConfirmed } from '../lib/web-analytics.js';
+import { entryWithdrawalAnalytics } from '../../mobile/src/lib/entry-analytics.js';
+import { reportWebError } from '../lib/web-monitoring.js';
 import { eventLicense } from '../utils/licenses';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -398,6 +401,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const [myRegs, setMyRegs] = useState([]);
     const [showWizard, setShowWizard] = useState(false);
     const [wizardStep, setWizardStep] = useState(1);
+    const trackedWizard = useRef(null);
     const [processing, setProcessing] = useState(false);
     const [withdrawTarget, setWithdrawTarget] = useState(null);
     const [withdrawing, setWithdrawing] = useState(false);
@@ -1187,8 +1191,20 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     };
     openWizardRef.current = openWizard;
 
+    useEffect(() => {
+        if (!showWizard) { trackedWizard.current = null; return; }
+        if (wizardStep < 1 || wizardStep > 4) return;
+        const key = `${event.id}:${wizardMode}:${wizardStep}`;
+        if (trackedWizard.current === key) return;
+        trackedWizard.current = key;
+        trackWebEvent('registration_step', { step: wizardStep, flow: wizardMode === 'payOnly' ? 'pay' : 'register' });
+    }, [showWizard, event.id, wizardMode, wizardStep]);
+
     const closeWizard = () => {
         if (processing) return;
+        if (wizardStep < 5) trackWebEvent('checkout_exit', {
+            step: wizardStep, flow: wizardMode === 'payOnly' ? 'pay' : 'register',
+        });
         resetWizardState();
         setShowWizard(false);
     };
@@ -2254,6 +2270,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             throw new Error(payload?.error || payload?.message || error.message || 'Refund request failed');
         }
         if (data?.error) throw new Error(data.message || data.error);
+        if (['withdraw', 'withdraw_all', 'remove_partner'].includes(body.action)) {
+            const summary = entryWithdrawalAnalytics(data);
+            if (summary) {
+                trackWebEvent('entry_withdrawal', { item_count: summary.withdrawn });
+                if (summary.refundStarted) trackWebEvent('entry_refund_started', { item_count: summary.refundStarted });
+            }
+        }
         return data;
     };
 
@@ -2475,6 +2498,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             line_items: lineItems,
             event_url: eventUrl,
             registration_rows: rows,
+            ...(wizardMode === 'register' ? { new_entry_count: rows.length } : {}),
             solo_link_updates: soloLinks,
             division_names: isWeeklyEvent
                 ? selectedWeeks.map((w) => formatWeeklyDateLabel(w.start_date, w.start_time)).join(', ')
@@ -2664,6 +2688,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 throw new Error('Awaiting payment. Your registration is not confirmed.');
             }
         } catch (confirmErr) {
+            trackWebEvent('checkout_outcome', { item_category: 'event_registration', status: 'unconfirmed' });
+            if (confirmErr?.code !== 'PAYMENT_NOT_CONFIRMED') reportWebError(new Error('Event payment verification failed'), 'payment_confirmation');
             console.error('Payment confirmation error:', confirmErr);
             toast.error(confirmErr.message || 'Payment received but confirmation failed. Try refreshing or contact support.');
             setProcessing(false);
@@ -2674,18 +2700,23 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         // changed between preload and completion. The payments row is the source of
         // truth (it's what Paystack charged and what the receipt/emails report).
         let confirmedAmount = paidAmount ?? 0;
+        let newEntries;
+        let isTestPayment = isPaystackTestMode;
         try {
             const { data: payRow } = await supabase
                 .from('payments')
-                .select('amount')
+                .select('amount, is_test, metadata')
                 .eq('reference', paidRef)
                 .maybeSingle();
             if (payRow?.amount != null) confirmedAmount = Number(payRow.amount);
+            if (payRow?.is_test === true) isTestPayment = true;
+            newEntries = payRow?.metadata?.new_entry_count;
         } catch (amountErr) {
             console.error('Could not load charged amount, falling back to client total:', amountErr);
         }
         // Capture weeks before registeredWeekIds refresh can empty selectedWeeks.
         const weeksToSchedule = snapshotSelectedWeeksForSchedule();
+        if (!isTestPayment) trackWebPaymentConfirmed(paidRef, confirmedAmount, newEntries);
         setConfirmedPaidTotal(confirmedAmount);
         setProcessing(false);
         setWizardStep(5);
@@ -2707,6 +2738,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const { data, error } = await supabase.rpc('cancel_event_checkout', { p_reference: reference });
         if (error) { setProcessing(false); toast.error('Could not cancel checkout. Please check payment status before trying again.'); return; }
         if (data?.paymentReceived) { await handlePaymentSuccess(reference); return; }
+        trackWebEvent('checkout_outcome', { item_category: 'event_registration', status: 'cancelled' });
         checkoutPrepRef.current = null;
         setProcessing(false);
         if (wizardMode === 'payOnly') setWizardStep(2);
@@ -3032,6 +3064,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 // Entry-fee cover rows are deliberately omitted: the organiser must
                 // verify the off-platform payment before changing payment_status.
                 const savedRows = await persistRegistrations(rows, soloLinks, []);
+                if (wizardMode === 'register') trackWebEvent('registration_complete', { payment_state: 'pending', item_count: rows.length });
                 await sendRegistrationEmails(savedRows, false);
                 setConfirmedPaidTotal(null);
                 setWizardStep(5);
@@ -3056,6 +3089,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
                 const { error: insertError } = await insertProcessingPayment(payload);
                 if (insertError) throw insertError;
+                trackWebEvent('begin_checkout', { item_category: 'event_registration', currency: 'ZAR', value: payload.amount });
 
                 // Keep processing=true until Paystack onSuccess / onCancel clears it.
                 if (prep?.launcher) {
@@ -3073,6 +3107,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             const savedRows = isReserve
                 ? await savePayLaterRegistrations(rows, soloLinks)
                 : await persistRegistrations(rows, soloLinks, covers);
+            if (wizardMode === 'register') trackWebEvent('registration_complete', { payment_state: isReserve ? 'pending' : 'paid', item_count: rows.length });
             await sendRegistrationEmails(savedRows, isReserve ? false : (wizardMode === 'addPartner' ? total > 0 : true));
             setConfirmedPaidTotal(isReserve ? null : 0);
             setWizardStep(5);
@@ -3085,6 +3120,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 toast.success('Entry saved — return to your entry to pay later.');
             }
         } catch (err) {
+            trackWebEvent('action_error', { feature: 'registration' });
+            reportWebError(new Error('Event registration failed'), 'registration');
             console.error('Manual registration error:', err);
             toast.error(`Registration failed: ${err.message}`);
         } finally {

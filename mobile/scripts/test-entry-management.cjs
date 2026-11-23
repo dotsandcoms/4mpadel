@@ -9,9 +9,10 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/event-rules.ts', 
 }).outputText, { exports: eventRules });
 const paymentModule = { exports: {} };
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/payment-presentation.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { module: paymentModule, exports: paymentModule.exports });
-function screen(partner = true, open = true, higher = false, balance = undefined, registrations = undefined) {
+const entryAnalytics = require('../src/lib/entry-analytics.js');
+function screen(partner = true, open = true, higher = false, balance = undefined, registrations = undefined, refundResult = {}) {
   let cursor = 0;
-  const state = [], routes = [], calls = [], manageCalls = [];
+  const state = [], routes = [], calls = [], manageCalls = [], analytics = [];
   const modules = {
     react: { useEffect() {}, useState: value => { const i = cursor++; if (!(i in state)) state[i] = value; return [state[i], next => state[i] = next]; } },
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }), Fragment: 'Fragment' },
@@ -21,11 +22,13 @@ function screen(partner = true, open = true, higher = false, balance = undefined
     './event-teams': { PlayerAvatar: 'Avatar' },
     './payment-status': { PaymentStatus: 'PaymentStatus' },
     '@/lib/payment-presentation': paymentModule.exports,
+    '@/lib/entry-analytics': entryAnalytics,
+    '@/lib/analytics': { trackEvent: (name, props) => analytics.push([name, { ...props }]) },
     '@expo/vector-icons': { Ionicons: 'Ionicons' },
     '@/theme/tokens': { lightBrand: { page: '#F5F6F3', elevated: '#fff', surface: '#eee', premium: '#16251F', muted: '#52625A', faint: '#65726B', accent: '#386018', edge: '#DCE2DA', padel: '#CCFF00', danger: '#B7352D' } },
     '@/lib/event-rules': { ...eventRules, formatMoney: n => `R ${n}`, entryFee: (_event, division) => division?.entry_fee || 100, registrationState: () => open ? 'open' : 'closed' },
     'expo-router': { useRouter: () => ({ push: value => routes.push(value) }) },
-    '@/lib/supabase': { supabase: { functions: { invoke: async (...args) => { calls.push(args); return { data: {} }; } } } },
+    '@/lib/supabase': { supabase: { functions: { invoke: async (...args) => { calls.push(args); return { data: refundResult }; } } } },
   };
   const exports = {};
   const source = ts.transpileModule(fs.readFileSync('src/components/events/registration-entries.tsx', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
@@ -43,7 +46,7 @@ function screen(partner = true, open = true, higher = false, balance = undefined
     }
     return visit(tree);
   }
-  return { find, routes, calls, manageCalls };
+  return { find, routes, calls, manageCalls, analytics };
 }
 test('management opens a native sheet and partner removal calls the authenticated refund service', async () => {
   const app = screen();
@@ -58,6 +61,22 @@ test('management opens a native sheet and partner removal calls the authenticate
   assert.equal(app.calls[0][1].body.action, 'remove_partner');
   assert.equal(app.calls[0][1].body.registration_id, 'r1');
   assert.equal(app.routes.length, 0);
+});
+test('confirmed entry changes send withdrawal and refund counts without ledger details', async () => {
+  const result = { processed: true, refunds: [
+    { registration_id: 'r1', status: 'processing', refunded_rands: 120, references: ['private-receipt'] },
+  ] };
+  const app = screen(true, true, false, undefined, undefined, result);
+  app.find(n => n.props?.accessibilityLabel === 'Manage partner Partner').props.onPress();
+  app.find(n => n.props?.label === 'Remove partner').props.onPress();
+  await app.find(n => n.type === 'Pressable' && n.props.children?.props?.children === 'Confirm partner removal').props.onPress();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(app.analytics, [['entry_withdrawal', { item_count: 1 }], ['entry_refund_started', { item_count: 1 }]]);
+  assert.deepEqual(entryAnalytics.entryWithdrawalAnalytics({ ...result, refunds: [...result.refunds,
+    { status: 'skipped:closed', refunded_rands: 300 }, { status: 'no_refund', refunded_rands: 0 },
+  ] }), { withdrawn: 2, refundStarted: 1 });
+  assert.equal(entryAnalytics.entryWithdrawalAnalytics({ processed: true, refunds: [{ status: 'skipped:closed' }] }), null);
+  assert.equal(entryAnalytics.entryWithdrawalAnalytics({ ...result, processed: false }), null);
 });
 test('solo entry adds a partner through the native registration route', () => {
   const app = screen(false);

@@ -1,5 +1,10 @@
 export const defaultBranch = 'main';
 
+const sharedAnalyticsFiles = new Set([
+  'mobile/src/lib/telemetry-privacy.js',
+  'mobile/src/lib/entry-analytics.js',
+]);
+
 export function isWorkflowPath(path) {
   return path === 'AGENTS.md' || path === 'mobile/AGENTS.md' || path === 'README.md'
     || path.startsWith('.github/') || path.startsWith('.githooks/')
@@ -19,6 +24,7 @@ export function isMobileProduct(path) {
 
 export function isWebProduct(path) {
   return /^(src|api|public|reactmath-package)\//.test(path)
+    || sharedAnalyticsFiles.has(path)
     || path.startsWith('sandbox/private-draw-rehearsal/')
     || /^(package(?:-lock)?\.json|vite\.config\.[cm]?js|index\.html|vercel\.json|\.vercelignore|postcss\.config\.[cm]?js|tailwind\.config\.[cm]?js)$/.test(path);
 }
@@ -32,6 +38,7 @@ export function classifyPaths(paths) {
       result.web = result.mobile = result.backend = true;
     } else if (path.startsWith('mobile/')) {
       result.mobile = true;
+      if (sharedAnalyticsFiles.has(path)) result.web = true;
       if (path.startsWith('mobile/supabase/')) result.backend = true;
     } else if (path.startsWith('supabase/') || path === 'deno.lock') {
       result.backend = result.web = true;

@@ -113,7 +113,11 @@ function RegistrationFlow() {
   const [checkoutStarted, setCheckoutStarted] = useState(false);
   const showPaymentStatus = !!reference && (!payOnly || checkoutStarted || payment_return === '1');
   const [done, setDone] = useState(false);
-  useEffect(() => { if (!loading && event && !done) void trackEvent('registration_step', { step, flow: payOnly ? 'pay' : 'register', item_count: selected.length }); }, [loading, event?.id, step, payOnly, done]);
+  useEffect(() => {
+    if (!loading && event?.is_manual && !done) {
+      void trackEvent('registration_step', { step, flow: payOnly ? 'pay' : 'register', item_count: selected.length });
+    }
+  }, [loading, event?.id, event?.is_manual, step, payOnly, done]);
   const [paymentPending, setPaymentPending] = useState(false);
   const [partnerPayAccepted, setPartnerPayAccepted] = useState(false);
   const attempt = useRef(Crypto.randomUUID());
@@ -235,7 +239,9 @@ function RegistrationFlow() {
   };
   const [showSavedBanner, setShowSavedBanner] = useState(false);
   const finish = async (pending: boolean) => {
-    void trackEvent('registration_complete', { payment_state: pending ? 'pending' : 'paid', item_count: quote?.entries?.length ?? selected.length });
+    if (mode !== 'pay' && mode !== 'add-partner' && !quote?.isTest) {
+      void trackEvent('registration_complete', { payment_state: pending ? 'pending' : 'paid', item_count: quote?.entries?.length ?? selected.length });
+    }
     setShowSavedBanner(true);
     scroll.current?.scrollTo({ y: 0, animated: true });
     setPaymentPending(pending); setDone(true); setReference(null);
@@ -249,7 +255,7 @@ function RegistrationFlow() {
     const email = await currentEmail();
     const entries = email ? await fetchMyEventRegistrations(Number(id), email) : [];
     if (!entries.length || (payOnly ? !quote?.entries?.length || !quote.entries.every(item => entries.some(r => r.id === item.id && (!item.payForSelf || r.payment_status === 'paid') && (!item.payForPartner || r.partner_payment_status === 'paid'))) : !entries.some(r => r.payment_status === 'paid'))) throw new Error('Your payment is being processed. Wait a moment and check again.');
-    void trackConfirmedPurchase(reference, 'event_registration');
+    if (!quote?.isTest) void trackConfirmedPurchase(reference, 'event_registration');
     await finish(false);
   });
   useEffect(() => {
@@ -295,7 +301,7 @@ function RegistrationFlow() {
   });
   const back = () => {
     if (busy) return;
-    if (!done && (showPaymentStatus || step === 1 || payOnly && step === 2)) void trackEvent('checkout_exit', { step, flow: payOnly ? 'pay' : 'register' });
+    if (event?.is_manual && !done && (showPaymentStatus || step === 1 || payOnly && step === 2)) void trackEvent('checkout_exit', { step, flow: payOnly ? 'pay' : 'register' });
     if (!done && !showPaymentStatus && payOnly && step === 2) {
       router.replace({ pathname: '/events/[id]', params: { id: String(event?.id || id) } });
     } else if (!done && !showPaymentStatus && step > 1) {
@@ -392,7 +398,9 @@ function RegistrationFlow() {
             <Text style={{ color: brand.muted, lineHeight: 22 }}>Continue to RankedIn to select your division, arrange your partner and complete the organiser’s entry process.</Text>
             <Text style={{ color: brand.faint, fontSize: 12, lineHeight: 18 }}>You may need to sign in to your RankedIn account. Return here for event information and your 4M schedule.</Text>
             {!!event.rankedin_url && <ActionButton label="Continue to RankedIn ↗" disabled={registrationState(event) !== 'open'} onPress={() => run(async () => {
-              const url = new URL(event.rankedin_url!); if (url.protocol !== 'https:') throw new Error('Contact the organiser for a registration link.'); await WebBrowser.openBrowserAsync(url.href);
+              const url = new URL(event.rankedin_url!);
+              if (url.protocol !== 'https:') throw new Error('Contact the organiser for a registration link.');
+              await WebBrowser.openBrowserAsync(url.href);
             })} />}
             {!event.rankedin_url && <Text style={{ color: brand.muted }}>The organiser has not provided a registration link yet.</Text>}
             {registrationState(event) !== 'open' && <Text style={{ color: brand.danger }}>Registration {registrationState(event)}.</Text>}

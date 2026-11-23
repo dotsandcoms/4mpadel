@@ -32,8 +32,11 @@ import { watchAuthRefresh } from '@/lib/foreground-task';
 import { migrateLegacyDrafts } from '@/lib/profile-draft-storage';
 import { withStartupDeadline } from '@/lib/startup';
 import { consumeSharedLink } from '@/lib/shared-links';
-import { initializeAnalytics, setAnalyticsUser, trackScreen } from '@/lib/analytics';
+import { initializeAnalytics, setAnalyticsUser } from '@/lib/analytics';
+import { useScreenAnalytics } from '@/hooks/use-screen-analytics';
+import { initializeSentry, reportNativeError, SentryBoundary } from '@/lib/sentry-monitoring';
 
+initializeSentry();
 SplashScreen.preventAutoHideAsync();
 Observe.configure({
   integrations: {
@@ -80,9 +83,7 @@ function RootLayout() {
   const [pendingPushPath, setPendingPushPath] = useState<string | null>(null);
 
   useEffect(() => { void initializeAnalytics().catch(() => {}); }, []);
-  useEffect(() => {
-    if (revealed) void trackScreen(segments.join('/'));
-  }, [pathname, revealed]);
+  useScreenAnalytics(pathname, segments.join('/'), revealed);
 
   useEffect(() => watchWelcomeEmailRetries(), []);
   useEffect(() => Platform.OS === 'web' ? undefined : watchAuthRefresh(supabase.auth), []);
@@ -132,7 +133,9 @@ function RootLayout() {
       }
       } catch {
         if (!cancelled) {
-          Observe.reportError(new Error('Startup session restoration failed'));
+          const error = new Error('Startup session restoration failed');
+          Observe.reportError(error);
+          reportNativeError(error, 'startup');
           setBootError(true);
         }
       }
@@ -321,6 +324,8 @@ function ObserveFailure({ onRetry }: { onRetry: () => void }) {
 
 export default function ObservedRootLayout() {
   return <ObserveRoot errorBoundaryFallback={({ resetError }) => <ObserveFailure onRetry={resetError} />}>
-    <MessagingProvider><AppIconBadge /><RootLayout /><IncomingMessageBanner /></MessagingProvider>
+    <SentryBoundary fallback={({ resetError }) => <ObserveFailure onRetry={resetError} />}>
+      <MessagingProvider><AppIconBadge /><RootLayout /><IncomingMessageBanner /></MessagingProvider>
+    </SentryBoundary>
   </ObserveRoot>;
 }

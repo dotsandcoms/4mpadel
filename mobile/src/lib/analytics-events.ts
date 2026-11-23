@@ -4,6 +4,8 @@ export const EVENT_FIELDS = {
   tutorial_complete: [], profile_completed: [], profile_updated: ['photo_changed'],
   begin_checkout: ['item_category', 'currency', 'value'],
   registration_complete: ['payment_state', 'item_count'],
+  entry_withdrawal: ['item_count'],
+  entry_refund_started: ['item_count'],
   payment_confirmed: ['item_category'],
   schedule_change: ['enabled'], player_follow: ['enabled', 'content_type'],
   match_bookmark: ['enabled', 'notify'],
@@ -25,28 +27,36 @@ export type PurchaseKind = 'event_registration' | 'entry_balance' | 'licence_ful
 export const PURCHASE_KINDS: readonly PurchaseKind[] = ['event_registration', 'entry_balance', 'licence_full', 'licence_temporary'];
 
 const SCREENS: Record<string, string> = {
-  '': 'home', index: 'home', calendar: 'events', 'events/[id]': 'event_details',
+  '': 'home', calendar: 'events', 'events/[id]': 'event_details',
   explore: 'explore', profile: 'my_profile', rankings: 'rankings',
   onboarding: 'onboarding', 'sign-in': 'sign_in', 'complete-profile': 'complete_profile',
+  'app-tour': 'app_tour', 'email-change': 'email_change',
   settings: 'account_settings', 'edit-profile': 'edit_profile', 'delete-account': 'delete_account',
   license: 'sapa_licence', payments: 'payments', 'my-entries': 'my_entries',
   'events/register': 'event_registration', 'events/pay-balance': 'entry_balance',
-  'events/switch-division': 'switch_division', following: 'following',
+  'events/switch-division': 'switch_division', 'events/points': 'event_points',
+  'event-winners': 'event_winners', followers: 'followers', following: 'following',
   notifications: 'notifications', 'notification-settings': 'notification_settings',
-  'players/index': 'players', 'players/[id]': 'player_profile',
+  players: 'players', 'players/[id]': 'player_profile',
+  clubs: 'clubs', 'clubs/[slug]': 'club', 'claim-club': 'claim_club', 'club-groups/[slug]': 'club_group',
   'pro-padel': 'pro_padel', 'pro/live': 'pro_live', 'pro/match/[id]': 'pro_match',
   'pro/player/[id]': 'pro_player', 'pro/tournament/[id]': 'pro_tournament',
-  'pro/fip/[id]/index': 'fip_tournament', 'pro/fip/[id]/document': 'fip_document',
-  'media/index': 'media', 'media/[id]': 'media_album', 'calendar/[id]': 'calendar_event',
+  'pro/tournament/[id]/pair/[pair]': 'pro_tournament_pair', 'pro/news': 'pro_news',
+  'pro/fip/[id]': 'fip_tournament', 'pro/fip/[id]/document': 'fip_document',
+  media: 'media', 'media/[id]': 'media_album', 'calendar/[id]': 'calendar_event',
   search: 'event_search', help: 'help', legal: 'legal', 'reset-password': 'reset_password',
+  'help/related': 'help_related_entry', 'help/requests': 'help_requests', 'help/request/[id]': 'help_request',
   'match-result': 'match_result', messages: 'messages', 'messages/[id]': 'conversation',
-  'messages/new': 'message_request', 'messages/events': 'event_messages', 'settings/messaging': 'messaging_settings',
+  'messages/new': 'message_request', 'messages/events': 'event_messages',
+  'messages/group': 'group_message', 'messages/group-members': 'group_members',
+  'messages/help/[id]': 'help_conversation', 'settings/messaging': 'messaging_settings',
 };
 
 /** Receives Expo Router segments, whose dynamic parts are templates such as [id]. */
 export function analyticsScreen(segments: string): string {
-  const route = segments.split('/').filter(part => part && !/^\(.*\)$/.test(part)).join('/');
-  return SCREENS[route] ?? 'other';
+  const route = segments.split('/').filter(part => part && !/^\(.*\)$/.test(part)).join('/')
+    .replace(/(^|\/)index$/, '');
+  return Object.hasOwn(SCREENS, route) ? SCREENS[route] : 'other';
 }
 
 const ENUMS: Record<string, readonly string[]> = {
@@ -57,7 +67,7 @@ const ENUMS: Record<string, readonly string[]> = {
   permission: ['granted', 'denied', 'undetermined', 'unavailable'],
   destination: [...new Set(Object.values(SCREENS)), 'other'],
   feature: ['event_details', 'event_calendar', 'rankings', 'player_hub', 'pro_live', 'following_feed', 'media', 'licence', 'registration', 'entry_balance', 'authentication', 'profile', 'match_detail', 'notifications'],
-  action: ['tab', 'filter', 'refresh', 'photo_open', 'video_open', 'document_open', 'calendar_export', 'directions_open', 'external_registration', 'retry'],
+  action: ['tab', 'filter', 'refresh', 'photo_open', 'video_open', 'document_open', 'calendar_export', 'directions_open', 'retry'],
   selection: ['overview', 'activity', 'players', 'draws', 'results', 'media', 'discover', 'following', 'rankings', 'tour', 'all', '4m', 'pro', 'sa', 'men', 'women', 'past', 'upcoming', 'saved', 'live', 'finished', 'all_days', 'specific_day', 'all_rounds', 'specific_round', 'all_tiers', 'specific_tier', 'all_cities', 'specific_city', 'full', 'temporary', 'featured', 'sapa', 'grand_tour', 'broll', 'leagues', 'tournaments', 'summary', 'points', 'h2h', 'matches', 'major', 'super_gold', 'gold', 'silver', 'bronze', 'fip_event'],
   flow: ['register', 'pay'], status: ['unconfirmed', 'browser_returned', 'opened'],
   preference: ['push_enabled', 'quiet_hours_enabled', 'followed_events', 'registration_complete', 'event_registration', 'division_changed', 'partner_entry_paid', 'partner_assigned', 'partner_invite', 'entry_withdrawn', 'registration_open', 'early_bird_ending', 'registration_closing', 'registration_closed', 'event_updated', 'tournament_live', 'tournament_finished', 'ranking_change', 'pro_match_live', 'schedule_published', 'schedule_changed', 'match_reminder', 'match_progression', 'opponent_confirmed', 'result_confirmed', 'result_corrected', 'payment_reminder', 'payment_confirmation', 'entry_refunded', 'event_cancelled', 'draws_ready'],

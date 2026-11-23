@@ -1,12 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import * as firebase from './firebase-analytics';
+import * as posthog from './posthog-analytics';
+import { analyticsIdentityInput } from './telemetry-privacy';
 import { analyticsScreen, EVENT_FIELDS, PURCHASE_KINDS, safeAnalyticsParams, type AnalyticsEvent, type PurchaseKind } from './analytics-events';
 
 let initialization: Promise<void> | undefined;
 let queue: Promise<void> = Promise.resolve();
 
 export function initializeAnalytics() {
+  posthog.initializePostHog();
   initialization ??= firebase.configureAnalytics().catch(error => {
     initialization = undefined;
     throw error;
@@ -15,26 +18,44 @@ export function initializeAnalytics() {
 }
 
 /** SDK/network failures never reject a user action, payment, navigation or sign-in. */
-function enqueue(action: () => Promise<void>): Promise<void> {
+function enqueue(action: (firebaseReady: boolean) => Promise<void>): Promise<void> {
   queue = queue.then(async () => {
-    try { await initializeAnalytics(); await action(); }
+    const firebaseReady = await initializeAnalytics().then(() => true, () => false);
+    try { await action(firebaseReady); }
     catch { if (__DEV__) console.warn('[analytics] Could not record analytics.'); }
   });
   return queue;
 }
 
+async function sendEvent(firebaseReady: boolean, name: string, params: Record<string, unknown>) {
+  posthog.capturePostHogEvent(name, params);
+  if (firebaseReady) await firebase.sendAnalyticsEvent(name, params);
+}
+
 export function trackEvent(name: AnalyticsEvent, params: Record<string, unknown> = {}) {
   if (!Object.hasOwn(EVENT_FIELDS, name)) return Promise.resolve();
-  return enqueue(() => firebase.sendAnalyticsEvent(name, safeAnalyticsParams(name, params)));
+  return enqueue(ready => sendEvent(ready, name, safeAnalyticsParams(name, params)));
 }
 export function trackScreen(segments: string) {
-  return enqueue(() => firebase.sendAnalyticsScreen(analyticsScreen(segments)));
+  return enqueue(async ready => {
+    const screen = analyticsScreen(segments);
+    posthog.capturePostHogScreen(screen);
+    if (ready) await firebase.sendAnalyticsScreen(screen);
+  });
+}
+export function trackScreenEngagement(segments: string, seconds: number) {
+  return enqueue(async () => {
+    posthog.capturePostHogEvent('engagement_time', {
+      screen: analyticsScreen(segments), engagement_seconds: seconds,
+    });
+  });
 }
 export function setAnalyticsUser(authId: string | null) {
-  return enqueue(async () => {
-    const id = authId && /^[a-f0-9-]{36}$/i.test(authId)
-      ? await digest(`user:${authId}`) : null;
-    await firebase.identifyAnalyticsUser(id);
+  return enqueue(async ready => {
+    const input = analyticsIdentityInput(authId);
+    const id = input ? await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, input) : null;
+    await posthog.identifyPostHogAccount(id);
+    if (ready) await firebase.identifyAnalyticsUser(id);
   });
 }
 
@@ -66,41 +87,42 @@ async function saveLedger(ledger: Ledger) {
 
 /** Save only the amount returned by the checkout service, with a hashed reference. */
 export function recordAnalyticsCheckout(reference: string, kind: PurchaseKind, value: number) {
-  return enqueue(async () => {
+  return enqueue(async ready => {
     if (!/^[a-z0-9_-]{8,180}$/i.test(reference) || !PURCHASE_KINDS.includes(kind) || !Number.isFinite(value) || value <= 0) return;
     const id = await digest(`payment:${reference}`), ledger = await readLedger();
     if (ledger.sent.includes(id)) return;
     const first = !ledger.pending[id];
     ledger.pending[id] = { kind, value };
     await saveLedger(ledger);
-    if (first) await firebase.sendAnalyticsEvent('begin_checkout', { item_category: kind, currency: 'ZAR', value });
+    if (first) await sendEvent(ready, 'begin_checkout', { item_category: kind, currency: 'ZAR', value });
   });
 }
 
 /** Call only after the backend confirms payment; browser returns are never confirmation. */
 export function trackConfirmedPurchase(reference: string, kind: PurchaseKind) {
-  return enqueue(async () => {
+  return enqueue(async ready => {
     if (!/^[a-z0-9_-]{8,180}$/i.test(reference) || !PURCHASE_KINDS.includes(kind)) return;
     const id = await digest(`payment:${reference}`), ledger = await readLedger();
     if (ledger.sent.includes(id)) return;
     const checkout = ledger.pending[id];
     if (checkout && checkout.kind === kind) {
-      await firebase.sendAnalyticsEvent('purchase', {
+      await sendEvent(ready, 'purchase', {
         transaction_id: id, currency: 'ZAR', value: checkout.value,
         items: [{ item_id: kind, item_name: kind, item_category: kind, price: checkout.value, quantity: 1 }],
       });
     }
     // Older app versions may have created the checkout without a recorded amount.
     // Count the confirmation without inventing revenue or backfilling old payments.
-    await firebase.sendAnalyticsEvent('payment_confirmed', { item_category: kind });
+    await sendEvent(ready, 'payment_confirmed', { item_category: kind });
     ledger.sent.push(id); delete ledger.pending[id];
     await saveLedger(ledger);
   });
 }
 
 export function clearAccountAnalytics() {
-  return enqueue(async () => {
-    await firebase.resetAnalytics();
+  return enqueue(async ready => {
+    posthog.resetPostHogAccount();
+    if (ready) await firebase.resetAnalytics();
     await AsyncStorage.removeItem(LEDGER_KEY);
     initialization = undefined;
   });

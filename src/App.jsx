@@ -46,6 +46,7 @@ import { SpeedInsights } from "@vercel/speed-insights/react";
 import { SEOAdminPanel, GoogleAnalytics } from '@burkcorp/reactmath';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from './supabaseClient';
+import { useWebAnalytics } from './lib/use-web-analytics';
 import { SearchProvider } from './context/SearchContext';
 import SearchPalette from './components/SearchPalette';
 
@@ -65,6 +66,7 @@ function AppContent() {
   const [session, setSession] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [membersOnlyPrompt, setMembersOnlyPrompt] = React.useState(false);
+  useWebAnalytics(location.pathname, session?.user?.id, loading);
 
   useEffect(() => {
     // INITIAL_SESSION also supplies the saved session without a separate lock request.
