@@ -158,6 +158,9 @@ registration funnel. Active time counts intervals in a focused, visible browser
 page or foreground app screen. Sign-in joins web and app with the same hashed 4M
 account identifier. App Store Connect and Google Play Console report downloads.
 The first launch seen by PostHog can include players who already had the app.
+RankedIn registration links emit a separate `feature_interaction` with
+`action=external_registration`. The event records intent to visit the organiser's
+registration page. The `registration_step` event tracks the in-app 4M flow.
 
 [4M Padel Product Analytics](https://eu.posthog.com/project/364297/dashboard/1142927)
 shows South Africa and overseas activity, engagement, weekly returns, app store

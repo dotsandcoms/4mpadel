@@ -59,6 +59,11 @@ import EventMediaGallery from '../components/EventMediaGallery';
 import { divisionRankingSource, resolvePlayerRanking } from '../utils/playerRankingSelection';
 import { addPublicPlayerPaymentStatuses, publicPlayerPaymentLabel } from '../utils/publicPlayerPayment';
 
+function openRankedinRegistration(url) {
+    trackWebEvent('feature_interaction', { feature: 'registration', action: 'external_registration' });
+    window.open(url, '_blank');
+}
+
 const formatPlayerName = (fullName) => {
     if (!fullName) return '';
     const parts = fullName.trim().split(/\s+/);
@@ -3377,7 +3382,7 @@ const EventDetails = () => {
                     const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
                     if (rId) {
                         const slugPart = event?.slug ? `/${event.slug}` : '';
-                        window.open(`https://www.rankedin.com/en/tournament/${rId}${slugPart}`, '_blank');
+                        openRankedinRegistration(`https://www.rankedin.com/en/tournament/${rId}${slugPart}`);
                     }
                 }
             }
@@ -3419,10 +3424,10 @@ const EventDetails = () => {
         }
         const rId = event?.rankedin_id || extractRankedinId(event?.rankedin_url);
         if (event?.rankedin_url) {
-            window.open(event.rankedin_url, '_blank');
+            openRankedinRegistration(event.rankedin_url);
         } else if (rId) {
             const slug = event?.slug ? `/${event.slug}` : '';
-            window.open(`https://www.rankedin.com/en/tournament/${rId}${slug}`, '_blank');
+            openRankedinRegistration(`https://www.rankedin.com/en/tournament/${rId}${slug}`);
         } else {
             alert('RankedIn registration link is not available for this event.');
         }

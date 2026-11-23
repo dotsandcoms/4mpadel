@@ -122,11 +122,13 @@ export function initializeWebAnalytics() {
 
 function capture(name, properties, page) {
     if (!enabled || !accountReady || !page) return;
+    const sendImmediately = ['$pageview', 'engagement_time', 'app_store_click'].includes(name)
+        || (name === 'feature_interaction' && properties.action === 'external_registration');
     try {
         posthog.capture(name, {
             ...properties, ...campaign, $pathname: page.path,
             screen: page.screen, platform: 'web', environment: ENVIRONMENT,
-        }, ['$pageview', 'engagement_time', 'app_store_click'].includes(name) ? { send_instantly: true } : undefined);
+        }, sendImmediately ? { send_instantly: true } : undefined);
     } catch { /* Analytics is independent of the user action. */ }
 }
 
