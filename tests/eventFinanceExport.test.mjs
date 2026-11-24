@@ -68,7 +68,7 @@ test('the short summary includes outstanding amounts and prior payouts when need
     const rows = new Map();
     wb.getWorksheet('Summary').eachRow(row => rows.set(row.getCell(1).value, row));
     assert.equal(rows.get('Recipient unconfirmed').getCell(3).result, 200);
-    assert.equal(rows.get('Outstanding entry fees').getCell(3).result, 100);
+    assert.equal(rows.get('Outstanding entry fees (excluded)').getCell(3).result, 100);
     assert.equal(rows.get('Already paid to organiser').getCell(3).value, -100);
     assert.equal(rows.get('Refund funding adjustment').getCell(3).value, -20);
     assert.equal(rows.get('Amount due to organiser').getCell(3).result, 450);
