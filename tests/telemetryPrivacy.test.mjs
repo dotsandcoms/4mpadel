@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { analyticsIdentityInput, posthogHost, scrubSentryEvent } from '../mobile/src/lib/telemetry-privacy.js';
+import { analyticsIdentityInput, posthogHost, scrubSentryEvent, scrubSentryTransaction, sentryPerformanceAttributes } from '../mobile/src/lib/telemetry-privacy.js';
 
 test('web and mobile hash the same account input and reject non-account identifiers', () => {
     const id = 'ABB30000-B500-41EA-8FA3-EAA71004FA20';
@@ -9,6 +9,36 @@ test('web and mobile hash the same account input and reject non-account identifi
     assert.equal(analyticsIdentityInput(null), null);
     assert.equal(posthogHost('https://us.i.posthog.com'), 'https://us.i.posthog.com');
     assert.equal(posthogHost('https://example.com'), 'https://eu.i.posthog.com');
+});
+
+test('Sentry performance keeps timing and trace links without sending URLs, form inputs or user context', () => {
+    const attributes = sentryPerformanceAttributes({
+        'sentry.op': 'ui.webvital.lcp',
+        'sentry.pageload.span_id': '1234567890abcdef',
+        'browser.web_vital.lcp.value': 1250,
+        'browser.web_vital.lcp.element': 'Private element',
+        'url.full': 'https://example.com/?token=private',
+    });
+    assert.deepEqual(attributes, {
+        'sentry.op': 'ui.webvital.lcp',
+        'sentry.pageload.span_id': '1234567890abcdef',
+        'browser.web_vital.lcp.value': 1250,
+    });
+
+    const transaction = scrubSentryTransaction({
+        transaction: 'event/player@example.com',
+        request: { data: 'private player profile' },
+        contexts: { trace: { trace_id: 'active-trace', op: 'navigation', data: { 'route.key': 'private route key' } } },
+        spans: [{ description: 'POST https://example.com/?token=private', data: { 'http.status_code': 200, 'url.query': 'token=private' } }],
+        measurements: { app_start_cold: { value: 950, unit: 'millisecond' }, frames_slow: { value: 12, unit: 'none' }, private_measure: { value: 1 } },
+    }, 'event/[id]');
+    assert.equal(transaction.transaction, 'event/[id]');
+    assert.equal(transaction.contexts.trace.trace_id, 'active-trace');
+    assert.deepEqual(transaction.contexts.trace.data, {});
+    assert.deepEqual(transaction.spans[0].data, { 'http.status_code': 200 });
+    assert.equal(transaction.spans[0].description, undefined);
+    assert.equal(transaction.request, undefined);
+    assert.deepEqual(transaction.measurements, { app_start_cold: { value: 950, unit: 'millisecond' }, frames_slow: { value: 12, unit: 'none' } });
 });
 
 test('Sentry keeps symbolic frames and strips request, account, context, and URL data', () => {

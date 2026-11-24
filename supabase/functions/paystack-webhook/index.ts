@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supa
 import { assertPaystackPayment, parseMetadata, verifyPaystackWebhookSignature } from './paystack.ts';
 import { persistManualEventRegistrations, recordLicensePaymentSplit, markManualEventEntryCoversPaid } from './manual-event-payment.ts';
 import { fetchCommerceConfig, matchLicenseTypeByAmount } from './commerce.ts';
+import { traceEdgeRequest } from '../_shared/sentry-performance.ts';
 
 async function sendEmailViaEdge(payload: {
     to: string;
@@ -377,7 +378,7 @@ async function handleRefundEvent(
     return { updated: true };
 }
 
-serve(async (req: Request) => {
+serve(traceEdgeRequest('paystack-webhook', async (req: Request) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
     }
@@ -508,4 +509,4 @@ serve(async (req: Request) => {
         console.error('paystack-webhook error:', error);
         return new Response(JSON.stringify({ error: (error as Error).message }), { status: 500, headers: corsHeaders });
     }
-});
+}));

@@ -5,7 +5,7 @@ import { GuidedTourProvider } from '@/components/guided-tour';
 import { watchWelcomeEmailRetries } from '@/lib/welcome-email';
 import 'react-native-gesture-handler';
 import type { Session } from '@supabase/supabase-js';
-import { DefaultTheme, Stack, ThemeProvider, usePathname, useRouter, useSegments } from 'expo-router';
+import { DefaultTheme, Stack, ThemeProvider, useNavigationContainerRef, usePathname, useRouter, useSegments } from 'expo-router';
 import { Observe, ObserveRoot } from 'expo-observe';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -34,7 +34,7 @@ import { withStartupDeadline } from '@/lib/startup';
 import { consumeSharedLink } from '@/lib/shared-links';
 import { initializeAnalytics, setAnalyticsUser } from '@/lib/analytics';
 import { useScreenAnalytics } from '@/hooks/use-screen-analytics';
-import { initializeSentry, reportNativeError, SentryBoundary } from '@/lib/sentry-monitoring';
+import { initializeSentry, registerSentryNavigation, reportNativeError, SentryBoundary, wrapSentryRoot } from '@/lib/sentry-monitoring';
 
 initializeSentry();
 SplashScreen.preventAutoHideAsync();
@@ -322,10 +322,15 @@ function ObserveFailure({ onRetry }: { onRetry: () => void }) {
   </View>;
 }
 
-export default function ObservedRootLayout() {
+function ObservedRootLayout() {
+  const navigationRef = useNavigationContainerRef();
+  useEffect(() => registerSentryNavigation(navigationRef), [navigationRef]);
+
   return <ObserveRoot errorBoundaryFallback={({ resetError }) => <ObserveFailure onRetry={resetError} />}>
     <SentryBoundary fallback={({ resetError }) => <ObserveFailure onRetry={resetError} />}>
       <MessagingProvider><AppIconBadge /><RootLayout /><IncomingMessageBanner /></MessagingProvider>
     </SentryBoundary>
   </ObserveRoot>;
 }
+
+export default wrapSentryRoot(ObservedRootLayout);

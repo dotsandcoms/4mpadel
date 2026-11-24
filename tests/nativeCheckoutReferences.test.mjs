@@ -23,10 +23,11 @@ async function compileHandler(file) {
     plugins: [{
       name: 'mock-edge-runtime',
       setup(plugin) {
-        plugin.onResolve({ filter: /^https:\/\// }, ({ path }) => ({ path, namespace: 'fixture' }));
+        plugin.onResolve({ filter: /^(?:https:\/\/|npm:@sentry\/deno@)/ }, ({ path }) => ({ path, namespace: 'fixture' }));
         plugin.onLoad({ filter: /.*/, namespace: 'fixture' }, ({ path }) => {
           if (path.startsWith('https://esm.sh/@supabase/supabase-js@')) return { contents: 'export const createClient = mockClient;' };
           if (path.startsWith('https://deno.land/std@') && path.endsWith('/http/server.ts')) return { contents: 'export const serve = mockServe;' };
+          if (path.startsWith('npm:@sentry/deno@')) return { contents: 'export {};' };
           throw new Error(`Unexpected Edge import ${path}`);
         });
       },

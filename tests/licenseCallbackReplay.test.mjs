@@ -10,7 +10,7 @@ for (const path of ['supabase/functions/paystack-webhook/index.ts', 'supabase/fu
   const mod = { exports: {} };
   const finalisations = [];
   vm.runInNewContext(code, { module: mod, exports: mod.exports, require: () => ({
-    serve() {}, parseMetadata: value => value,
+    serve() {}, traceEdgeRequest: (_route, handler) => handler, parseMetadata: value => value,
     async persistManualEventRegistrations(_client, receipt) { finalisations.push(receipt.id); return { savedRows: [], persisted: false }; },
     async markManualEventEntryCoversPaid() {}, async recordLicensePaymentSplit() {},
   }), Deno: { env: { get: () => '' } } });

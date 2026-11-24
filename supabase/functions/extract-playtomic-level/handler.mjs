@@ -62,9 +62,9 @@ async function readPath(request) {
 }
 
 /** Dependencies are injected so auth, ownership, failures and quota can be tested locally. */
-export function createHandler({ userClient, adminClient, apiKey, model = DEFAULT_MODEL, fetchImpl = fetch }) {
+export function createHandler({ userClient, adminClient, apiKey, model = DEFAULT_MODEL, fetchImpl = fetch, traceModel = (_model, read, _trace) => read() }) {
   const reply = (status, body) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
-  return async request => {
+  return async (request, trace) => {
     if (request.method === 'OPTIONS') return new Response('ok', { headers: cors });
     if (request.method !== 'POST') return reply(405, { error: 'Use POST.' });
     const authorization = request.headers.get('Authorization');
@@ -90,7 +90,7 @@ export function createHandler({ userClient, adminClient, apiKey, model = DEFAULT
       const quota = await adminClient().rpc('consume_playtomic_extraction', { p_user_id: auth.user.id });
       if (quota.error) return reply(503, { error: 'Screenshot reading is unavailable. Enter your level manually.' });
       if (quota.data !== true) return reply(429, { error: 'You have reached 20 screenshot reads today. Enter your level manually or try again tomorrow.' });
-      const response = await fetchImpl('https://api.openai.com/v1/responses', {
+      const requestModel = () => fetchImpl('https://api.openai.com/v1/responses', {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         signal: AbortSignal.timeout(20_000),
@@ -105,8 +105,11 @@ export function createHandler({ userClient, adminClient, apiKey, model = DEFAULT
           } } },
         }),
       });
+      const { response, result } = await traceModel(model, async () => {
+        const response = await requestModel();
+        return { response, result: response.ok ? await response.json() : null };
+      }, trace);
       if (!response.ok) return reply(502, { error: 'The screenshot could not be read. Enter your level manually or try again.' });
-      const result = await response.json();
       const output = result.output?.flatMap(item => item.type === 'message' ? item.content ?? [] : [])
         .filter(item => item.type === 'output_text').map(item => item.text).join('');
       if (result.status === 'incomplete' || !output) return reply(200, { status: 'not_found', level: null });

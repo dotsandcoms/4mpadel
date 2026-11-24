@@ -8,6 +8,7 @@ import {
 } from './paystack.ts';
 import { persistManualEventRegistrations, recordLicensePaymentSplit, markManualEventEntryCoversPaid } from './manual-event-payment.ts';
 import { canConfirmEventCheckout } from './checkout-access.ts';
+import { traceEdgeRequest } from '../_shared/sentry-performance.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -205,7 +206,7 @@ async function finalizeManualEventPayment(
     }
 }
 
-serve(async (req: Request) => {
+serve(traceEdgeRequest('confirm-manual-payment', async (req: Request) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
     }
@@ -315,4 +316,4 @@ serve(async (req: Request) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
     }
-});
+}));
