@@ -3377,9 +3377,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                             <p className="text-[9px] text-gray-500 mt-1">{fmtR(overviewStats.pendingAmount)} outstanding</p>
                                         </div>
                                         <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
-                                            <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Comped Entries</p>
+                                            <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Complimentary entries</p>
                                             <span className="text-xl font-black text-white">{overviewStats.compedEntries}</span>
-                                            <p className="text-[9px] text-gray-500 mt-1">Free / complimentary · R 0</p>
                                         </div>
                                         <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Total amount billed</p>
@@ -3406,7 +3405,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                         </div>
                                         {overviewStats.billedTierBreakdown.length > 0 && (
                                             <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 space-y-1.5">
-                                                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Current entry fees</p>
+                                                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Billed entry fees</p>
                                                 {overviewStats.billedTierBreakdown.map((tier, index) => (
                                                     <div key={tier.rate} className="flex items-center justify-between gap-4 text-xs">
                                                         <span className="text-gray-400">
@@ -3417,54 +3416,40 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                 ))}
                                             </div>
                                         )}
+                                        {overviewStats.pendingAmount > 0 && (
+                                            <div className="flex items-center justify-between gap-4 text-sm">
+                                                <span className="text-gray-400">Outstanding entry fees (excluded)</span>
+                                                <span className="font-bold text-amber-300 shrink-0">{fmtR(overviewStats.pendingAmount)}</span>
+                                            </div>
+                                        )}
                                         <div className="flex items-center justify-between gap-4 text-sm">
-                                            <span className="text-gray-400">Outstanding entry fees</span>
-                                            <span className="font-bold text-red-400">−{fmtR(overviewStats.pendingAmount)}</span>
+                                            <span className="text-gray-400">Paid direct to organiser</span>
+                                            <span className="font-bold text-white">{fmtR(overviewStats.collectedOrganiser)}</span>
                                         </div>
-                                        <div className="flex items-center justify-between gap-4 text-sm">
-                                            <span className="text-gray-400">Payments allocated to current entries</span>
-                                            <span className="font-bold text-white">{fmtR(overviewStats.grossEntryFees)}</span>
-                                        </div>
-                                        <p className="text-xs text-gray-500">Paystack to 4M: {fmtR(overviewStats.paystackCollected)} · EFT / manual to 4M: {fmtR(overviewStats.collectedManual)} · Direct to organiser: {fmtR(overviewStats.collectedOrganiser)}{overviewStats.unconfirmedCollected > 0 ? ` · Recipient unconfirmed: ${fmtR(overviewStats.unconfirmedCollected)}` : ''}</p>
                                         {overviewStats.compedEntries > 0 && (
                                             <div className="flex items-center justify-between gap-4 text-sm">
                                                 <span className="text-gray-400">
-                                                    Comped entries
-                                                    <span className="text-gray-600 font-normal"> · {overviewStats.compedEntries} free</span>
+                                                    Complimentary entries
+                                                    <span className="text-gray-400 font-normal"> · {overviewStats.compedEntries}</span>
                                                 </span>
                                                 <span className="font-bold text-gray-500">{fmtR(0)}</span>
                                             </div>
                                         )}
-                                        <div className="flex items-center justify-between gap-4 text-sm">
-                                            <span className="text-gray-400">Completed entry refunds (cash history)</span>
-                                            <span className="font-bold text-red-400">{fmtR(overviewStats.entryFeesRefunded)}</span>
-                                        </div>
                                         <div className="flex items-center justify-between gap-4 text-sm border-t border-white/10 pt-3">
-                                            <span className="text-gray-300 font-semibold">Net entry income</span>
-                                            <span className="font-black text-white">{fmtR(overviewStats.entryFeeBalance)}</span>
+                                            <span className="text-gray-300 font-semibold">Paid to 4M</span>
+                                            <span className="font-black text-white">{fmtR(overviewStats.collected4M)}</span>
                                         </div>
-                                        {overviewStats.collectedManual > 0 && (
-                                            <div className="flex items-center justify-between gap-4 text-sm">
-                                                <span className="text-gray-400">Of which manual / EFT collected by 4M</span>
-                                                <span className="font-bold text-white">{fmtR(overviewStats.collectedManual)}</span>
-                                            </div>
-                                        )}
+                                        <p className="text-xs text-gray-400">Paystack {fmtR(overviewStats.paystackCollected)} · EFT / manual {fmtR(overviewStats.collectedManual)}</p>
                                         <div className="flex items-center justify-between gap-4 text-sm">
-                                            <span className="text-red-400">Platform fees @ {Math.round(PLATFORM_COMMISSION_RATE * 100)}% of entry fees received by 4M</span>
-                                            <span className="font-bold text-red-400">−{fmtR(overviewStats.commission)}</span>
+                                            <span className="text-red-400">4M fee ({Math.round(PLATFORM_COMMISSION_RATE * 100)}% of payments to 4M)</span>
+                                            <span className="font-bold text-red-400 shrink-0">−{fmtR(overviewStats.commission)}</span>
                                         </div>
-                                        <div className="flex items-center justify-between gap-4 text-sm">
-                                            <span className="text-gray-300 font-semibold">Organiser entitlement</span>
-                                            <span className="font-bold text-white">{fmtR(overviewStats.organiserEntitlement)}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between gap-4 text-sm">
-                                            <span className="text-gray-400">Less: entry fees retained by organiser</span>
-                                            <span className="font-bold text-red-400">−{fmtR(overviewStats.organiserRetained)}</span>
-                                        </div>
+                                        {overviewStats.organiserRetained > 0 && <p className="text-xs text-gray-400">Organiser entitlement including direct payments {fmtR(overviewStats.organiserEntitlement)}</p>}
+                                        {overviewStats.entryFeesRefunded > 0 && <p className="text-xs text-gray-400">Completed entry refunds (cash history) {fmtR(overviewStats.entryFeesRefunded)}</p>}
                                         {overviewStats.unconfirmedCollected > 0 && <p className="text-xs text-amber-300">Recipient unconfirmed: {fmtR(overviewStats.unconfirmedCollected)}. Excluded from the amount due.</p>}
                                         {overviewStats.refundFundingAdjustment !== 0 && <p className="text-xs text-amber-300">Refund funding adjustment: {fmtR(overviewStats.refundFundingAdjustment)}.</p>}
                                         {overviewStats.refundReserve > 0 && <p className="text-xs text-amber-300">Pending entry refunds: {fmtR(overviewStats.refundReserve)}. Already excluded from current-entry paid amounts.</p>}
-                                        {overviewStats.unallocatedCash4M > 0 && <p className="text-xs text-gray-400">4M cash not allocated to current entries: {fmtR(overviewStats.unallocatedCash4M)}. Excluded from the fee and payout.</p>}
+                                        {overviewStats.unallocatedCash4M > 0 && <p className="text-xs text-gray-400">Unallocated 4M receipts of {fmtR(overviewStats.unallocatedCash4M)} are excluded from the fee and payout.</p>}
                                         {overviewStats.cashHistory.issues.length > 0 && <p className="text-xs text-amber-300">Cash history review: {overviewStats.cashHistory.issues.join('; ')}. These receipts are excluded from current-entry settlement.</p>}
                                         {overviewStats.unallocatedCredit4M > 0 && <p className="text-xs text-amber-300">Unallocated credit held by 4M: {fmtR(overviewStats.unallocatedCredit4M)}. Available for payout after reserves: {fmtR(overviewStats.availableForPayout)}.</p>}
                                         {overviewStats.payoutRows.length > 0 && (
@@ -3551,7 +3536,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Balance due from 4M</p>
                                                 <span className="text-3xl font-black text-padel-green">{fmtR(overviewStats.dueToOrg)}</span>
                                                 <p className="text-[9px] text-gray-500 mt-1">
-                                                    Current-entry funds paid to 4M − {Math.round(PLATFORM_COMMISSION_RATE * 100)}% fee
+                                                    Paid to 4M ({fmtR(overviewStats.collected4M)}) − 4M fee ({fmtR(overviewStats.commission)})
                                                     {overviewStats.interimPaid > 0 ? ` − interim paid (${fmtR(overviewStats.interimPaid)})` : ''}
                                                     {overviewStats.refundFundingAdjustment !== 0 ? ` · refund funding adjustment ${fmtR(overviewStats.refundFundingAdjustment)}` : ''}
                                                     {' · '}licence fees excluded
@@ -4805,7 +4790,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                     { label: 'Net entry income', value: fmtR(overviewStats.entryFeeBalance), color: 'text-white' },
                                     { label: 'Balance due from 4M', value: fmtR(overviewStats.dueToOrg), color: 'text-padel-green' },
                                     { label: 'Entry Fees Refunded', value: `−${fmtR(overviewStats.entryFeesRefunded)}`, color: 'text-red-400' },
-                                    { label: 'Outstanding', value: `−${fmtR(overviewStats.pendingAmount)}`, color: 'text-red-400' },
+                                    { label: 'Outstanding entry fees (excluded)', value: fmtR(overviewStats.pendingAmount), color: 'text-amber-300' },
                                     { label: 'Manual / EFT collected by 4M', value: fmtR(overviewStats.collectedManual), color: 'text-white' },
                                     { label: 'Paid directly to organiser', value: fmtR(overviewStats.organiserRetained), color: 'text-white' },
                                     { label: 'Refunds pending', value: fmtR(overviewStats.refundReserve), color: 'text-amber-300' },
