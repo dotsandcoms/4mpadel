@@ -1,9 +1,10 @@
+import { matchReviewedRefund, reviewedRefundClaim, REVIEWED_REFUND_PREFIX } from '../paystack-refund/reviewed-refund-retry.ts';
+import { traceEdgeRequest } from '../_shared/sentry-performance.ts';
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { assertPaystackPayment, parseMetadata, verifyPaystackWebhookSignature } from './paystack.ts';
 import { persistManualEventRegistrations, recordLicensePaymentSplit, markManualEventEntryCoversPaid } from './manual-event-payment.ts';
 import { fetchCommerceConfig, matchLicenseTypeByAmount } from './commerce.ts';
-import { traceEdgeRequest } from '../_shared/sentry-performance.ts';
 
 async function sendEmailViaEdge(payload: {
     to: string;
@@ -291,6 +292,7 @@ const REFUND_STATUS_BY_EVENT: Record<string, string> = {
     'refund.processing': 'processing',
     'refund.processed': 'processed',
     'refund.failed': 'failed',
+    'refund.needs-attention': 'needs_attention',
 };
 
 /**
@@ -318,8 +320,16 @@ async function handleRefundEvent(
     const amountRands = data.amount != null ? Number(data.amount) / 100 : null;
 
     let row: Record<string, unknown> | null = null;
+    const reviewedReference = [data.refund_reference, data.reference].find(value => typeof value === 'string' && value.startsWith(REVIEWED_REFUND_PREFIX)) as string | undefined;
 
-    if (refundId) {
+    if (reviewedReference) {
+        const { data: byReference, error } = await supabaseAdmin.from('payment_refunds').select('*')
+            .eq('metadata->reviewed_retry->>reference', reviewedReference).maybeSingle();
+        if (error) throw error;
+        if (!byReference) return { updated: false, reason: 'reviewed_refund_row_not_found' };
+        row = byReference;
+    }
+    if (!row && refundId) {
         const { data: byId } = await supabaseAdmin
             .from('payment_refunds')
             .select('*')
@@ -328,13 +338,45 @@ async function handleRefundEvent(
         row = byId || null;
     }
 
+    if (row && reviewedRefundClaim(row.metadata).reference) {
+        const claim = reviewedRefundClaim(row.metadata);
+        // Old webhook formats may omit the refund reference. In that case require
+        // the exact provider ID which was already verified and recorded locally.
+        const evidence = matchReviewedRefund({ ...data, status: newStatus }, {
+            reference: reviewedReference,
+            providerId: row.paystack_refund_id ? String(row.paystack_refund_id) : undefined,
+            transactionReference: String(claim.transaction_reference), transactionId: String(claim.transaction_id),
+            domain: String(claim.domain), amountCents: Math.round(Number(row.amount) * 100),
+        });
+        if (!evidence) return { updated: false, reason: 'unverified_reviewed_refund' };
+        const { data: reg, error: regError } = await supabaseAdmin.from('event_registrations').select('event_id')
+            .eq('id', row.event_registration_id).maybeSingle();
+        if (regError) throw regError;
+        if (!reg) return { updated: false, reason: 'reviewed_refund_registration_not_found' };
+        const { data: saved, error } = await supabaseAdmin.rpc('apply_event_refund_retry_evidence', {
+            p_refund_id: row.id, p_event_id: reg.event_id, p_registration_id: row.event_registration_id,
+            p_reference: claim.reference, p_provider_id: evidence.id, p_status: evidence.status,
+        });
+        if (error) throw error;
+        return { updated: !!saved };
+    }
+
+    if (newStatus === 'needs_attention') return { updated: false, reason: 'unreviewed_needs_attention' };
+
     if (!row && reference) {
         const { data: candidates } = await supabaseAdmin
             .from('payment_refunds')
             .select('*')
             .eq('paystack_reference', reference)
-            .in('status', ['pending', 'processing']);
-        const list = candidates || [];
+            .in('status', ['pending', 'processing', 'needs_attention', 'processed', 'failed']);
+        const matchingAmount = (candidate: { amount: number }) => amountRands == null || Math.abs(Number(candidate.amount) - amountRands) < 0.01;
+        const related = candidates || [];
+        // A callback without an exact refund reference or ID might be for the
+        // reviewed attempt. It must never be applied to a neighbouring refund.
+        if (related.some(candidate => reviewedRefundClaim(candidate.metadata).reference && matchingAmount(candidate))) {
+            return { updated: false, reason: 'reviewed_refund_requires_exact_reference' };
+        }
+        const list = related.filter(candidate => ['pending', 'processing'].includes(candidate.status) && !reviewedRefundClaim(candidate.metadata).reference);
         row = (amountRands != null
             ? list.find((r) => Math.abs(Number(r.amount) - amountRands) < 0.01)
             : undefined) || list[0] || null;
