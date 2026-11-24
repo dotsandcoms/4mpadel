@@ -128,7 +128,8 @@ export function buildEventFinanceWorkbook(payload) {
         header.getCell(col).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
     }
     const currentRange = `'Registrations'!W2:W${lastRegistrationRow}`;
-    const count = col => exportedRegistrations.length ? `COUNTIFS(${currentRange},"Yes",'Registrations'!${col}2:${col}${lastRegistrationRow},">0")` : '0';
+    const count = (col, criterion = '>0') => exportedRegistrations.length
+        ? `COUNTIFS(${currentRange},"Yes",'Registrations'!${col}2:${col}${lastRegistrationRow},"${criterion}")` : '0';
     const link = col => `'Registrations'!${col}${registrationTotalsRow}`;
     const paymentRow = (label, entries, amount) => {
         const row = wsSummary.addRow([label, entries, amount]);
@@ -141,7 +142,9 @@ export function buildEventFinanceWorkbook(payload) {
     const paid4MRow = paymentRow('Paid to 4M', { formula: count('R'), result: currentRegistrations.filter(r => r.paidTo4M > 0).length }, { formula: link('R'), result: current.collected4M });
     if (current.unconfirmedCollected > 0) paymentRow('Recipient unconfirmed', { formula: count('T'), result: currentRegistrations.filter(r => r.recipientUnconfirmed > 0).length }, { formula: link('T'), result: current.unconfirmedCollected });
     const outstanding = Math.round(currentRegistrations.reduce((n, r) => n + Number(r.outstanding || 0), 0) * 100) / 100;
-    if (outstanding > 0) paymentRow('Outstanding entry fees', { formula: count('U'), result: currentRegistrations.filter(r => r.outstanding > 0).length }, { formula: link('U'), result: outstanding });
+    if (outstanding > 0) paymentRow('Outstanding entry fees (excluded)', { formula: count('U'), result: currentRegistrations.filter(r => r.outstanding > 0).length }, { formula: link('U'), result: outstanding });
+    const compedEntries = currentRegistrations.filter(r => r.comped).length;
+    if (compedEntries > 0) paymentRow('Complimentary entries', { formula: count('N', 'Yes'), result: compedEntries }, 0);
     const feeRow = paymentRow('4M fee', ENTRY_COMMISSION_RATE, null);
     feeRow.getCell(2).numFmt = '0%';
     feeRow.getCell(3).value = { formula: `-ROUND(C${paid4MRow.number}*B${feeRow.number},2)`, result: -current.commission };

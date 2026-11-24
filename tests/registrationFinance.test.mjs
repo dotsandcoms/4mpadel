@@ -55,6 +55,50 @@ test('200 current entries reconcile to the supplied R111,720 across payouts, ove
     }
 });
 
+test('Rockets Cup outstanding entries and complimentary entries are excluded from the payout', () => {
+    const paidEntries = Array.from({ length: 46 }, (_, i) => registration(`paid-${i}`));
+    const unpaidEntries = ['pending-a', 'pending-b'].map(id => ({ ...registration(id), payment_status: 'pending' }));
+    const compedEntries = Array.from({ length: 4 }, (_, i) => registration(`comped-${i}`));
+    const withdrawn = { ...registration('comped-withdrawn'), status: 'withdrawn' };
+    const registrations = [...paidEntries, ...unpaidEntries, ...compedEntries, withdrawn];
+    const payments = [
+        ...paidEntries.map(r => ({ ...payment(r.id), amount: 650 })),
+        ...[...compedEntries, withdrawn].map(r => ({
+            ...payment(r.id), amount: 0, payment_method: 'manual',
+            metadata: { registration_id: r.id, free_entry: true },
+        })),
+    ];
+    const event = { entry_fee: 650, end_date: '2026-11-22' };
+    const settlement = calculateEventSettlement({ event, registrations, payments });
+    assert.deepEqual([
+        settlement.activeEntries, settlement.compedEntries, settlement.totalAmountBilled, settlement.pendingAmount,
+        settlement.collected4M, settlement.commission, settlement.dueToOrg,
+    ], [52, 4, 31200, 1300, 29900, 1495, 28405]);
+    assert.equal(eventPayoutRequestLimit(event, settlement, Date.parse('2026-11-24')).maxRequestable, 28405);
+
+    const allocations = new Map(settlement.allocations.map(a => [a.registration.id, registrationFinanceAmounts(a)]));
+    for (const reportType of ['organiser', 'full']) {
+        const summary = buildEventFinanceWorkbook({ reportType, activeRegistrationIds: [...allocations.keys()],
+            registrations: registrations.map(r => ({ registrationId: r.id, registrationStatus: r.status,
+                comped: r === withdrawn, ...allocations.get(r.id) })),
+        }).getWorksheet('Summary');
+        const comped = metric(summary, 'Complimentary entries');
+        assert.equal(comped.value, 0);
+        const compedCount = summary.getRow(comped.row).getCell(2);
+        const lastRow = reportType === 'organiser' ? 53 : 54;
+        assert.deepEqual(compedCount.value, {
+            formula: `COUNTIFS('Registrations'!W2:W${lastRow},"Yes",'Registrations'!N2:N${lastRow},"Yes")`, result: 4,
+        });
+        assert.equal(metric(summary, 'Outstanding entry fees (excluded)').result, 1300);
+        const paid = metric(summary, 'Paid to 4M');
+        const fee = metric(summary, '4M fee');
+        const due = metric(summary, 'Amount due to organiser');
+        assert.equal(paid.result, 29900);
+        assert.equal(fee.result, -1495);
+        assert.deepEqual(due.value, { formula: `SUM(C${paid.row},C${fee.row})`, result: 28405 });
+    }
+});
+
 test('empty exports have numeric zero totals and never reference their own footer', () => {
     const wb = buildEventFinanceWorkbook({ registrations: [], activeRegistrationIds: [] });
     assert.equal(wb.getWorksheet('Registrations').getCell('R2').formula, '0');
