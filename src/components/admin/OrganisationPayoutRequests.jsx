@@ -3,6 +3,7 @@ import { Eye, ShieldCheck } from 'lucide-react';
 import { organisationBanking } from '../../utils/organisationBanking';
 import { supabase } from '../../supabaseClient';
 import BankingVerification from './BankingVerification';
+import RevealedBankingDetails from './RevealedBankingDetails';
 
 const money = n => `R ${Number(n).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`;
 export default function OrganisationPayoutRequests({ organisationId, eventId, refreshKey = 0, onProcessed }) {
@@ -57,10 +58,7 @@ export default function OrganisationPayoutRequests({ organisationId, eventId, re
             </div>}
             {action?.id === request.id && action.status === 'paid' && <p className="text-xs text-amber-300">Confirm the bank payment is complete. This adds {money(request.amount)} to the event payout ledger; do not also add it as an interim payment.</p>}
             {action?.id === request.id && <BankingVerification key={`${action.id}-${action.type}-${action.status}`} purpose={action.purpose} onVerified={complete} onCancel={() => { operationEpoch.current += 1; setAction(null); }} />}
-            {revealed?.id === request.id && <div className="rounded-xl border border-padel-green/25 p-4 bg-black/40 space-y-2" data-private="true">
-                <div className="flex justify-between gap-3"><p className="text-xs text-gray-400">Confidential · hides after 60 seconds</p><button type="button" onClick={() => setRevealed(null)} className="text-xs text-padel-green focus-visible:outline-2 focus-visible:outline-padel-green">Hide now</button></div>
-                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">{[['Bank','bank_name'],['Account holder','account_holder'],['Account number','account_number'],['Branch code','branch_code'],['Account type','account_type']].map(([label,key]) => <div key={key}><dt className="text-xs text-gray-500">{label}</dt><dd className="text-white break-all mt-0.5">{revealed.details[key]}</dd></div>)}</dl>
-            </div>}
+            {revealed?.id === request.id && <RevealedBankingDetails details={revealed.details} onHide={() => setRevealed(null)} />}
         </div>)}
     </section>;
 }

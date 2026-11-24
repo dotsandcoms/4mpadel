@@ -41,6 +41,36 @@ SELECT pg_temp.assert(pg_temp.denied('save','10000000-0000-0000-0000-00000000000
 SELECT pg_temp.identity(1);
 CREATE TEMP TABLE bank_summary AS SELECT public.organisation_banking('save','10000000-0000-0000-0000-000000000001','{"bank_name":"Test Bank","account_holder":"Test Org","account_number":"000123456789","branch_code":"001234","account_type":"current"}') AS summary;
 SELECT pg_temp.assert((SELECT summary->>'last_four'='6789' AND NOT summary ? 'account_number' AND NOT summary ? 'account_holder' FROM bank_summary),'save returns masked fields only');
+CREATE FUNCTION pg_temp.saved_account_version() RETURNS jsonb LANGUAGE sql AS $$
+    SELECT jsonb_build_object('expected_version',summary->>'version') FROM pg_temp.bank_summary
+$$;
+SELECT pg_temp.assert(pg_temp.denied('reveal_saved_account','10000000-0000-0000-0000-000000000001',pg_temp.saved_account_version()),'org owner cannot reveal a saved account even with MFA');
+SELECT pg_temp.identity(5);
+SELECT pg_temp.assert(pg_temp.denied('reveal_saved_account','10000000-0000-0000-0000-000000000001',pg_temp.saved_account_version()),'custom platform admin cannot reveal a saved account');
+SELECT pg_temp.identity(4,'aal1');
+SELECT pg_temp.assert(pg_temp.denied('reveal_saved_account','10000000-0000-0000-0000-000000000001',pg_temp.saved_account_version()),'saved account reveal requires AAL2');
+SELECT pg_temp.identity(4,'aal2',301);
+SELECT pg_temp.assert(pg_temp.denied('reveal_saved_account','10000000-0000-0000-0000-000000000001',pg_temp.saved_account_version()),'saved account reveal requires fresh MFA');
+SELECT pg_temp.identity(4);
+SELECT pg_temp.assert(pg_temp.denied('reveal_saved_account','10000000-0000-0000-0000-000000000001'),'saved account reveal requires the displayed version');
+SELECT pg_temp.assert(pg_temp.denied('reveal_saved_account','10000000-0000-0000-0000-000000000002'),'a missing saved account cannot be revealed');
+SELECT pg_temp.assert(
+    public.organisation_banking('reveal_saved_account','10000000-0000-0000-0000-000000000001',pg_temp.saved_account_version())
+        = '{"bank_name":"Test Bank","account_holder":"Test Org","account_number":"000123456789","branch_code":"001234","account_type":"current"}'::jsonb,
+    'super admin can view only the saved banking fields before any payout request'
+);
+RESET ROLE;
+SELECT pg_temp.assert(NOT EXISTS (SELECT FROM banking_private.payout_requests),'saved account reveal creates no payout request');
+SELECT pg_temp.assert(NOT EXISTS (SELECT FROM public.calendar WHERE organiser_interim_payments IS NOT NULL),'saved account reveal never records a payment');
+SELECT pg_temp.assert(
+    (SELECT count(*)=1 FROM banking_private.audit
+     WHERE action='saved_account_revealed' AND request_id IS NULL
+       AND organisation_id='10000000-0000-0000-0000-000000000001'
+       AND actor_id='00000000-0000-0000-0000-000000000004'),
+    'saved account reveal is audited against the organisation and acting super admin'
+);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.identity(1);
 SELECT pg_temp.assert(pg_temp.denied('save','10000000-0000-0000-0000-000000000001','{"bank_name":"Stale"}'),'stale account write denied');
 SELECT pg_temp.assert(pg_temp.denied('request','10000000-0000-0000-0000-000000000001',jsonb_build_object('event_id',2,'amount',500,'request_id','20000000-0000-0000-0000-000000000001','expected_version',(SELECT summary->>'version' FROM bank_summary))),'cross-org event request denied');
 SELECT public.organisation_banking('request','10000000-0000-0000-0000-000000000001',jsonb_build_object('event_id',1,'amount',500,'request_id','20000000-0000-0000-0000-000000000001','expected_version',(SELECT summary->>'version' FROM bank_summary)));
@@ -48,6 +78,7 @@ SELECT public.organisation_banking('request','10000000-0000-0000-0000-0000000000
 SELECT pg_temp.assert(pg_temp.denied('request','10000000-0000-0000-0000-000000000001',jsonb_build_object('event_id',1,'amount',400,'request_id','20000000-0000-0000-0000-000000000002','expected_version',(SELECT summary->>'version' FROM bank_summary))),'duplicate pending request denied');
 SELECT pg_temp.assert(pg_temp.denied('reveal',NULL,'{"request_id":"20000000-0000-0000-0000-000000000001"}'),'owner cannot reveal full banking');
 SELECT pg_temp.assert(NOT (public.organisation_banking('notification',NULL,'{"request_id":"20000000-0000-0000-0000-000000000001"}') ? 'account_number'),'email metadata has no banking');
+CREATE TEMP TABLE previous_bank_version AS SELECT pg_temp.saved_account_version() AS data;
 UPDATE bank_summary SET summary=public.organisation_banking('save','10000000-0000-0000-0000-000000000001',jsonb_build_object('expected_version',summary->>'version','bank_name','Replacement Bank','account_holder','New Holder','account_number','999987654321','branch_code','009876','account_type','savings'));
 SELECT pg_temp.assert((public.organisation_banking('list','10000000-0000-0000-0000-000000000001')->'requests'->0->>'account_changed')='true','replacement marks existing snapshot');
 SELECT pg_temp.identity(4,'aal2',301);
@@ -56,6 +87,11 @@ SELECT pg_temp.identity(4);
 SELECT pg_temp.assert((public.organisation_banking('reveal',NULL,'{"request_id":"20000000-0000-0000-0000-000000000001"}')->>'account_number')='000123456789','snapshot remains original including leading zeros');
 SELECT public.organisation_banking('resolve',NULL,'{"request_id":"20000000-0000-0000-0000-000000000001","status":"paid"}');
 SELECT pg_temp.assert(pg_temp.denied('reveal',NULL,'{"request_id":"20000000-0000-0000-0000-000000000001"}'),'paid request cannot reveal');
+SELECT pg_temp.assert(pg_temp.denied('reveal_saved_account','10000000-0000-0000-0000-000000000001',(SELECT data FROM previous_bank_version)),'account replacement invalidates the previous version for reveal');
+SELECT pg_temp.assert(
+    (public.organisation_banking('reveal_saved_account','10000000-0000-0000-0000-000000000001',pg_temp.saved_account_version())->>'account_number')='999987654321',
+    'super admin can view the current saved account after a payout is paid'
+);
 SELECT pg_temp.assert(pg_temp.denied('resolve',NULL,'{"request_id":"20000000-0000-0000-0000-000000000001","status":"paid"}'),'repeat payment recording denied');
 SELECT pg_temp.identity(1);
 SELECT public.organisation_banking('remove','10000000-0000-0000-0000-000000000001',jsonb_build_object('expected_version',(SELECT summary->>'version' FROM bank_summary)));
@@ -64,7 +100,7 @@ RESET ROLE;
 SELECT pg_temp.assert((SELECT jsonb_array_length(organiser_interim_payments)=1 AND (organiser_interim_payments->0->>'amount')::numeric=500 FROM public.calendar WHERE id=1),'manual payment ledger updated exactly once');
 SELECT pg_temp.assert((SELECT count(*)=1 FROM banking_private.payout_requests),'retry is idempotent');
 SELECT pg_temp.assert((SELECT position('000123456789' in encode(encrypted_details,'escape'))=0 FROM banking_private.payout_requests),'ciphertext has no plaintext account number');
-SELECT pg_temp.assert((SELECT count(*)=6 FROM banking_private.audit),'all sensitive actions audited exactly once');
+SELECT pg_temp.assert((SELECT count(*)=8 FROM banking_private.audit),'all sensitive actions audited exactly once');
 UPDATE auth.mfa_factors SET status='unverified' WHERE user_id='00000000-0000-0000-0000-000000000001';
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.identity(1);
