@@ -1,6 +1,6 @@
 import { trackWebEvent, trackWebPaymentConfirmed } from '../lib/web-analytics.js';
 import { entryWithdrawalAnalytics } from '../../mobile/src/lib/entry-analytics.js';
-import { reportWebError } from '../lib/web-monitoring.js';
+import { reportRegistrationError, reportWebError } from '../lib/web-monitoring.js';
 import { eventLicense } from '../utils/licenses';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -2789,12 +2789,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         expireAbandonedCheckouts();
     }, [expireAbandonedCheckouts]);
 
-    const insertProcessingPayment = useCallback(async (payload) => {
-        await expireAbandonedCheckouts();
-        await reserveDivisionPlaces(supabase, (payload.rows || []).map((row) => ({
-            ...row,
-            ...(accessGrantId ? { access_grant_id: accessGrantId } : {}),
-        })), payload.soloLinks || []);
+    const insertProcessingPayment = async (payload) => {
         const metadata = {
             ...(payload.paymentMetadata || {}),
             // RLS ownership keys — must match auth JWT email for insert policy.
@@ -2813,7 +2808,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             is_test: isPaystackTestMode,
             metadata,
         }]);
-    }, [event.id, profile?.id, userEmail, expireAbandonedCheckouts, accessGrantId]);
+    };
 
     useEffect(() => {
         if (
@@ -3015,6 +3010,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
         setProcessing(true);
         let paystackHandoff = false;
+        let registrationStep = 'prepare_entry';
+        let entrySaved = false;
         try {
             if (!isWeeklyEvent && wizardMode !== 'payOnly') {
                 for (const d of selectedDivisions) {
@@ -3063,14 +3060,19 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 const weeksToSchedule = snapshotSelectedWeeksForSchedule();
                 // Entry-fee cover rows are deliberately omitted: the organiser must
                 // verify the off-platform payment before changing payment_status.
+                registrationStep = 'save_entries';
                 const savedRows = await persistRegistrations(rows, soloLinks, []);
+                entrySaved = true;
+                registrationStep = 'send_confirmation';
                 if (wizardMode === 'register') trackWebEvent('registration_complete', { payment_state: 'pending', item_count: rows.length });
                 await sendRegistrationEmails(savedRows, false);
                 setConfirmedPaidTotal(null);
                 setWizardStep(5);
                 loadMyRegs();
                 loadDivisionRegs();
+                registrationStep = 'update_schedule';
                 await addRegisteredWeeksToSchedule(weeksToSchedule);
+                registrationStep = 'refresh_entry';
                 await loadRegisteredWeekIds();
                 onParticipantsChange?.();
                 toast.success(`Registration received — ${manualPaymentLabel} payment is pending.`);
@@ -3087,11 +3089,19 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 const prep = checkoutPrepRef.current;
                 const payload = prep?.reference ? prep : buildManualPaymentPayload();
 
+                registrationStep = 'reserve_places';
+                await expireAbandonedCheckouts();
+                await reserveDivisionPlaces(supabase, (payload.rows || []).map((row) => ({
+                    ...row,
+                    ...(accessGrantId ? { access_grant_id: accessGrantId } : {}),
+                })), payload.soloLinks || []);
+                registrationStep = 'save_checkout';
                 const { error: insertError } = await insertProcessingPayment(payload);
                 if (insertError) throw insertError;
                 trackWebEvent('begin_checkout', { item_category: 'event_registration', currency: 'ZAR', value: payload.amount });
 
                 // Keep processing=true until Paystack onSuccess / onCancel clears it.
+                registrationStep = 'open_checkout';
                 if (prep?.launcher) {
                     prep.launcher();
                     paystackHandoff = true;
@@ -3104,16 +3114,21 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             }
 
             const weeksToSchedule = snapshotSelectedWeeksForSchedule();
+            registrationStep = isReserve ? 'save_pay_later' : 'save_entries';
             const savedRows = isReserve
                 ? await savePayLaterRegistrations(rows, soloLinks)
                 : await persistRegistrations(rows, soloLinks, covers);
+            entrySaved = true;
+            registrationStep = 'send_confirmation';
             if (wizardMode === 'register') trackWebEvent('registration_complete', { payment_state: isReserve ? 'pending' : 'paid', item_count: rows.length });
             await sendRegistrationEmails(savedRows, isReserve ? false : (wizardMode === 'addPartner' ? total > 0 : true));
             setConfirmedPaidTotal(isReserve ? null : 0);
             setWizardStep(5);
             loadMyRegs();
             loadDivisionRegs();
+            registrationStep = 'update_schedule';
             await addRegisteredWeeksToSchedule(weeksToSchedule);
+            registrationStep = 'refresh_entry';
             await loadRegisteredWeekIds();
             onParticipantsChange?.();
             if (isReserve) {
@@ -3121,7 +3136,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             }
         } catch (err) {
             trackWebEvent('action_error', { feature: 'registration' });
-            reportWebError(new Error('Event registration failed'), 'registration');
+            reportRegistrationError(err, registrationStep, entrySaved);
             console.error('Manual registration error:', err);
             toast.error(`Registration failed: ${err.message}`);
         } finally {
