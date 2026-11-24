@@ -70,3 +70,56 @@ export function scrubSentryEvent(event) {
         exception: safeException(event.exception),
     };
 }
+
+const PERFORMANCE_MEASUREMENTS = new Set([
+    'lcp', 'cls', 'fcp', 'inp', 'ttfb', 'ttfb.requestTime', 'fp', 'fid',
+    'app_start_cold', 'app_start_warm', 'time_to_initial_display', 'time_to_full_display',
+    'frames_total', 'frames_slow', 'frames_frozen', 'frames_slow_rate', 'frames_frozen_rate',
+    'stall_count', 'stall_total_time', 'stall_longest_time', 'stall_percentage',
+]);
+const PERFORMANCE_UNITS = new Set(['millisecond', 'second', 'none', 'ratio', 'percent']);
+const PERFORMANCE_METADATA = new Set([
+    'sentry.op', 'sentry.origin', 'sentry.source', 'sentry.segment.name.source', 'sentry.trace.lifecycle',
+    'sentry.sample_rate', 'sentry.exclusive_time',
+]);
+
+export function sentryPerformanceAttributes(attributes) {
+    return Object.fromEntries(Object.entries(attributes ?? {}).filter(([key, value]) =>
+        (PERFORMANCE_METADATA.has(key) && (Number.isFinite(value) || (typeof value === 'string' && /^[a-z_.]+$/.test(value)))) ||
+        (Number.isFinite(value) && /^(?:browser\.web_vital\.(?:lcp|cls|fcp|inp|ttfb)\.[a-z_.]+|http\.(?:status_code|response\.status_code))$/.test(key)) ||
+        ((key === 'sentry.pageload.span_id' || key === 'sentry.segment.id') && typeof value === 'string' && /^[a-f0-9]{16}$/.test(value))));
+}
+
+function performanceMeasurements(measurements) {
+    return Object.fromEntries(Object.entries(measurements ?? {}).flatMap(([key, measurement]) => {
+        if (!PERFORMANCE_MEASUREMENTS.has(key) || !Number.isFinite(measurement?.value)) return [];
+        const unit = PERFORMANCE_UNITS.has(measurement.unit) ? measurement.unit : undefined;
+        return [[key, { value: measurement.value, unit }]];
+    }));
+}
+
+/** Keep timing and protocol metadata. Span descriptions may contain URLs or DOM text. */
+function scrubSentryPerformanceSpan(span) {
+    return {
+        ...span,
+        description: undefined,
+        links: undefined,
+        data: sentryPerformanceAttributes(span.data),
+        measurements: span.measurements && performanceMeasurements(span.measurements),
+    };
+}
+
+export function scrubSentryTransaction(event, name) {
+    const cleaned = scrubSentryEvent(event);
+    const trace = event.contexts?.trace;
+    const { trace_id, span_id, parent_span_id, op, origin, status } = trace ?? {};
+    return {
+        ...cleaned,
+        transaction: name,
+        contexts: { ...cleaned.contexts, trace: trace && {
+            trace_id, span_id, parent_span_id, op, origin, status, data: sentryPerformanceAttributes(trace.data),
+        } },
+        spans: event.spans?.map(scrubSentryPerformanceSpan),
+        measurements: event.measurements && performanceMeasurements(event.measurements),
+    };
+}

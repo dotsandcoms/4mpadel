@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
@@ -47,6 +47,7 @@ import { SEOAdminPanel, GoogleAnalytics } from '@burkcorp/reactmath';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import { useWebAnalytics } from './lib/use-web-analytics';
+import { MonitoredRoutes } from './lib/web-monitoring';
 import { SearchProvider } from './context/SearchContext';
 import SearchPalette from './components/SearchPalette';
 
@@ -133,7 +134,7 @@ function AppContent() {
       <SpeedInsights />
       {!isAdminRoute && <Navbar isDark={location.pathname === '/tournaments/broll'} />}
       <div id="site-content" className={`${isHeroRoute ? '' : 'max-md:pt-20'}`}>
-        <Routes>
+        <MonitoredRoutes>
           <Route path="/" element={<Home />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/admin" element={<React.Suspense fallback={<div role="status" className="min-h-screen p-8 text-gray-400">Loading admin…</div>}><Admin /></React.Suspense>} />
@@ -178,7 +179,7 @@ function AppContent() {
           <Route path="/academy/videos" element={<CoachingVideos />} />
           <Route path="/academy/register" element={<CoachRegistration />} />
           <Route path="*" element={<NotFound />} />
-        </Routes>
+        </MonitoredRoutes>
       </div>
       {!isAdminRoute && <SiteFooter />}
       <SEOAdminPanel />
