@@ -80,16 +80,25 @@ async function open() {
 }
 const clickText = (page, label) => page.evaluate(label => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === label)?.click(), label);
 const metric = (page, label) => page.evaluate(label => [...document.querySelectorAll('p,h3')].find(p => p.textContent.trim() === label)?.nextElementSibling?.textContent.replace(/\s/g, ''), label);
+const financeRowAmount = (page, label) => page.evaluate(label => {
+    const name = [...document.querySelectorAll('span')].find(span => span.textContent.trim() === label);
+    return name?.nextElementSibling?.textContent.replace(/\s/g, '');
+}, label);
 
 test('existing Overview, Income Statement, export and finance overview reconcile the same event', async () => {
     const page = await open();
     try {
+        assert.equal(await financeRowAmount(page, 'Outstanding entry fees (excluded)'), 'R600,00');
+        assert.equal(await financeRowAmount(page, 'Paid direct to organiser'), 'R600,00');
+        assert.equal(await financeRowAmount(page, 'Paid to 4M'), 'R1200,00');
+        assert.equal(await financeRowAmount(page, '4M fee (5% of payments to 4M)'), '−R60,00');
         assert.equal(await metric(page, 'Balance due from 4M'), 'R940,00');
         await page.screenshot({path:'/tmp/4m-reconciliation-overview.png',fullPage:true});
         await clickText(page, 'Income Statement');
         await page.waitForFunction(() => document.querySelector('input[placeholder="Search player, division, type, status..."]'));
         assert.equal(await metric(page, 'Total billed'), 'R2400,00');
         assert.equal(await metric(page, 'Total collected'), 'R1800,00');
+        assert.equal(await metric(page, 'Outstanding entry fees (excluded)'), 'R600,00');
         assert.equal(await metric(page, 'Net entry income'), 'R1800,00');
         assert.equal(await metric(page, 'Platform Fees'), '−R60,00');
         await page.screenshot({path:'/tmp/4m-reconciliation-statement.png',fullPage:true});
