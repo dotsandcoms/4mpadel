@@ -329,6 +329,48 @@ test('subaccount verification rejects a code from another environment and financ
   assert.equal(providerCalls, 1);
 });
 
+test('Paystack subaccount verification explains which payout setting needs attention', async () => {
+  const validAccount = {
+    subaccount_code: 'ACCT_fixture', domain: 'live', id: 51, active: true, currency: 'ZAR',
+    percentage_charge: 0, account_name: 'Test organisation', account_number: '0123456789',
+  };
+  let account = validAccount;
+  const caller = {
+    auth: { getUser: async () => ok({ user }) },
+    rpc: async name => {
+      assert.equal(name, 'can_manage_paystack_subaccounts');
+      return ok(true);
+    },
+  };
+  const handler = organisationHandler(() => caller, async url => {
+    assert.equal(url, 'https://api.paystack.co/subaccount/ACCT_fixture');
+    return Response.json({ status: true, data: account });
+  }, { PAYSTACK_SECRET_KEY: 'sk_live_fixture' });
+  const verify = () => handler(post('paystack-organisation-settlement', { action: 'preview', code: 'ACCT_fixture' }));
+
+  for (const [settings, expected] of [
+    [{ active: false }, /confirm this subaccount is active/],
+    [{ currency: 'NGN' }, /confirm ZAR as the subaccount currency/],
+    [{ percentage_charge: 5 }, /5% share for the 4M main account/],
+    [{ percentage_charge: null }, /did not return a valid share/],
+    [{ percentage_charge: false }, /did not return a valid share/],
+    [{ account_name: null }, /account holder or subaccount ID/],
+    [{ id: 0 }, /account holder or subaccount ID/],
+  ]) {
+    account = { ...validAccount, ...settings };
+    const result = await verify();
+    assert.equal(result.status, 400);
+    assert.match((await result.json()).error, expected);
+  }
+
+  account = { ...validAccount, percentage_charge: '0.00' };
+  const result = await verify();
+  assert.equal(result.status, 200);
+  const body = await result.json();
+  assert.equal(body.account.lastFour, '6789');
+  assert.doesNotMatch(JSON.stringify(body), /0123456789/);
+});
+
 test('a subaccount refund without funding approval never reaches Paystack', async () => {
   const registration = { id: 'entry', event_id: 517 };
   const payment = { id: 'payment', event_id: 517, status: 'success', reference: namedReference, currency: 'ZAR', is_test: false,
