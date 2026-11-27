@@ -23,6 +23,7 @@ import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 const tierOptions = [
   { value: 'sapa-pro-tour', label: 'SAPA Pro Tour' },
   { value: 'silver-bronze', label: 'Silver/Bronze' },
+  { value: '', label: 'All' },
 ];
 const defaultFilters: EventFilters = { search: '', timing: 'upcoming', city: '', tier: 'sapa-pro-tour', status: 'active' };
 const timings = [{ value: 'upcoming', label: 'Upcoming' }, { value: 'past', label: 'Past' }, { value: 'saved', label: 'My schedule' }];

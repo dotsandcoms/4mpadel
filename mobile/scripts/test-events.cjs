@@ -34,13 +34,14 @@ test('calendar includes multi-day ongoing events and filters combined fields', (
   assert.equal(filterEvents(events, { search: '', timing: 'saved', city: '', tier: '' }, [1], now)[0].id, 1);
   assert.equal(filterEvents([{ ...base, event_status: 'cancelled' }], { search: '', timing: 'saved', city: '', tier: '' }, [1], now).length, 0);
 });
-test('event tier groups accept legacy Super Gold labels and allow an unfiltered schedule', () => {
-  const events = ['Major', ' Super Gold ', 'S Gold', 'Gold', 'Silver', 'Bronze', null]
+test('event tiers include untiered events in All and My schedule', () => {
+  const events = ['Major', ' Super Gold ', 'S Gold', 'Gold', 'Silver', 'Bronze', null, 'None']
     .map((sapa_status, i) => ({ ...base, id: i + 1, sapa_status }));
   const filters = { search: '', timing: 'upcoming', city: '' };
   const ids = tier => Array.from(filterEvents(events, { ...filters, tier }, [], now), event => event.id);
   assert.deepEqual(ids('sapa-pro-tour'), [1, 2, 3, 4]);
   assert.deepEqual(ids('silver-bronze'), [5, 6]);
+  assert.deepEqual(ids(''), [1, 2, 3, 4, 5, 6, 7, 8]);
   assert.deepEqual(ids('Gold'), [4]);
   const saved = filterEvents(events, { ...filters, timing: 'saved', tier: '' }, [1, 5, 7], now);
   assert.deepEqual(Array.from(saved, event => event.id), [1, 5, 7]);
