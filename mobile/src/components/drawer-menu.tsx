@@ -93,7 +93,7 @@ const NAV: NavItem[] = [
     hidden: true, // Not included in the launch navigation.
     icon: { ios: 'graduationcap', android: 'school', web: 'school' },
     children: [
-      { name: 'Approved Coaches', dest: { kind: 'site', path: '/academy/coaches' } },
+      { name: 'Approved Coaches', dest: { kind: 'tab', href: '/coaches' } },
       { name: 'Coaching Videos', dest: { kind: 'site', path: '/academy/videos' } },
       { name: 'Register', dest: { kind: 'site', path: '/academy/register' } },
     ],

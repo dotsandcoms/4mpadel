@@ -1,0 +1,5 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": { "modules": ["FourMLiveScoresModule"] },
+  "android": { "modules": ["com.fourmpadel.livescores.FourMLiveScoresModule"] }
+}

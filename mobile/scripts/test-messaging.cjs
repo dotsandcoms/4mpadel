@@ -257,12 +257,16 @@ test('native Messages badge clears at zero using the installed Expo tab option c
   for (const [badge, expected] of [[5, '5'], [0, undefined], [101, '99+'], [0, undefined]]) {
     const layout = load('src/app/(tabs)/_layout.tsx', {
       'react/jsx-runtime': require('react/jsx-runtime'),
+      react: { useState: initial => [initial, () => {}], useCallback: fn => fn, useEffect: () => {} },
       '@/components/messaging/messaging-provider': { useMessagingInbox: () => ({ badge }) },
-      'expo-router': { useNavigation: () => ({ dispatch() {} }) },
+      'expo-router': { useNavigation: () => ({ dispatch() {} }), usePathname: () => '/messages', useFocusEffect: () => {} },
       'expo-router/unstable-native-tabs': { NativeTabs }, 'react-native': { Platform: { OS: 'ios' } },
-      '@/components/app-drawer': { AppDrawer: () => null }, '@/theme/tokens': { lightBrand: {} },
+      '@/components/app-drawer': { AppDrawer: () => null }, '@/components/profile-tab-panel': { ProfileTabPanel: () => null },
+      '@/components/glass-tab-bar': { supportsExpandableGlass: false },
+      '@/theme/tokens': { lightBrand: {} },
     });
-    const tree = layout.default(), messages = React.Children.toArray(tree.props.children.props.children).find(child => child.props.name === 'messages');
+    const [tabs] = layout.default().props.children;
+    const messages = React.Children.toArray(tabs.props.children).find(child => child.props.name === 'messages');
     assert.ok(messages, 'Messages tab remains available at zero');
     assert.equal(converter.convertTabPropsToOptions(messages.props).badgeValue, expected);
   }

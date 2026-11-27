@@ -5,7 +5,8 @@ module.exports = ({ config }) => {
   const iosBuildNumber = process.env.EAS_BUILD_IOS_BUILD_NUMBER?.trim();
   const sentryProject = process.env.SENTRY_PROJECT?.trim();
   const sentryOrg = process.env.SENTRY_ORG?.trim();
-  const sentryPlugin = sentryProject && sentryOrg && process.env.SENTRY_AUTH_TOKEN ? [
+  // Credentials are only available during upload. Native config must match between EAS CLI and worker.
+  const sentryPlugin = sentryProject && sentryOrg ? [
     ['@sentry/react-native/expo', {
       organization: sentryOrg, project: sentryProject,
       ...(process.env.SENTRY_URL ? { url: process.env.SENTRY_URL } : {}),

@@ -5,6 +5,7 @@ import { useProLiveFeed } from '@/hooks/use-pro-live-feed';
 import { trackEvent } from '@/lib/analytics';
 import { fetchHeadToHead, fetchMatchDetails, fetchMatchPrediction, fetchMatchStats, fetchPlayerStats, fetchPointFeed, liveScoreFromPointFeed, type HeadToHead, type MatchDetails, type MatchPrediction, type MatchStats, type PlayerStats, type PointFeed } from '@/lib/pro-padel-live';
 import { ProMatchStar } from '@/components/pro-match-star';
+import { ProLiveScoreButton } from '@/components/pro-live-score-button';
 import { ProLiveFeed } from '@/components/pro-live-feed';
 import { NativeSegmentedControl } from '@/components/native-segmented-control';
 import { ErrorBanner } from '@/components/error-banner';
@@ -252,6 +253,7 @@ export default function ProMatchScreen() {
         <View style={{ flex: 1 }}><Text style={{ color: b.premium, fontSize: 18, fontWeight: '600' }}>{playerCountryFlag(detail?.tournament?.country)}{detail?.tournament?.country ? ' ' : ''}{match.tournamentName}</Text></View><Ionicons name="chevron-forward" size={20} color={b.accent} />
       </Pressable>
       <ProMatchScoreboard row={{ ...detail!, match: { ...match, status: effectiveStatus || match.status }, liveScore: currentScore }} round={tournamentRoundLabel(detail!)} hero photos={matchPhotos} onPlayers={() => setTab('players')} />
+      <ProLiveScoreButton id={match.id} live={!!live} />
       {live && <Text accessibilityLiveRegion="polite" style={{ color: b.muted, fontSize: 12 }}>{stream.state === 'connected' && points?.channel ? '● Live connection · updates as points arrive' : points?.channel ? 'Reconnecting · saved scores refresh automatically' : 'Scores refresh automatically when available'}</Text>}
       {match.status === 'scheduled' && <StartTime value={match.scheduledAt} scheduleLabel={match.scheduleLabel} />}
       <NativeSegmentedControl label="Match view" value={tab} onChange={value => setTab(value as typeof tab)} options={[{ value: 'points', label: 'Live feed' }, { value: 'summary', label: 'Stats' }, { value: 'players', label: 'Players' }, { value: 'h2h', label: 'H2H' }]} />

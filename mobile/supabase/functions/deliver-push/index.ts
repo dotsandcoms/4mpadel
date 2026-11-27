@@ -3,6 +3,7 @@ import { cachedAppBadge, appBadgeForToken } from '../_shared/app-badge.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { deliveryDecision, retryDelay } from './policy.ts';
 import { refreshProMatchAlerts } from './pro-match-alerts.ts';
+import { refreshPinnedScores } from './pro-live-scores.ts';
 import { refreshFollowingActivity } from './following-activity.ts';
 import { createPadelFetch } from '../_shared/padel-api.ts';
 
@@ -93,6 +94,11 @@ Deno.serve(async request => {
       await Promise.all(jobs!.slice(i, i + 5).map(processJob));
     }
     await refreshFollowingActivity(client, Deno.env.get('PADEL_API_TOKEN'), providerFetch).catch(() => console.warn('Following activity refresh failed'));
+    const liveScores = refreshPinnedScores(client, providerFetch, Deno.env.get('PADEL_API_TOKEN'), expo)
+      .catch(() => console.warn('Pinned Pro Padel scores could not refresh'));
+    const runtime = (globalThis as typeof globalThis & { EdgeRuntime?: { waitUntil(promise: Promise<unknown>): void } }).EdgeRuntime;
+    if (runtime) runtime.waitUntil(liveScores);
+    else await liveScores;
     return Response.json({ processed });
   } catch {
     return Response.json({ error: 'Push worker failed; inspect delivery state before retrying.' }, { status: 500 });
