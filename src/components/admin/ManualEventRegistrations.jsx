@@ -222,7 +222,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const [addPlayerSelected, setAddPlayerSelected] = useState(null);
     const [addTeam, setAddTeam] = useState(false);
     const [addPartnerSelected, setAddPartnerSelected] = useState(null);
-    const [addPlayerDivision, setAddPlayerDivision] = useState('');
+    const [selectedAddPlayerDivision, setSelectedAddPlayerDivision] = useState('');
+    const addPlayerDivision = divisions.length === 1 ? divisions[0].name : selectedAddPlayerDivision;
     const [addPlayerNote, setAddPlayerNote] = useState('');
     const [addPlayerBusy, setAddPlayerBusy] = useState(false);
     const [removeTarget, setRemoveTarget] = useState(null);
@@ -769,7 +770,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         setAddPlayerSearch('');
         setAddPlayerResults([]);
         setAddPlayerSelected(null);
-        setAddPlayerDivision('');
+        setSelectedAddPlayerDivision('');
         setAddPlayerNote('');
         setAddPlayerBusy(false);
     };
@@ -780,7 +781,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         setAddPlayerSearch('');
         setAddPlayerResults([]);
         setAddPlayerSelected(null);
-        setAddPlayerDivision('');
+        setSelectedAddPlayerDivision('');
         setAddPlayerNote('');
         setAddPlayerBusy(false);
     };
@@ -905,7 +906,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             setAddPlayerSearch('');
             setAddPlayerResults([]);
             setAddPlayerSelected(null);
-            setAddPlayerDivision('');
+            setSelectedAddPlayerDivision('');
             setAddPlayerNote('');
             load();
         } catch (err) {
@@ -4540,7 +4541,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                         id="add-player-division"
                                         required
                                         value={addPlayerDivision}
-                                        onChange={(e) => setAddPlayerDivision(e.target.value)}
+                                        onChange={(e) => setSelectedAddPlayerDivision(e.target.value)}
                                         disabled={addPlayerBusy}
                                         className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-padel-green/50 mb-3"
                                     >

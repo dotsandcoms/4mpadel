@@ -21,8 +21,10 @@ const reg = (id,extra={}) => ({id,event_id:1,full_name:id.toUpperCase(),email:id
 const pay=(id,amount,method='paystack',recipient='4m')=>({id,event_id:1,amount,reference:method==='paystack'?'REGEV-1-'+id:'MANUAL-ADMIN-'+id,payment_type:'event_entry_fee',payment_method:method,status:'success',created_at:'2026-10-01T10:00:00Z',metadata:{registration_id:id,email:id+'@example.com',division:'Open',collection_recipient:recipient,...(method==='paystack'?{}:{source:'manual_event_admin',marked_by_admin:true,note:'Verified receipt'})}});
 const event={id:1,is_manual:true,event_name:'Reconciliation test',entry_fee:600,start_date:'2026-10-01',end_date:'2026-10-02',organiser_interim_payments:[{id:'request-1',amount:200,paid_at:'2026-10-02'}]};
 const tables={calendar:[event],event_registrations:[reg('a'),reg('b'),reg('c'),reg('d',{payment_status:'pending'}),reg('old',{status:'withdrawn',payment_status:'refunded'})],payments:[pay('a',600),pay('b',600,'eft'),pay('c',600,'eft','organiser'),pay('old',550)],tournament_divisions:[{id:'open',event_id:1,name:'Open',entry_fee:600}],payment_refunds:[{id:'refund-old',event_registration_id:'old',payment_id:'old',amount:550,status:'processed',metadata:{cover_type:'entry'},processed_at:'2026-10-02'}],tournament_participants:[]};
+if(window.__extraDivision)tables.tournament_divisions.push({id:'mixed',event_id:1,name:'Mixed',entry_fee:450});
 window.__tables=tables;window.__writes=[];
 export const supabase={async rpc(name,args){
+ if(name==='find_registration_partner')return {data:[{id:'new-player',name:'New Player',email:'new@example.com'}]};
  if(name!=='correct_manual_event_payment')throw new Error('Unexpected RPC '+name);
  window.__rpcCalls=(window.__rpcCalls||[]).concat({name,args});
  if(window.__failCorrection)return {error:{message:'Payment correction denied.'}};
@@ -40,7 +42,11 @@ export const supabase={async rpc(name,args){
   if(window.__fail===table)return {data:null,error:{message:table+' unavailable'}};
   let rows=(tables[table]||[]).filter(r=>filters.every(f=>f(r)));
   if(operation==='update'){rows.forEach(r=>Object.assign(r,values));window.__writes.push({table,operation,values});}
-  if(operation==='insert'){rows=Array.isArray(values)?values:[values];(tables[table]||=[]).push(...rows);window.__writes.push({table,operation,values});}
+  if(operation==='insert'){
+   rows=Array.isArray(values)?values:[values];
+   if(table==='event_registrations')rows=rows.map(row=>({...row,id:'registration-'+row.email}));
+   (tables[table]||=[]).push(...rows);window.__writes.push({table,operation,values});
+  }
   if(ordering)rows=[...rows].sort((a,b)=>String(a[ordering]).localeCompare(String(b[ordering])));
   return {data:structuredClone(rows.slice(from,to+1)),error:null};
  };
@@ -66,7 +72,7 @@ before(async () => {
 });
 after(async () => { await browser?.close(); fs.rmSync(temporary, { recursive: true, force: true }); });
 
-async function open() {
+async function open({ extraDivision = false } = {}) {
     const page = await browser.newPage();
     await page.setViewport({ width: 1600, height: 1100 });
     await page.setContent('<!doctype html><html><body style="background:#0a0a0a"><div id="root"></div></body></html>');
@@ -74,6 +80,7 @@ async function open() {
     const css = fs.existsSync(assets) ? fs.readdirSync(assets).find(name => /^index-.*\.css$/.test(name)) : null;
     if (css) await page.addStyleTag({ content: fs.readFileSync(path.join(root, 'dist/assets', css), 'utf8') });
     page.on('pageerror', error => { throw error; });
+    await page.evaluate(extraDivision => { window.__extraDivision = extraDivision; }, extraDivision);
     await page.addScriptTag({ path: output });
     await page.waitForFunction(() => document.body.textContent.includes('R 940,00'));
     return page;
@@ -84,6 +91,33 @@ const financeRowAmount = (page, label) => page.evaluate(label => {
     const name = [...document.querySelectorAll('span')].find(span => span.textContent.trim() === label);
     return name?.nextElementSibling?.textContent.replace(/\s/g, '');
 }, label);
+
+test('Add Player defaults to the sole division and submits the entry in that division', async () => {
+    const page = await open();
+    try {
+        await clickText(page, 'Add Player / Team');
+        await page.waitForSelector('#add-player-division');
+        assert.equal(await page.$eval('#add-player-division', select => select.value), 'Open');
+        await page.type('input[placeholder="Name or email…"]', 'New Player');
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => button.textContent.includes('new@example.com')));
+        await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent.includes('new@example.com')).click());
+        await clickText(page, 'Add player (pending)');
+        await page.waitForSelector('#add-player-division', { hidden: true });
+        const [entry] = await page.evaluate(() => window.__writes.find(write => write.table === 'event_registrations' && write.operation === 'insert').values);
+        assert.deepEqual([entry.division, entry.division_id, entry.payment_status], ['Open', 'open', 'pending']);
+    } finally { await page.close(); }
+});
+
+test('Add Player leaves the division choice to the manager when several are available', async () => {
+    const page = await open({ extraDivision: true });
+    try {
+        await clickText(page, 'Add Player / Team');
+        await page.waitForSelector('#add-player-division');
+        assert.equal(await page.$eval('#add-player-division', select => select.value), '');
+        await page.select('#add-player-division', 'Mixed');
+        assert.equal(await page.$eval('#add-player-division', select => select.value), 'Mixed');
+    } finally { await page.close(); }
+});
 
 test('existing Overview, Income Statement, export and finance overview reconcile the same event', async () => {
     const page = await open();
