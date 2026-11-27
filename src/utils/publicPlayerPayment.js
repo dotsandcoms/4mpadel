@@ -44,5 +44,11 @@ export const addPublicPlayerPaymentStatuses = (participants, registrations, divi
     });
 };
 
-export const publicPlayerPaymentLabel = (status) => status == null ? null
-    : status === 'paid' ? 'Paid & Confirmed' : 'Payment Pending';
+// High level Americano with Diogo, 2 December 2026.
+const AMERICANO_WITH_DIOGO_EVENT_ID = '591';
+
+export const publicPlayerPaymentLabel = (status, eventId) => {
+    if (status == null) return null;
+    if (status === 'paid') return 'Paid & Confirmed';
+    return String(eventId) === AMERICANO_WITH_DIOGO_EVENT_ID ? null : 'Payment Pending';
+};
