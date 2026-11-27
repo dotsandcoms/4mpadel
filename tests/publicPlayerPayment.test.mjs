@@ -68,3 +68,10 @@ test('enrichment preserves seeding and does not mutate participants or registrat
     assert.equal(publicPlayerPaymentLabel('paid'), 'Paid & Confirmed');
     assert.equal(publicPlayerPaymentLabel('pending'), 'Payment Pending');
 });
+
+test('only the December 2 Americano hides pending badges on the public player list', () => {
+    assert.equal(publicPlayerPaymentLabel('pending', 591), null);
+    assert.equal(publicPlayerPaymentLabel('pending', '591'), null);
+    assert.equal(publicPlayerPaymentLabel('paid', 591), 'Paid & Confirmed');
+    assert.equal(publicPlayerPaymentLabel('pending', 592), 'Payment Pending');
+});

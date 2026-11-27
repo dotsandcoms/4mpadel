@@ -5016,6 +5016,7 @@ const EventDetails = () => {
                                                                                 {players.map((player, idx) => {
                                                                                     const pName = (player.Name || '').split(' ')[0];
                                                                                     const avatarUrl = getProfileImage(player);
+                                                                                    const paymentLabel = publicPlayerPaymentLabel(player.PaymentStatus, event.id);
                                                                                     return (
                                                                                         <button
                                                                                             key={idx}
@@ -5035,8 +5036,8 @@ const EventDetails = () => {
                                                                                             <span className="text-sm font-bold text-slate-800 mt-1.5 text-center max-w-[96px] truncate group-hover:underline underline-offset-2">
                                                                                                 {pName}
                                                                                             </span>
-                                                                                            {publicPlayerPaymentLabel(player.PaymentStatus) && (
-                                                                                                <PaymentBadge paid={player.PaymentStatus === 'paid'} label={publicPlayerPaymentLabel(player.PaymentStatus)} compact className="mt-1.5" />
+                                                                                            {paymentLabel && (
+                                                                                                <PaymentBadge paid={player.PaymentStatus === 'paid'} label={paymentLabel} compact className="mt-1.5" />
                                                                                             )}
                                                                                         </button>
                                                                                     );
@@ -5166,6 +5167,7 @@ const EventDetails = () => {
                                                                                                     const hasPts = pts > 0;
                                                                                                     const pName = (player.Name || '').split(' ')[0];
                                                                                                     const avatarUrl = getProfileImage(player);
+                                                                                                    const paymentLabel = publicPlayerPaymentLabel(player.PaymentStatus, event.id);
                                                                                                     return (
                                                                                                         <button
                                                                                                             key={idx}
@@ -5190,8 +5192,8 @@ const EventDetails = () => {
                                                                                                                     {pts.toLocaleString()}
                                                                                                                 </span>
                                                                                                             )}
-                                                                                                            {publicPlayerPaymentLabel(player.PaymentStatus) && (
-                                                                                                                <PaymentBadge paid={player.PaymentStatus === 'paid'} label={publicPlayerPaymentLabel(player.PaymentStatus)} compact className="mt-1.5" />
+                                                                                                            {paymentLabel && (
+                                                                                                                <PaymentBadge paid={player.PaymentStatus === 'paid'} label={paymentLabel} compact className="mt-1.5" />
                                                                                                             )}
                                                                                                         </button>
                                                                                                     );
