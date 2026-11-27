@@ -35,7 +35,12 @@ const tables = {
   {id:524,event_name:'Super Gold tournament',sapa_status:'Super Gold',start_date:'2026-11-21',is_manual:true,finance_managed:true},
   {id:525,event_name:'Legacy Super Gold',sapa_status:'S Gold',start_date:'2026-11-22',is_manual:true,finance_managed:true},
   {id:526,event_name:'Social tournament',sapa_status:'None',start_date:'2026-11-23',is_manual:true,finance_managed:true},
-  {id:527,event_name:'Unmanaged Gold',sapa_status:'Gold',start_date:'2026-11-24',is_manual:true,finance_managed:false}
+  {id:527,event_name:'Unmanaged Gold',sapa_status:'Gold',start_date:'2026-11-24',is_manual:true,finance_managed:false},
+  ...(window.__includeQuickEvents ? [
+   {id:591,event_name:'High level Americano with Diogo',sapa_status:'None',start_date:'2026-12-02',is_manual:true,is_quick_event:true,finance_managed:true},
+   {id:592,event_name:'Managed Quick Event without a tier',sapa_status:null,start_date:'2026-12-03',is_manual:true,is_quick_event:true,finance_managed:true},
+   {id:593,event_name:'Unmanaged Quick Event',sapa_status:'None',start_date:'2026-12-04',is_manual:true,is_quick_event:true,finance_managed:false}
+  ] : [])
  ],
  event_registrations:[...older,...target,{...target[0],id:'r1077',status:'withdrawn'},{...target[1],id:'r1078',payment_status:'pending'},
   {id:'bronze',event_id:523,email:'bronze@example.com',division:'Open',payment_status:'paid',status:'registered',tournament_divisions:{entry_fee:200}}],
@@ -83,7 +88,20 @@ export const supabase = {
    neq(column,value){filters.push(row=>row[column]!==value);return q},
    in(column,values){constraints.push({column,values});filters.push(row=>values.includes(row[column]));return q},
    is(column,value){filters.push(row=>row[column]===value);return q},
-   or(filter){const emails=filter.split(',').map(part=>part.replace('email.ilike.',''));constraints.push({column:'email',values:emails});filters.push(row=>emails.includes(row.email));return q},
+   or(filter){
+    if(table==='calendar'){
+     const [tierFilter, quickFilter]=filter.split('),and(');
+     if(!tierFilter.startsWith('sapa_status.in.(')||quickFilter!=='is_quick_event.is.true,or(sapa_status.eq.None,sapa_status.is.null))') throw new Error('Unexpected Event Manager filter: '+filter);
+     const statuses=tierFilter.slice('sapa_status.in.('.length).split(',');
+     constraints.push({column:'sapa_status',values:statuses});
+     filters.push(row=>statuses.includes(row.sapa_status)||(row.is_quick_event===true&&(row.sapa_status==='None'||row.sapa_status===null)));
+     return q;
+    }
+    const emails=filter.split(',').map(part=>part.replace('email.ilike.',''));
+    constraints.push({column:'email',values:emails});
+    filters.push(row=>emails.includes(row.email));
+    return q;
+   },
    async range(from,to){const result=execute(from,to);if(table==='calendar'&&(window.__holdCalendar||(window.__holdBronze&&constraints.some(c=>c.column==='sapa_status'&&c.values.includes('Bronze')))))await new Promise(resolve=>{window.__releaseBronze=resolve;window.__releaseCalendar=resolve});return result},
    async maybeSingle(){const result=execute();return {...result,data:result.data?.[0]||null}},
    then(resolve,reject){return Promise.resolve(execute()).then(resolve,reject)}
@@ -208,7 +226,7 @@ test('a failed refresh hides stale financial figures until a successful reload',
     } finally { await page.close(); }
 });
 
-test('manager defaults to the four SAPA tiers and loads only their data', async () => {
+test('manager loads the default SAPA tiers and skips other non-quick events', async () => {
     const page = await openOverview();
     try {
         assert.equal(await eventRow(page, 'Bronze tournament'), null);
@@ -220,6 +238,21 @@ test('manager defaults to the four SAPA tiers and loads only their data', async 
         const queries = await page.evaluate(() => window.__queries);
         assert.deepEqual(queries.map(query=>query.table), ['calendar','event_management_completion']);
         assert.deepEqual(await page.evaluate(()=>window.__summaryCalls.flat().sort((a,b)=>a-b)), [520,521,522,524,525]);
+    } finally { await page.close(); }
+});
+
+test('manager lists managed Quick Events without a SAPA tier and can open their registrations', async () => {
+    const page = await openOverview(null, { __includeQuickEvents: true });
+    const quickEvent = 'High level Americano with Diogo';
+    try {
+        assert.ok(await eventRow(page, quickEvent));
+        assert.ok(await eventRow(page, 'Managed Quick Event without a tier'));
+        assert.equal(await eventRow(page, 'Unmanaged Quick Event'), null);
+        assert.equal(await eventRow(page, 'Social tournament'), null);
+        assert.equal(await eventRow(page, 'Bronze tournament'), null);
+        assert.equal(await page.evaluate(() => window.__summaryCalls.flat().includes(591)), true);
+        await page.click(`button[aria-label="Manage registrations for ${quickEvent}"]`);
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => button.textContent === 'Back to events'));
     } finally { await page.close(); }
 });
 

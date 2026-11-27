@@ -8,8 +8,9 @@ export function loadFinanceOverviewEvents(client, { isEventManagementModule, sho
     return fetchAllRows(() => {
         let query = client.from('calendar').select(EVENT_COLUMNS);
         if (isEventManagementModule) {
+            const sapaStatuses = showBronze ? [...DEFAULT_SAPA_STATUSES, 'Bronze'] : DEFAULT_SAPA_STATUSES;
             query = query.eq('finance_managed', true)
-                .in('sapa_status', showBronze ? [...DEFAULT_SAPA_STATUSES, 'Bronze'] : DEFAULT_SAPA_STATUSES);
+                .or(`sapa_status.in.(${sapaStatuses.join(',')}),and(is_quick_event.is.true,or(sapa_status.eq.None,sapa_status.is.null))`);
         }
         if (allowedEventIds.length) query = query.in('id', allowedEventIds);
         return query.order('start_date', { ascending: false }).order('id', { ascending: true });

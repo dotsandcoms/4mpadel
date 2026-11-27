@@ -1619,7 +1619,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                 </div>}
                 {isEventManagementModule && <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
                     <div className="space-y-1 text-xs text-gray-400">
-                        <p>Silver, Gold, Super Gold and Major events{showBronze ? ', including Bronze' : ''}.</p>
+                        <p>Managed Quick Events and SAPA events at Silver, Gold, Super Gold and Major{showBronze ? ', plus Bronze' : ''}.</p>
                         <p>Events stay in this list until you mark them as completed. Completed events can be reopened at any time.</p>
                     </div>
                     <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-semibold text-gray-300">
