@@ -39,6 +39,7 @@ const SCREENS: Record<string, string> = {
   notifications: 'notifications', 'notification-settings': 'notification_settings',
   players: 'players', 'players/[id]': 'player_profile',
   clubs: 'clubs', 'clubs/[slug]': 'club', 'claim-club': 'claim_club', 'club-groups/[slug]': 'club_group',
+  coaches: 'coaches', 'coaches/[id]': 'coach_profile',
   'pro-padel': 'pro_padel', 'pro/live': 'pro_live', 'pro/match/[id]': 'pro_match',
   'pro/player/[id]': 'pro_player', 'pro/tournament/[id]': 'pro_tournament',
   'pro/tournament/[id]/pair/[pair]': 'pro_tournament_pair', 'pro/news': 'pro_news',

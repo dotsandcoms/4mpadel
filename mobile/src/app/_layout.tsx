@@ -3,6 +3,7 @@ import { AppIconBadge } from '@/components/app-icon-badge';
 import { IncomingMessageBanner } from '@/components/messaging/incoming-banner';
 import { GuidedTourProvider } from '@/components/guided-tour';
 import { watchWelcomeEmailRetries } from '@/lib/welcome-email';
+import { watchLiveScorePins } from '@/lib/pro-live-score-pin';
 import 'react-native-gesture-handler';
 import type { Session } from '@supabase/supabase-js';
 import { DefaultTheme, Stack, ThemeProvider, useNavigationContainerRef, usePathname, useRouter, useSegments } from 'expo-router';
@@ -86,6 +87,7 @@ function RootLayout() {
   useScreenAnalytics(pathname, segments.join('/'), revealed);
 
   useEffect(() => watchWelcomeEmailRetries(), []);
+  useEffect(watchLiveScorePins, []);
   useEffect(() => Platform.OS === 'web' ? undefined : watchAuthRefresh(supabase.auth), []);
   useEffect(() => {
     // Draft upgrades are independent of sign-in. A failed upgrade retains the old draft.

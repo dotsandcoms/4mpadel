@@ -62,10 +62,10 @@ export const GUIDES: Record<GuideId, Guide> = {
     { path: '/following', route: '/following', target: 'following.tools', title: 'Your favourites, together', body: 'Filter updates by players, matches or tournaments. Your players opens the list of people you follow.' },
   ] },
   messages: { id: 'messages', title: 'Find your conversations', detail: 'Requests, event announcements, discussion and Help', icon: 'chatbubbles-outline', steps: [
-    { ...inbox, target: 'messages.filters', title: 'Every conversation has a place', body: 'Use the inbox filters to find player chats, event conversations and Help replies. Open a conversation to read its messages.' },
+    { ...inbox, target: 'messages.filters', title: 'Every conversation has a place', body: 'Use the inbox filters to find player chats, event conversations, Help replies and chats you’ve archived.' },
     { ...inbox, target: 'messages.requests', title: 'You choose who can chat', body: 'Message requests are invitations from players or groups. Open a request to review it, then accept or decline. Your contact details stay private.' },
     { ...inbox, target: 'messages.actions', title: 'Start a conversation', body: 'Use New message to find a player. Your first message is a request, so they can choose whether to accept the conversation.' },
-    { ...inbox, target: 'messages.events', optional: true, title: 'Your event, in the conversation', body: 'Open Event chats and choose an event you enter or manage. Announcements carries organiser updates; Discussion is where eligible players and organisers can reply.' },
+    { ...inbox, target: 'messages.events', optional: true, title: 'Chats for your events', body: 'Chats for events you enter appear in your inbox automatically. Tap Events to find organiser announcements and discussions you can join.' },
     { ...helpInbox, target: 'messages.help', title: 'A private line to your organiser', body: 'Help brings your enquiries and replies together. It’s separate from the shared event discussion, so you can follow up privately with the event organiser or 4M support.' },
     { ...helpInbox, target: 'messages.helpCompose', title: 'Ask the right team', body: 'Tap New help request. Choose Tournament or entry, then Still need help? and select your entry. Check the named recipient before sending; replies appear here under Help.' },
   ] },

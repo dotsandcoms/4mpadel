@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.fourmpadel.livescores'
+version = '1.0.0'
+
+android {
+  namespace "com.fourmpadel.livescores"
+}
+
+dependencies {
+  def notifications = findProject(':expo-notifications')
+  // SDK 57 can autolink the published AAR or the source project.
+  implementation(notifications ?: 'host.exp.exponent:expo.modules.notifications:57.0.21')
+  implementation 'com.google.firebase:firebase-messaging:25.0.1'
+  implementation 'androidx.core:core:1.17.0'
+  implementation 'androidx.work:work-runtime:2.9.1'
+}

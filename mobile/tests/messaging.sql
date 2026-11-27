@@ -13,6 +13,8 @@ create function auth.jwt() returns jsonb language sql stable as $$select coalesc
 create function auth.uid() returns uuid language sql stable as $$select nullif(auth.jwt()->>'sub','')::uuid$$;
 create function auth.email() returns text language sql stable as $$select auth.jwt()->>'email'$$;
 create table public.players(id bigint primary key,email text,name text,image_url text,region text,racket_brand text,notification_prefs jsonb default '{}');
+create view public.players_public as select id from public.players;
+create table public.coach_applications(id uuid primary key,email text,status text);
 create table public.player_profile_details(player_id bigint primary key references public.players,date_of_birth date);
 create table public.calendar(id bigint primary key,event_name text,start_date date,end_date date,event_status text,is_visible boolean default true,sanction_status text,organisation_id uuid,organiser_email text,event_co_admins text[],venue text,city text,poster_image_url text,custom_image_url text,image_url text,sapa_status text,entry_fee numeric,early_bird_fee numeric,early_bird_ends_at timestamptz);
 alter table public.calendar add column organiser_name text,add column address text;
@@ -80,6 +82,8 @@ alter table public.event_registrations add column full_name text,add column part
 \ir ../../supabase/migrations/20261116083323_messaging_admin_inbox_and_org_search.sql
 \ir ../../supabase/migrations/20261116090058_messaging_super_admin_org_outreach_and_event_cutoff.sql
 \ir ../../supabase/migrations/20261120073514_scope_messaging_account_erasure_to_affected_groups.sql
+\ir ../supabase/migrations/20261127100450_coach_message_target.sql
+\ir ../supabase/migrations/20261127111000_pro_live_score_pins.sql
 
 create function pg_temp.expect(ok boolean,label text) returns void language plpgsql as $$begin if ok is distinct from true then raise exception 'FAIL: %',label; end if; end$$;
 create function pg_temp.reject(query text,pattern text) returns void language plpgsql as $$begin
@@ -96,6 +100,11 @@ insert into auth.users(id,email) select ('00000000-0000-0000-0000-'||lpad(n::tex
   (array['alice','bob','charlie','staff','junior','guardian','late','partner'])[n]||'@test.test' from generate_series(1,8)n;
 insert into auth.sessions(id,user_id) select ('10000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid,
   ('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid from generate_series(1,8)n;
+insert into public.coach_applications values
+  ('70000000-0000-0000-0000-000000000001',' Bob@test.test ','approved'),
+  ('70000000-0000-0000-0000-000000000002','charlie@test.test','pending'),
+  ('70000000-0000-0000-0000-000000000003','missing@test.test','approved'),
+  ('70000000-0000-0000-0000-000000000004','late@test.test','approved');
 insert into public.players(id,email,name,image_url,notification_prefs) select n,email,split_part(email,'@',1),null,'{}' from auth.users cross join lateral (select right(id::text,1)::int n) p;
 insert into public.player_profile_details select id,case when id=5 then current_date-interval '15 years' else date '1990-01-01' end from public.players;
 insert into public.calendar(id,event_name,start_date,end_date) values(100,'4M Open',current_date,current_date),(200,'Other club',current_date,current_date);
@@ -110,12 +119,32 @@ select pg_temp.login(3);select public.messaging_api('accept_rules','{"version":"
 select pg_temp.login(4);select public.messaging_api('accept_rules','{"version":"2026-11-05"}');
 select pg_temp.login(5);select public.messaging_api('accept_rules','{"version":"2026-11-05"}');
 select pg_temp.login(6);select public.messaging_api('accept_rules','{"version":"2026-11-05"}');
+select pg_temp.login(1);
+select pg_temp.expect(public.coach_message_target('70000000-0000-0000-0000-000000000004')='{"unavailable":true}'::jsonb,'verified coach profile is found before the coach activates messaging');
 select pg_temp.login(7);select public.messaging_api('accept_rules','{"version":"2026-11-05"}');
 select pg_temp.login(8);select public.messaging_api('accept_rules','{"version":"2026-11-05"}');
 select pg_temp.reject('select * from messaging.messages','permission denied');
 select pg_temp.reject('select messaging.event_access(100,auth.uid())','permission denied');
 select pg_temp.reject($q$select public.messaging_delivery_api('claim')$q$,'permission denied');
 select pg_temp.login(1);
+select pg_temp.expect(public.coach_message_target('70000000-0000-0000-0000-000000000001')='{"playerId":"2"}'::jsonb,'an approved coach links to one verified messageable player');
+select pg_temp.expect(public.coach_message_target('70000000-0000-0000-0000-000000000002') is null,'pending coach applications cannot resolve');
+select pg_temp.expect(public.coach_message_target('70000000-0000-0000-0000-000000000003') is null,'unlinked coaches cannot resolve');
+select pg_temp.login(2);
+select pg_temp.expect(public.coach_message_target('70000000-0000-0000-0000-000000000001') is null,'coaches cannot message themselves');
+select public.messaging_api('preferences','{"allowRequests":false}');
+select pg_temp.login(1);
+select pg_temp.expect(public.coach_message_target('70000000-0000-0000-0000-000000000001')='{"unavailable":true}'::jsonb,'a coach who disables new requests has no exposed message target');
+select pg_temp.login(2);
+select public.messaging_api('preferences','{"allowRequests":true}');
+reset role;
+insert into public.players(id,email,name) values(90,'bob@test.test','Ambiguous match');
+set local role authenticated;
+select pg_temp.login(1);
+select pg_temp.expect(public.coach_message_target('70000000-0000-0000-0000-000000000001') is null,'duplicate player emails cannot resolve');
+reset role;
+delete from public.players where id=90;
+set local role authenticated;
 select public.messaging_api('request','{"playerId":2,"body":"Hi Bob","clientId":"20000000-0000-0000-0000-000000000001"}')->>'id' as dm \gset
 select pg_temp.expect(public.messaging_api('request','{"playerId":2,"body":"retry","clientId":"20000000-0000-0000-0000-000000000001"}')->>'id'=:'dm','request retry is idempotent');
 select pg_temp.reject(format('select public.messaging_api(''send'',%L)',jsonb_build_object('conversationId',:'dm','body','second before accepted','clientId',gen_random_uuid())),'cannot send');
@@ -128,6 +157,7 @@ select public.messaging_api('send',jsonb_build_object('conversationId',:'dm','bo
 select pg_temp.expect(public.messaging_api('send',jsonb_build_object('conversationId',:'dm','body','retry text','clientId','20000000-0000-0000-0000-000000000002'))->>'id'=(:'sent'::jsonb->>'id'),'send retry reuses original message');
 select pg_temp.login(1);
 select pg_temp.expect(jsonb_array_length(public.messaging_api('read',jsonb_build_object('conversationId',:'dm'))->'messages')=2,'accepted direct conversation');
+select pg_temp.expect(public.coach_message_target('70000000-0000-0000-0000-000000000001')->>'conversationId'=:'dm','coach action opens the existing direct conversation');
 select public.messaging_api('report',jsonb_build_object('conversationId',:'dm','messageId',:'sent'::jsonb->>'id','reason','spam'));
 select public.messaging_api('mark_read',jsonb_build_object('conversationId',:'dm','seq',:'sent'::jsonb->>'seq'));
 select pg_temp.expect((public.messaging_api('read',jsonb_build_object('conversationId',:'dm'))->'conversation'->>'unread')::int=0,'read position scoped to visible messages');
@@ -237,8 +267,10 @@ delete from auth.sessions where user_id='00000000-0000-0000-0000-000000000003';
 set local role authenticated;
 select pg_temp.login(3);
 select pg_temp.reject($q$select public.messaging_api('status')$q$,'Sign in again');
+select pg_temp.expect(public.coach_message_target('70000000-0000-0000-0000-000000000001') is null,'revoked sessions cannot resolve coach contact');
 select pg_temp.login(1);
 select public.messaging_api('block',jsonb_build_object('conversationId',:'dm'));
+select pg_temp.expect(public.coach_message_target('70000000-0000-0000-0000-000000000001') is null,'a block disables the coach shortcut');
 select pg_temp.login(2);
 select pg_temp.reject(format('select public.messaging_api(''read'',%L)',jsonb_build_object('conversationId',:'dm')),'unavailable');
 -- A broad legacy realtime policy still cannot read or publish to another inbox.
@@ -270,6 +302,7 @@ select pg_temp.expect(has_sequence_privilege('service_role','messaging.messages_
 select pg_temp.expect(not has_sequence_privilege('authenticated','messaging.messages_seq_seq','USAGE'),'player sequence denied');
 set local role anon;
 select pg_temp.reject($q$select public.messaging_api('status')$q$,'permission denied');
+select pg_temp.reject($q$select public.coach_message_target('70000000-0000-0000-0000-000000000001')$q$,'permission denied');
 reset role;
 -- Worker claim/context returns generic copy and rechecks access after enqueue.
 update messaging.deliveries set available_at=now()-interval '1 second';
@@ -360,7 +393,8 @@ select pg_temp.expect(public.messaging_api('status')->>'needsBirthDate'='true','
 select pg_temp.expect(public.messaging_api('status')->>'interactive'='false','missing birth date cannot unlock interactive messaging');
 reset role;
 select pg_temp.expect(not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-  where n.nspname='messaging' and p.proname not in ('api','own_unread_total','event_directory','event_analytics','mark_unread','delete_conversation','snapshot','realtime_can_read','notification_api') and has_function_privilege('authenticated',p.oid,'EXECUTE')),'all other private helpers deny client execution');
+  where n.nspname='messaging' and p.proname not in ('api','own_unread_total','event_directory','event_analytics','mark_unread','delete_conversation','snapshot','realtime_can_read','notification_api','coach_message_target') and has_function_privilege('authenticated',p.oid,'EXECUTE')),'all other private helpers deny client execution');
+\ir pro-live-score-pins.sql
 \ir messaging-divisions.sql
 \ir messaging-notifications.sql
 \ir messaging-groups.sql

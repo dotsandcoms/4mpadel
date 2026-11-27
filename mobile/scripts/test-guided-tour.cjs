@@ -327,6 +327,73 @@ test('contextual invitations dismiss, respect saved progress and offer an intent
   } finally { if (renderer) await act(async () => renderer.unmount()); }
 });
 
+test('Messages shows registered-event channels and supports chat type and archive filters', async () => {
+  const channel = { title: 'Example Open', eventId: 42, state: 'accepted', archived: false, unread: 0, preview: '', lastMessageId: null };
+  const rows = [
+    { ...channel, id: 'announcements', kind: 'event_announcements' },
+    { ...channel, id: 'discussion', kind: 'event_discussion' },
+    { ...channel, id: 'archived', kind: 'event_announcements', archived: true },
+    { ...channel, id: 'player', kind: 'direct', title: 'Alex Player' },
+  ];
+  const selections = [], opened = [];
+  const FlatList = ({ data, ListHeaderComponent, renderItem }) => React.createElement(React.Fragment, null,
+    ListHeaderComponent, data.map(item => React.createElement(React.Fragment, { key: item.id }, renderItem({ item }))));
+  const screen = load('src/app/(tabs)/messages.tsx', {
+    'react-native': { FlatList, ...Object.fromEntries(['Modal', 'Pressable', 'RefreshControl', 'ScrollView', 'Text', 'TextInput', 'View'].map(name => [name, name])) },
+    'expo-router': { useLocalSearchParams: () => ({}), useRouter: () => ({ setParams: ({ filter }) => selections.push(filter), push: route => opened.push(route) }) },
+    'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
+    '@expo/vector-icons': { Ionicons: 'Icon' },
+    '@/hooks/use-tab-scene-padding': { useTabScenePadding: () => 0 },
+    '@/hooks/use-private-messaging-screen': { usePrivateMessagingScreen: () => true },
+    '@/components/messaging/messaging-provider': { useMessagingInbox: () => ({ owner: 'owner', rows, status: { enabled: true, interactive: true, groupsEnabled: true }, badge: 0 }) },
+    '@/components/help-inbox-provider': { useHelpInbox: () => ({ unread: 0 }) },
+    '@/components/messaging/ui': { ChatAvatar: 'Avatar', ChatButton: 'Button', ChatNotice: 'Notice', ChatPill: 'Pill', chatDate: () => '' },
+    '@/components/messaging/event-channels': { EventChannelIcon: 'ChannelIcon', eventChannelStyle: () => ({}) },
+    '@/components/messaging/event-chat-filter': load('src/components/messaging/event-chat-filter.tsx', {
+      '@/components/select-field': { SelectField: 'EventChatSelect' },
+    }),
+    '@/components/messaging/message-requests-button': { MessageRequestsButton: 'Requests' },
+    '@/components/error-banner': { ErrorBanner: 'Error' },
+    '@/components/guided-tour': { TourTarget: 'TourTarget', ContextualTip: 'ContextualTip' },
+    '@/lib/help-inbox': load('src/lib/help-inbox.ts'),
+    '@/theme/tokens': { lightBrand: {} },
+  }, { __DEV__: false }).default;
+  let renderer;
+  try {
+    await act(async () => { renderer = create(React.createElement(screen)); });
+    const visibleIds = () => plain(renderer.root.findByType(FlatList).props.data.map(row => row.id));
+    const pill = label => renderer.root.findAllByType('Pill').find(item => item.props.children[0] === label);
+    assert.deepEqual(visibleIds(), ['announcements', 'discussion', 'player']);
+    const filters = renderer.root.findByType('ScrollView');
+    assert.equal(filters.props.horizontal, true);
+    assert.ok(filters.findAllByType('Pill').includes(pill('Archived')));
+    assert.equal(renderer.root.findAllByProps({ accessibilityLabel: 'Event chats' }).length, 0);
+    assert.equal(renderer.root.findAllByType('EventChatSelect').length, 0);
+    const events = renderer.root.findByProps({ id: 'messages.events' });
+    await act(async () => events.props.onActivate());
+    assert.equal(pill('Events').props.active, true);
+    assert.deepEqual(visibleIds(), ['announcements', 'discussion']);
+    const menu = () => renderer.root.findByType('EventChatSelect');
+    const selectChatType = async value => act(async () => menu().props.onChange(value));
+    assert.deepEqual(plain(menu().props.options.map(option => option.label)), ['All chats', 'Discussions', 'Announcements']);
+    await selectChatType('event_discussion');
+    assert.deepEqual(visibleIds(), ['discussion']);
+    assert.equal(menu().props.value, 'event_discussion');
+    await selectChatType('event_announcements');
+    assert.deepEqual(visibleIds(), ['announcements']);
+    const announcement = renderer.root.findByProps({ accessibilityLabel: 'Example Open. Announcements. ' });
+    await act(async () => announcement.props.onPress());
+    assert.deepEqual(opened, ['/messages/announcements']);
+    await selectChatType('all');
+    assert.deepEqual(visibleIds(), ['announcements', 'discussion']);
+    await act(async () => pill('Archived').props.onPress());
+    assert.equal(pill('Archived').props.active, true);
+    assert.equal(renderer.root.findAllByType('EventChatSelect').length, 0);
+    assert.deepEqual(visibleIds(), ['archived']);
+    assert.deepEqual(selections, ['Events', 'Archived']);
+  } finally { if (renderer) await act(async () => renderer.unmount()); }
+});
+
 test('event conversation guides cover announcements and both locked and available discussion without joining or reading a chat', async () => {
   for (const unlocked of [false, true]) {
     const calls = [], routes = []; let renderer;

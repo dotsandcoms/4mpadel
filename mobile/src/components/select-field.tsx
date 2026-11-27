@@ -30,6 +30,7 @@ type Props = {
   disabled?: boolean;
   valid?: boolean;
   badge?: string;
+  compact?: boolean;
   emptyLabel?: string;
   onChange: (value: string) => void;
 };
@@ -54,6 +55,7 @@ export function SelectField({
   disabled = false,
   valid,
   badge,
+  compact = false,
   emptyLabel = 'No matches.',
   onChange,
 }: Props) {
@@ -106,10 +108,10 @@ export function SelectField({
   }
 
   return (
-    <View className="mb-3">
-      <Text className="mb-1.5 text-[14px] font-semibold" style={{ color: brand.label }}>
+    <View className={compact ? undefined : 'mb-3'}>
+      {!compact && <Text className="mb-1.5 text-[14px] font-semibold" style={{ color: brand.label }}>
         {label}
-      </Text>
+      </Text>}
       <Pressable
         disabled={disabled}
         onPress={openPicker}
@@ -117,11 +119,12 @@ export function SelectField({
         accessibilityLabel={label}
         accessibilityValue={{ text: selected?.label ?? placeholder }}
         accessibilityState={{ expanded: open, disabled }}
-        className="h-[52px] flex-row items-center rounded-[14px] bg-court-elevated px-3.5"
+        className={compact ? 'flex-row items-center rounded-full bg-court-elevated px-3' : 'h-[52px] flex-row items-center rounded-[14px] bg-court-elevated px-3.5'}
         style={{
           gap: 8,
-          borderWidth: 2,
-          borderColor: invalid ? brand.danger : selected ? brand.accent : brand.edge,
+          minHeight: compact ? 44 : undefined,
+          borderWidth: compact ? 1 : 2,
+          borderColor: invalid ? brand.danger : selected && !compact ? brand.accent : brand.edge,
           opacity: disabled ? 0.5 : 1,
         }}>
         {badge ? (
@@ -134,7 +137,7 @@ export function SelectField({
           </View>
         ) : null}
         <Text
-          className="flex-1 text-[16px]"
+          className={compact ? 'shrink text-[13px] font-semibold' : 'flex-1 text-[16px]'}
           style={{ color: selected ? brand.premium : brand.placeholder }}
           numberOfLines={1}>
           {selected?.label ?? placeholder}

@@ -54,3 +54,7 @@ verify_jwt = false
 [functions.deliver-help-alerts]
 # Dedicated scheduler-secret authentication in the handler; no client recipients.
 verify_jwt = false
+
+[functions.pro-live-score-pin]
+# The endpoint validates the viewer token, or a capability that only unpins one score.
+verify_jwt = false
