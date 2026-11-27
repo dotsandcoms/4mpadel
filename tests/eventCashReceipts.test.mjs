@@ -9,7 +9,7 @@ function fixture({ rows = [], user = { id: 'manager' }, allowed = true, legacySe
   const reads = [], calls = [];
   const createClient = (_url, key) => ({
     auth: { getUser: async () => ({ data: { user }, error: null }), admin: { listUsers: async () => ({ error: legacyService ? null : new Error('Invalid service key') }) } },
-    rpc: async (name, args) => { reads.push({ name, args, key }); return { data: allowed }; },
+    rpc: async (name, args) => { reads.push({ name, args, key }); return { data: name === 'paystack_event_split_receipts' ? [] : allowed }; },
     from: table => ({ select: fields => ({ order() { return this; }, eq: async (field, value) => { reads.push({ table, fields, field, value, key }); return { data: table === 'payments' ? rows : [] }; } }) }),
   });
   const mod = { exports: {} };

@@ -1,3 +1,4 @@
+import { eventSubaccountPayouts } from './settlements.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.95.3';
 
 const cors = {
@@ -74,6 +75,20 @@ export async function handleEventCashReceipts(req: Request) {
   if (!refs.size && !(body.discover_missing === true && internalService)) return json({ event_id: eventId, receipts: [], unresolved: [], candidates: [], verified_at: new Date().toISOString() });
   const secret = Deno.env.get('PAYSTACK_SECRET_KEY') || '';
   if (!secret) return json({ error: 'Paystack receipt verification is unavailable' }, 503);
+  const splitReferences = (payments || []).filter(payment => {
+    const meta = metadata(payment.metadata);
+    return references.includes(payment.reference) && (meta.organisation_paystack_required === true || meta.organisation_paystack);
+  }).map(payment => payment.reference);
+  let splitReceipts: { reference: string; provider_id: number; verified_at: string | null }[] = [];
+  if (splitReferences.length) {
+    const response = await admin.rpc('paystack_event_split_receipts', {
+      p_event_id: eventId, p_references: splitReferences,
+    });
+    if (response.error) return json({ error: 'Could not check Paystack subaccount receipts.' }, 503);
+    splitReceipts = response.data || [];
+  }
+  const bySplitReference = new Map<string, string | null>(splitReferences.map(reference => [reference, null]));
+  for (const split of splitReceipts) bySplitReference.set(split.reference, split.verified_at);
   const receipts: Record<string, unknown>[] = [];
   const reversals: Record<string, unknown>[] = [];
   const gatewayRefunds: Record<string, unknown>[] = [];
@@ -96,10 +111,14 @@ export async function handleEventCashReceipts(req: Request) {
           nonReceipts.push({ reference, status: 'not_found' });
           return;
         }
+        if (bySplitReference.has(reference) && !bySplitReference.get(reference)) {
+          unresolved.push({ reference, reason: 'The organisation subaccount split needs verification.' });
+          return;
+        }
         if (response.ok && payload.status === true && charge?.status === 'reversed'
           && charge.reference === reference && charge.id != null && charge.domain === 'live'
           && charge.currency === 'ZAR' && Number.isFinite(amount) && amount > 0) {
-          reversals.push({ reference, provider_charge_id: String(charge.id), amount, currency: 'ZAR', status: 'reversed', verified: true });
+          reversals.push({ reference, provider_charge_id: String(charge.id), amount, currency: 'ZAR', status: 'reversed', paid_at: charge.paid_at || charge.created_at, verified: true });
           // Paystack also marks partially refunded transactions as reversed.
           // Read refund amounts; never infer that the entire charge was returned.
           {
@@ -131,6 +150,7 @@ export async function handleEventCashReceipts(req: Request) {
       }
     }));
   }
+  if (splitReceipts?.length) await eventSubaccountPayouts([...receipts, ...reversals], splitReceipts, secret);
   // Optional audit aid: locate possible missing references for admin entries
   // explicitly recorded as Paystack. Candidates are never credited automatically.
   const candidates: Record<string, unknown>[] = [];

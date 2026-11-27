@@ -4,6 +4,8 @@ import {
     parseMetadata,
     resolvePaystackVerifySecrets,
     verifyPaystackReference,
+    verifyOrganisationPayment,
+    requiresOrganisationPaystack,
     assertPaystackPayment,
 } from './paystack.ts';
 import { persistManualEventRegistrations, recordLicensePaymentSplit, markManualEventEntryCoversPaid } from './manual-event-payment.ts';
@@ -303,6 +305,11 @@ serve(traceEdgeRequest('confirm-manual-payment', async (req: Request) => {
         const { data: binding, error: bindingError } = await supabaseAdmin.rpc('payment_verification_context', { p_reference: payment.reference });
         if (bindingError || !binding) throw new Error('The saved checkout could not be verified. Please try again.');
         assertPaystackPayment(binding, verification.data);
+        if (requiresOrganisationPaystack(payment.metadata) && !await verifyOrganisationPayment(supabaseAdmin, reference, verification.data)) {
+            return new Response(JSON.stringify({ needsReview: true, message: 'Payment received. 4M must verify the settlement before you pay again.' }), {
+                status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+        }
         const result = await finalizeManualEventPayment(supabaseAdmin, payment);
 
         return new Response(JSON.stringify({ ...result, paystackMode }), {

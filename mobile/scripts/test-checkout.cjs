@@ -15,15 +15,17 @@ function server(overrides = {}) {
     tournament_divisions: [{ id: 'division-1', name: 'Open', entry_fee: 350 }],
     event_registrations: [], commerce_config: { event_fee_percent: 5, fee_label: 'Booking fee' }, ...overrides.tables,
   };
+  if (overrides.split) tables.calendar = { ...tables.calendar, paystack_subaccount_checkout: true };
   const client = {
     auth: { getUser: async () => ({ data: { user: overrides.user === null ? null : { id: '12345678-0000-4000-8000-000000000000', email: 'player@example.com', ...overrides.user } } }) },
     rpc: (name, args) => {
       rpcCalls.push({ name, args });
       if (name === 'prepare_native_checkout_payment') {
-        return Promise.resolve({ data: tables.payments ?? { player_id: args.p_player_id, event_id: args.p_event_id,
+        return Promise.resolve({ data: tables.payments ?? { id: 'saved-payment', player_id: args.p_player_id, event_id: args.p_event_id,
           amount: args.p_amount, is_test: args.p_is_test, status: 'processing', reference: args.p_gateway_reference,
           metadata: { ...args.p_metadata, reference: args.p_gateway_reference } } });
       }
+      if (name === 'prepare_paystack_split') throw new Error('Native checkout must only call the settlement endpoint for the marked tournament');
       if (name === 'save_native_checkout_url') return Promise.resolve({ data: args.p_url });
       return Promise.resolve({ data: overrides.rpc ? overrides.rpc(name, args) : [], error: name === 'reserve_event_registration_places' ? overrides.capacityError || null : null });
     },
@@ -42,6 +44,13 @@ function server(overrides = {}) {
         const payment = JSON.parse(options.body);
         gatewayCalls.push(payment);
         return Response.json({ status: true, data: { authorization_url: 'https://checkout.paystack.com/test', reference: payment.reference } });
+      }
+      if (url.endsWith('/functions/v1/paystack-organisation-settlement') && overrides.split) {
+        const payment = JSON.parse(options.body);
+        gatewayCalls.push(payment);
+        assert.equal(options.headers.Authorization, 'Bearer test');
+        return Response.json(overrides.splitError || { authorizationUrl: 'https://checkout.paystack.com/test-split' },
+          { status: overrides.splitError ? 409 : 200 });
       }
       if (!url.endsWith('/functions/v1/send-email')) throw new Error('Tests must not contact a payment gateway');
       emails.push(JSON.parse(options.body));
@@ -292,10 +301,26 @@ test('new native checkout gives Paystack the app return endpoint', async () => {
  const app=server({gateway:true});
  const result=await app.call({action:'checkout',agreed:true,acceptedTotal:367.5,attemptId:'11111111-1111-1111-1111-111111111111'});
  assert.equal(result.status,200);assert.equal(app.gatewayCalls.length,1);
+ assert.equal(app.rpcCalls.some(call => call.name === 'prepare_paystack_split'), false);
+ assert.equal(app.gatewayCalls[0].subaccount, undefined);
  assert.equal(app.gatewayCalls[0].callback_url,'test/functions/v1/native-event-checkout/return?event_id=1');
  assert.match(app.gatewayCalls[0].reference, /^MOBILE-TEST-EVENT-\d{23}$/);
  assert.equal(result.body.reference,'MOBILE-12345678-11111111-1111-1111-1111-111111111111');
  assert.equal(result.body.authorizationUrl,'https://checkout.paystack.com/test');
+});
+
+test('an opted-in tournament uses the settlement service and never falls back to the primary account', async () => {
+  const attempt = { action: 'checkout', agreed: true, acceptedTotal: 367.5, attemptId: '11111111-1111-1111-1111-111111111111' };
+  const app = server({ split: { code: 'ACCT_fixture' } });
+  const result = await app.call(attempt);
+  assert.equal(result.status, 200);
+  assert.equal(result.body.authorizationUrl, 'https://checkout.paystack.com/test-split');
+  assert.deepEqual(app.gatewayCalls, [{ action: 'native_checkout', paymentId: 'saved-payment', mode: 'register' }]);
+  const paused = server({ split: { code: 'ACCT_fixture' }, splitError: { error: 'Online payments are paused.' } });
+  const blocked = await paused.call(attempt);
+  assert.equal(blocked.status, 400);
+  assert.match(blocked.body.error, /paused/);
+  assert.deepEqual(paused.gatewayCalls, [{ action: 'native_checkout', paymentId: 'saved-payment', mode: 'register' }]);
 });
 
 test('adding a partner to a paid solo entry charges only the new partner', async () => {

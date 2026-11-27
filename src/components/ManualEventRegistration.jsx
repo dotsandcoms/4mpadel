@@ -29,6 +29,7 @@ import sapaLogo from '../assets/sapa-logo.svg';
 
 import { isPaystackConfigured, isPaystackTestMode } from '../utils/paystackConfig';
 import { buildPaystackCheckoutConfig, isInAppBrowser } from '../utils/paystackCheckout';
+import { openEventPayment, prepareWebEventPayment } from '../utils/organisationPaystack';
 import { eventPaymentReference } from '../utils/eventPaymentReference';
 import PartnerProfileInvite from './PartnerProfileInvite';
 import ManualRegistrationEntryCard from './ManualRegistrationEntryCard';
@@ -541,17 +542,21 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 early_bird_ends_at: event.early_bird_ends_at,
                 registration_opens_at: event.registration_opens_at,
                 registration_closes_at: event.registration_closes_at,
+                paystack_subaccount_checkout: event.paystack_subaccount_checkout,
                 event_name: event.event_name,
                 slug: event.slug,
             }] : []);
             return;
         }
-        const { data, error } = await supabase
+        const columns = 'id, start_date, start_time, end_time, entry_fee, early_bird_fee, early_bird_ends_at, registration_opens_at, registration_closes_at, event_name, slug, is_weekly, series_id, weekly_payment_policy, max_teams_capacity';
+        const query = (projection) => supabase
             .from('calendar')
-            .select('id, start_date, start_time, end_time, entry_fee, early_bird_fee, early_bird_ends_at, registration_opens_at, registration_closes_at, event_name, slug, is_weekly, series_id, weekly_payment_policy, max_teams_capacity')
+            .select(projection)
             .eq('series_id', event.series_id)
             .eq('is_weekly', true)
             .order('start_date', { ascending: true });
+        let { data, error } = await query(`${columns}, paystack_subaccount_checkout`);
+        if (error?.code === '42703') ({ data, error } = await query(columns));
         if (error) {
             console.error('[ManualEventRegistration] loadSeriesWeeks failed:', error.message);
             setSeriesWeeks([]);
@@ -1635,6 +1640,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 fee: resolveDivisionEntryFee({ entry_fee: w.entry_fee }, w),
             }));
     }, [isWeeklyEvent, seriesWeeks, selectedWeekIds, registeredWeekIds]);
+
+    const usesSubaccountCheckout = selectedWeeks.length
+        ? selectedWeeks.some((week) => week.paystack_subaccount_checkout === true)
+        : event?.paystack_subaccount_checkout === true;
 
     /** Ensure weekly wizard always has the synthetic Open division selected. */
     useEffect(() => {
@@ -2747,7 +2756,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         await loadMyRegs(); await loadDivisionRegs();
     }, [handlePaymentSuccess, loadMyRegs, loadDivisionRegs, hasRegistrations, wizardMode]);
 
-    const launchPaystackCheckout = useCallback(async (reference, amount, paymentMetadata) => {
+    const launchPaystackCheckout = useCallback(async (reference, amount, paymentMetadata, checkout) => {
         if (!isPaystackConfigured()) {
             toast.error('Payments not configured');
             return;
@@ -2765,13 +2774,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 source: 'manual_event',
             },
         });
-        await pop.checkout({
-            ...checkoutConfig,
+        await openEventPayment(pop, checkout, checkoutConfig, {
             onSuccess: async (response) => {
                 const paidRef = resolvePaystackReference(response, reference);
                 await handlePaymentSuccess(paidRef, amount);
             },
             onCancel: () => { void cancelUnpaidCheckout(reference); },
+            onError: () => { setProcessing(false); toast.error('Could not load checkout. Please try again.'); },
         });
     }, [userEmail, event.id, event.event_name, profile?.name, displayProfile?.name, handlePaymentSuccess, cancelUnpaidCheckout]);
 
@@ -2789,14 +2798,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         expireAbandonedCheckouts();
     }, [expireAbandonedCheckouts]);
 
-    const insertProcessingPayment = async (payload) => {
+    const prepareProcessingPayment = (payload) => {
         const metadata = {
             ...(payload.paymentMetadata || {}),
             // RLS ownership keys — must match auth JWT email for insert policy.
             email: userEmail,
             registrant_email: userEmail,
         };
-        return supabase.from('payments').insert([{
+        return prepareWebEventPayment({
             player_id: profile?.id || null,
             event_id: event.id,
             amount: payload.amount,
@@ -2807,12 +2816,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             reference: payload.reference,
             is_test: isPaystackTestMode,
             metadata,
-        }]);
+        }, usesSubaccountCheckout);
     };
 
     useEffect(() => {
         if (
-            wizardStep !== 4
+            usesSubaccountCheckout
+            || wizardStep !== 4
             || total <= 0
             || usesManualEntryPayment
             || !userEmail
@@ -2868,6 +2878,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             setCheckoutPreparing(false);
         };
     }, [
+        usesSubaccountCheckout,
         wizardStep,
         total,
         userEmail,
@@ -3086,7 +3097,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 }
                 paymentRetryRef.current = false;
 
-                const prep = checkoutPrepRef.current;
+                if (usesSubaccountCheckout && selectedWeeks.some((week) => String(week.id) !== String(event.id))) {
+                    toast.error('Pay for this tournament separately from its event page.');
+                    return;
+                }
+                const prep = usesSubaccountCheckout ? null : checkoutPrepRef.current;
                 const payload = prep?.reference ? prep : buildManualPaymentPayload();
 
                 registrationStep = 'reserve_places';
@@ -3096,8 +3111,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     ...(accessGrantId ? { access_grant_id: accessGrantId } : {}),
                 })), payload.soloLinks || []);
                 registrationStep = 'save_checkout';
-                const { error: insertError } = await insertProcessingPayment(payload);
-                if (insertError) throw insertError;
+                const checkout = await prepareProcessingPayment(payload);
                 trackWebEvent('begin_checkout', { item_category: 'event_registration', currency: 'ZAR', value: payload.amount });
 
                 // Keep processing=true until Paystack onSuccess / onCancel clears it.
@@ -3107,8 +3121,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     paystackHandoff = true;
                     return;
                 }
-
-                await launchPaystackCheckout(payload.reference, payload.amount, payload.paymentMetadata);
+                await launchPaystackCheckout(payload.reference, payload.amount, payload.paymentMetadata, checkout);
                 paystackHandoff = true;
                 return;
             }
@@ -3293,7 +3306,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     registrant_name: profile?.name,
                     reference,
                 };
-                const { error: payErr } = await supabase.from('payments').insert([{
+                const checkout = await prepareWebEventPayment({
                     player_id: profile?.id || null,
                     event_id: event.id,
                     amount: delta,
@@ -3304,16 +3317,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     reference,
                     is_test: isPaystackTestMode,
                     metadata,
-                }]);
-                if (payErr) throw payErr;
+                }, event.paystack_subaccount_checkout === true);
 
                 const pop = new PaystackPop();
                 const cfg = buildPaystackCheckoutConfig({
                     reference, email: userEmail, amount: delta,
                     fullName: profile?.name || displayProfile?.name, metadata,
                 });
-                await pop.checkout({
-                    ...cfg,
+                await openEventPayment(pop, checkout, cfg, {
                     onSuccess: async (response) => {
                         try {
                             const paidRef = resolvePaystackReference(response, reference);
@@ -3336,6 +3347,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         setSwitching(false);
                         toast.info('Payment cancelled — division not changed.');
                     },
+                    onError: () => { setSwitching(false); toast.error('Could not load checkout. Please try again.'); },
                 });
             } else {
                 const res = await invokePaystackRefund({

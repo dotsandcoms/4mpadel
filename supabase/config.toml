@@ -33,7 +33,8 @@ entrypoint = "./functions/confirm-manual-payment/index.ts"
 
 [functions.paystack-refund]
 enabled = true
-verify_jwt = true
+# The handler validates user tokens and service-role credentials before issuing refunds.
+verify_jwt = false
 entrypoint = "./functions/paystack-refund/index.ts"
 
 [functions.send-email]
@@ -61,3 +62,9 @@ entrypoint = "./functions/event-finance-summary/index.ts"
 [functions.admin-authenticator-recovery]
 # The handler validates Auth, then SQL checks the current session and fresh MFA.
 verify_jwt = false
+
+[functions.paystack-organisation-settlement]
+enabled = true
+# Verify users through Auth so the endpoint accepts the project's signed-in sessions.
+verify_jwt = false
+entrypoint = "./functions/paystack-organisation-settlement/index.ts"

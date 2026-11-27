@@ -4,13 +4,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     CreditCard, DollarSign, CheckCircle, RefreshCcw, 
     ArrowUpRight, Search, Download, Loader2, 
-    LayoutDashboard, Users, Trophy, Settings, FileText, Calendar
+    LayoutDashboard, Users, Trophy, Settings, FileText, Calendar, Landmark
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import FinancialDashboard from './FinancialDashboard';
 import UserPayments from './UserPayments';
 import FinancialSummaryReport from './FinancialSummaryReport';
 import EventFinance from './EventFinance';
+import PaystackSubaccounts from './PaystackSubaccounts';
 import { useAdminPermissions } from '../../hooks/useAdminPermissions';
 import { useCommerceConfig } from '../../hooks/useCommerceConfig';
 import { licenseQuote, matchLicenseTypeByAmount } from '../../utils/commerce';
@@ -800,6 +801,7 @@ const FinanceManager = () => {
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'transactions', label: 'Live Paystack', icon: CreditCard },
         { id: 'events', label: 'Event Finance', icon: Trophy },
+        { id: 'paystack-subaccounts', label: 'Paystack Subaccounts', icon: Landmark },
         { id: 'summary', label: 'Summary Rep', icon: FileText },
         { id: 'users', label: 'User Ledger', icon: Users },
         { id: 'settings', label: 'Settings', icon: Settings },
@@ -807,7 +809,7 @@ const FinanceManager = () => {
 
     const tabs = permissions?.role === 'super_admin' 
         ? allTabs 
-        : allTabs.filter(t => allowedTabs.includes(t.id));
+        : allTabs.filter(t => t.id !== 'paystack-subaccounts' && allowedTabs.includes(t.id));
 
     if (permissionsLoading) {
         return (
@@ -1039,6 +1041,8 @@ const FinanceManager = () => {
                             </div>
                         </div>
                     )}
+
+                    {activeTab === 'paystack-subaccounts' && permissions?.role === 'super_admin' && <PaystackSubaccounts />}
 
                     {activeTab === 'settings' && (
                         <div className="bg-[#1a1a1a]/50 p-8 rounded-3xl border border-white/10 max-w-2xl">

@@ -2,7 +2,7 @@ import { matchReviewedRefund, reviewedRefundClaim, REVIEWED_REFUND_PREFIX } from
 import { traceEdgeRequest } from '../_shared/sentry-performance.ts';
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { assertPaystackPayment, parseMetadata, verifyPaystackWebhookSignature } from './paystack.ts';
+import { assertPaystackPayment, parseMetadata, requiresOrganisationPaystack, resolvePaystackVerifySecrets, verifyOrganisationPayment, verifyPaystackReference, verifyPaystackWebhookSignature } from './paystack.ts';
 import { persistManualEventRegistrations, recordLicensePaymentSplit, markManualEventEntryCoversPaid } from './manual-event-payment.ts';
 import { fetchCommerceConfig, matchLicenseTypeByAmount } from './commerce.ts';
 
@@ -309,6 +309,16 @@ async function handleRefundEvent(
     const newStatus = REFUND_STATUS_BY_EVENT[event];
     if (!newStatus) return { updated: false, reason: 'unknown_refund_event' };
 
+    const organisationReference = [data.refund_reference, data.reference].find(value =>
+        typeof value === 'string' && /^ORGREF-[0-9a-f-]{36}$/i.test(value)) as string | undefined;
+    if (organisationReference) {
+        const { data: updated, error } = await supabaseAdmin.rpc('apply_paystack_split_refund', {
+            p_refund_id: organisationReference.slice(7), p_gateway: data, p_status: newStatus,
+        });
+        if (error) throw error;
+        return { updated: !!updated };
+    }
+
     const refundId = data.id != null ? String(data.id) : null;
     const transaction = data.transaction as Record<string, unknown> | string | undefined;
     const reference = String(
@@ -338,6 +348,9 @@ async function handleRefundEvent(
         row = byId || null;
     }
 
+    if (row && parseMetadata(row.metadata).organisation_paystack_refund === true) {
+        return { updated: false, reason: 'organisation_refund_requires_exact_reference' };
+    }
     if (row && reviewedRefundClaim(row.metadata).reference) {
         const claim = reviewedRefundClaim(row.metadata);
         // Old webhook formats may omit the refund reference. In that case require
@@ -371,6 +384,9 @@ async function handleRefundEvent(
             .in('status', ['pending', 'processing', 'needs_attention', 'processed', 'failed']);
         const matchingAmount = (candidate: { amount: number }) => amountRands == null || Math.abs(Number(candidate.amount) - amountRands) < 0.01;
         const related = candidates || [];
+        if (related.some(candidate => parseMetadata(candidate.metadata).organisation_paystack_refund === true)) {
+            return { updated: false, reason: 'organisation_refund_requires_exact_reference' };
+        }
         // A callback without an exact refund reference or ID might be for the
         // reviewed attempt. It must never be applied to a neighbouring refund.
         if (related.some(candidate => reviewedRefundClaim(candidate.metadata).reference && matchingAmount(candidate))) {
@@ -475,6 +491,19 @@ serve(traceEdgeRequest('paystack-webhook', async (req: Request) => {
             .select('*')
             .eq('reference', reference)
             .maybeSingle();
+
+        if (payment && requiresOrganisationPaystack(payment.metadata)) {
+            const { secrets } = resolvePaystackVerifySecrets(payment);
+            const verified = await verifyPaystackReference(reference, secrets);
+            if (!verified.ok) throw new Error('Could not verify the Paystack split.');
+            if (!await verifyOrganisationPayment(supabaseAdmin, reference, verified.data)) {
+                return new Response(JSON.stringify({ received: true, needsReview: true }), { status: 200, headers: corsHeaders });
+            }
+            if (parseMetadata(payment.metadata).source === 'division_switch') {
+                // The switch handler binds the original registration and target division.
+                return new Response(JSON.stringify({ received: true }), { status: 200, headers: corsHeaders });
+            }
+        }
 
         const localIsManual = !!payment && parseMetadata(payment.metadata).source === 'manual_event';
 
