@@ -354,8 +354,8 @@ test('Paystack subaccount verification explains which payout setting needs atten
     [{ percentage_charge: 5 }, /5% share for the 4M main account/],
     [{ percentage_charge: null }, /did not return a valid share/],
     [{ percentage_charge: false }, /did not return a valid share/],
-    [{ account_name: null }, /account holder or subaccount ID/],
-    [{ id: 0 }, /account holder or subaccount ID/],
+    [{ account_name: null }, /did not return the bank account holder name/],
+    [{ id: 0 }, /did not return a valid internal ID/],
   ]) {
     account = { ...validAccount, ...settings };
     const result = await verify();

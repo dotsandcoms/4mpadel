@@ -58,8 +58,11 @@ async function getSubaccount(code: unknown, domain: string, requireVerified: boo
         throw new Error(`Paystack shows a ${mainShare}% share for the 4M main account. Set the 4M share to 0% under Transaction Split and verify the code again.`);
     }
     const providerId = Number(a.id);
-    if (!a.account_name || !Number.isSafeInteger(providerId) || providerId <= 0) {
-        throw new Error('Paystack did not return the account holder or subaccount ID. Check the subaccount details in Paystack.');
+    if (!Number.isSafeInteger(providerId) || providerId <= 0) {
+        throw new Error('Paystack did not return a valid internal ID for this subaccount.');
+    }
+    if (!a.account_name) {
+        throw new Error('Paystack did not return the bank account holder name for this subaccount.');
     }
     if (requireVerified && domain === 'live' && a.is_verified !== true) {
         throw new Error('Verify this payout subaccount in Paystack before enabling routing.');
