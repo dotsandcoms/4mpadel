@@ -197,3 +197,21 @@ export function resolvePaystackFetchSecrets(mode: PaystackFetchMode = 'both'): {
     }
     return { secrets };
 }
+
+/** Verify the allocation from Paystack's server-side response, never checkout metadata. */
+export async function verifyOrganisationPayment(
+    client: { rpc: (name: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: unknown }> },
+    reference: string,
+    gatewayPayment: Record<string, unknown>,
+) {
+    const { data, error } = await client.rpc('verify_paystack_organisation_split', {
+        p_reference: reference, p_gateway: {
+            reference: gatewayPayment.reference, amount: gatewayPayment.amount, domain: gatewayPayment.domain,
+            status: gatewayPayment.status, currency: gatewayPayment.currency,
+            fees_split: gatewayPayment.fees_split,
+            subaccount: { subaccount_code: (gatewayPayment.subaccount as { subaccount_code?: string } | undefined)?.subaccount_code },
+        },
+    });
+    if (error) throw new Error('Could not verify the Paystack settlement destination.');
+    return data === 'verified' || data === 'legacy';
+}

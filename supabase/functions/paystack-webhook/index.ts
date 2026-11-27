@@ -2,7 +2,7 @@ import { matchReviewedRefund, reviewedRefundClaim, REVIEWED_REFUND_PREFIX } from
 import { traceEdgeRequest } from '../_shared/sentry-performance.ts';
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { assertPaystackPayment, parseMetadata, verifyPaystackWebhookSignature } from './paystack.ts';
+import { assertPaystackPayment, parseMetadata, resolvePaystackVerifySecrets, verifyOrganisationPayment, verifyPaystackReference, verifyPaystackWebhookSignature } from './paystack.ts';
 import { persistManualEventRegistrations, recordLicensePaymentSplit, markManualEventEntryCoversPaid } from './manual-event-payment.ts';
 import { fetchCommerceConfig, matchLicenseTypeByAmount } from './commerce.ts';
 
@@ -309,6 +309,16 @@ async function handleRefundEvent(
     const newStatus = REFUND_STATUS_BY_EVENT[event];
     if (!newStatus) return { updated: false, reason: 'unknown_refund_event' };
 
+    const organisationReference = [data.refund_reference, data.reference].find(value =>
+        typeof value === 'string' && /^ORGREF-[0-9a-f-]{36}$/i.test(value)) as string | undefined;
+    if (organisationReference) {
+        const { data: updated, error } = await supabaseAdmin.rpc('apply_paystack_split_refund', {
+            p_refund_id: organisationReference.slice(7), p_gateway: data, p_status: newStatus,
+        });
+        if (error) throw error;
+        return { updated: !!updated };
+    }
+
     const refundId = data.id != null ? String(data.id) : null;
     const transaction = data.transaction as Record<string, unknown> | string | undefined;
     const reference = String(
@@ -317,6 +327,11 @@ async function handleRefundEvent(
         || data.reference
         || '',
     );
+    if (reference) {
+        const { data: split, error } = await supabaseAdmin.rpc('paystack_split_refund_context', { p_reference: reference });
+        if (error) throw error;
+        if (split) return { updated: false, reason: 'organisation_refund_requires_exact_reference' };
+    }
     const amountRands = data.amount != null ? Number(data.amount) / 100 : null;
 
     let row: Record<string, unknown> | null = null;
@@ -475,6 +490,22 @@ serve(traceEdgeRequest('paystack-webhook', async (req: Request) => {
             .select('*')
             .eq('reference', reference)
             .maybeSingle();
+
+        const { data: split, error: splitError } = await supabaseAdmin.rpc('paystack_split_refund_context', { p_reference: reference });
+        if (splitError) throw splitError;
+        if (split) {
+            if (!payment) throw new Error('A split Paystack charge has no saved payment.');
+            const { secrets } = resolvePaystackVerifySecrets(payment);
+            const verified = await verifyPaystackReference(reference, secrets);
+            if (!verified.ok) throw new Error('Could not verify the Paystack split.');
+            if (!await verifyOrganisationPayment(supabaseAdmin, reference, verified.data)) {
+                return new Response(JSON.stringify({ received: true, needsReview: true }), { status: 200, headers: corsHeaders });
+            }
+            if (parseMetadata(payment.metadata).source === 'division_switch') {
+                // The switch handler binds the original registration and target division.
+                return new Response(JSON.stringify({ received: true }), { status: 200, headers: corsHeaders });
+            }
+        }
 
         const localIsManual = !!payment && parseMetadata(payment.metadata).source === 'manual_event';
 

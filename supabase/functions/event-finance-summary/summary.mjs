@@ -414,6 +414,7 @@ function activeSettlementRegistrations(registrations = [], divisions = []) {
   return [...selected.values()];
 }
 function collectionRecipient(payment) {
+  if (norm2(payment?.payment_method) === "paystack" && normalizePaymentMetadata(payment.metadata).organisation_paystack) return "organiser";
   if (norm2(payment?.payment_method) === "paystack" && !isExplicitAdminMarkedPayment(payment)) return "4m";
   const recipient = norm2(normalizePaymentMetadata(payment?.metadata).collection_recipient);
   if (recipient === "4m") return "4m";
@@ -463,7 +464,8 @@ function calculateEventSettlement({ event = {}, registrations = [], divisions = 
     const gateway = verified.get(reference);
     const external = reference !== primary.reference;
     const confirmedExternalEntries = external && /^T\d{10,}$/.test(reference) && claims.every((p) => isExplicitAdminMarkedPayment(p) && collectionRecipient(p) === "4m" && p.metadata.registration_id) && new Set(claims.map((p) => p.metadata.registration_id)).size === claims.length;
-    let amount = gateway && external ? Math.min(positive(gateway.amount), sum(claims)) : confirmedExternalEntries ? sum(claims) : positive(primary.amount);
+    const organisationPaystack = norm2(primary.payment_method) === "paystack" ? primary.metadata.organisation_paystack : null;
+    let amount = organisationPaystack ? positive(organisationPaystack.entry_cents / 100) : gateway && external ? Math.min(positive(gateway.amount), sum(claims)) : confirmedExternalEntries ? sum(claims) : positive(primary.amount);
     if (gateway && amount > positive(gateway.amount)) {
       issues.push(`Receipt allocation exceeds Paystack amount: ${reference}`);
       amount = positive(gateway.amount);
@@ -471,7 +473,7 @@ function calculateEventSettlement({ event = {}, registrations = [], divisions = 
     if (external && claims.length > 1 && (gateway ? sum(claims) > positive(gateway.amount) : !confirmedExternalEntries)) {
       issues.push(`Multiple entry confirmations share ${reference}; review the receipt allocation`);
     }
-    const recipient = gateway || external && /^T\d{10,}$/.test(reference) ? "4m" : collectionRecipient(primary);
+    const recipient = organisationPaystack ? "organiser" : gateway || external && /^T\d{10,}$/.test(reference) ? "4m" : collectionRecipient(primary);
     if (!recipient) issues.push(`Confirm who received ${reference || primary.id}`);
     const unallocatedCredit = Math.min(amount, Math.max(0, ...claims.map((p) => positive(p.metadata.unallocated_credit_amount))));
     return {
@@ -482,6 +484,7 @@ function calculateEventSettlement({ event = {}, registrations = [], divisions = 
       gateway,
       claims,
       unallocatedCredit,
+      organisationPaystack,
       paymentIds: claims.map((p) => p.id),
       payment_method: gateway || external && /^T\d{10,}$/.test(reference) ? "paystack" : primary.payment_method
     };
@@ -599,6 +602,24 @@ function calculateEventSettlement({ event = {}, registrations = [], divisions = 
   const grossEntryFees = sum(receiptRows);
   const entryFeesRefunded = sum(processedRefundRows);
   const refundReserve = sum(reservedRefundRows);
+  const paystackSubaccountReceipts = receiptRows.filter((r) => r.organisationPaystack);
+  const subaccountPayouts = paystackSubaccountReceipts.map((r) => ({
+    reference: r.reference,
+    gross: r.amount,
+    processing: Number(r.organisationPaystack.processing_cents) / 100,
+    net: Number(r.organisationPaystack.net_cents) / 100,
+    refunded: r.refunded,
+    pending: r.reserved,
+    settlementStatus: r.gateway?.settlement_status || "unconfirmed",
+    settlementId: r.gateway?.settlement_id || ""
+  }));
+  const subaccountSummary = {
+    gross: sum(paystackSubaccountReceipts),
+    fees: money2(subaccountPayouts.reduce((n, r) => n + r.processing, 0)),
+    net: money2(subaccountPayouts.reduce((n, r) => n + r.net, 0)),
+    refunded: money2(subaccountPayouts.reduce((n, r) => n + r.refunded, 0)),
+    settledCount: subaccountPayouts.filter((r) => r.settlementStatus === "success").length
+  };
   const collected4M = sum(receiptRows.filter((r) => r.recipient === "4m"));
   const collectedManual = sum(receiptRows.filter((r) => r.recipient === "4m" && norm2(r.payment_method) !== "paystack"));
   const paystackCollected = sum(receiptRows.filter((r) => r.recipient === "4m" && norm2(r.payment_method) === "paystack"));
@@ -632,6 +653,8 @@ function calculateEventSettlement({ event = {}, registrations = [], divisions = 
   }
   const result = {
     ...current,
+    subaccountPayouts,
+    subaccountSummary,
     paystackCollected: currentPaystack,
     collectedManual: currentManual,
     unallocatedCredit4M,

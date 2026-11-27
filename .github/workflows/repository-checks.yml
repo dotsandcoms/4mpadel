@@ -125,6 +125,10 @@ jobs:
         run: |
           createdb fourm_native_checkout_test
           psql -X -q -d fourm_native_checkout_test -f tests/nativeCheckoutReferences.sql
+      - name: Verify organisation Paystack settlement and refunds
+        run: |
+          createdb fourm_paystack_routing_test
+          psql -X -q -d fourm_paystack_routing_test -f tests/paystackSubaccounts.sql
 
   gate:
     name: Repository checks

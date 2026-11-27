@@ -119,6 +119,9 @@ export async function handleReviewedRefundRetry(service: SupabaseClient, opts: {
     if (!Number.isSafeInteger(amountCents) || amountCents <= 0 || refund.currency !== 'ZAR') {
         return json(400, { error: 'Refund requires a positive recorded ZAR amount.' });
     }
+    const { data: split, error: splitError } = await service.rpc('paystack_split_refund_context', { p_reference: resolvePaystackGatewayReference(payment) });
+    if (splitError) throw splitError;
+    if (split) return json(409, { error: 'Use the original subaccount refund record to retry this refund.' });
     const prior = reviewedRefundClaim(refund.metadata);
     const method = String(payment.payment_method || 'paystack').toLowerCase();
     const held = () => json(409, {

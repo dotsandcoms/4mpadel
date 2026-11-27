@@ -61,3 +61,8 @@ entrypoint = "./functions/event-finance-summary/index.ts"
 [functions.admin-authenticator-recovery]
 # The handler validates Auth, then SQL checks the current session and fresh MFA.
 verify_jwt = false
+
+[functions.paystack-organisation-settlement]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/paystack-organisation-settlement/index.ts"

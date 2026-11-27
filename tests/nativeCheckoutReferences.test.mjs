@@ -45,10 +45,11 @@ async function compileHandler(file) {
   };
 }
 
-const [nativeHandler, confirmHandler, refundHandler] = await Promise.all([
+const [nativeHandler, confirmHandler, refundHandler, organisationHandler] = await Promise.all([
   compileHandler('../mobile/supabase/functions/native-event-checkout/index.ts'),
   compileHandler('../supabase/functions/confirm-manual-payment/index.ts'),
   compileHandler('../supabase/functions/paystack-refund/index.ts'),
+  compileHandler('../supabase/functions/paystack-organisation-settlement/index.ts'),
 ]);
 const appSource = await readFile(new URL('../mobile/src/lib/payment-return.ts', import.meta.url), 'utf8');
 const parser = await transform(appSource, { loader: 'ts', format: 'esm' });
@@ -61,7 +62,7 @@ function query(resolve) {
     eq: (column, value) => { filters[column] = value; return builder; },
     select: () => builder, ilike: () => builder, neq: () => builder,
     update: value => { changes = value; return builder; },
-    maybeSingle: () => builder,
+    maybeSingle: () => builder, single: () => builder,
     then: (fulfilled, rejected) => Promise.resolve().then(() => ok(resolve(filters, changes))).then(fulfilled, rejected),
   };
   return builder;
@@ -109,6 +110,7 @@ test('native checkout initializes once, resumes after rename and returns the ins
         receipt.metadata.native_authorization_url = p.p_url;
         return ok(p.p_url);
       }
+      if (name === 'prepare_paystack_split') return ok(null);
       assert.equal(name, 'resolve_native_checkout_reference');
       return ok(p.p_reference === receipt.reference
         ? { app_reference: appToken, event_id: 517, gateway_reference: receipt.reference } : null);
@@ -173,6 +175,7 @@ for (const [requested, reference] of [[appToken, namedReference], [oldToken, old
           assert.equal(params.p_reference, reference);
           return ok(payment);
         }
+        if (name === 'verify_paystack_organisation_split') return ok('legacy');
         assert.equal(name, 'finalize_paid_event_checkout');
         assert.equal(params.p_payment_id, payment.id);
         return ok({ savedRows: [], persisted: true });
@@ -208,7 +211,12 @@ for (const reference of [oldToken, namedReference]) {
         metadata: licence ? { parent_reference: reference } : {} };
       const refund = { id: 'refund', payment_id: payment.id, amount: licence ? 120 : 300, status: 'failed' };
       let refundUpdates;
-      const service = { from: table => query((filters, changes) => {
+      const service = {
+        rpc: async name => {
+          assert.ok(['paystack_split_refund_context', 'claim_paystack_split_refund'].includes(name), name);
+          return ok(null);
+        },
+        from: table => query((filters, changes) => {
         if (table === 'payments') {
           assert.equal(filters.id, payment.id);
           return payment;
@@ -240,3 +248,79 @@ for (const reference of [oldToken, namedReference]) {
     });
   }
 }
+
+test('web and native checkout share the pinned Paystack recipient, with the native return URL preserved', async () => {
+  const payment = { reference: namedReference, amount: 420, event_id: 517, is_test: false, metadata: { registrant_email: user.email } };
+  const plan = { code: 'ACCT_fixture', amount_cents: 42000, retained_cents: 12000, provider_id: 51 };
+  const service = {
+    from: () => query(() => payment),
+    rpc: async (name, params) => {
+      if (name === 'prepare_paystack_split') {
+        assert.equal(params.p_payment, 'payment');
+        assert.equal(params.p_funding_confirmed, true);
+        return ok(plan);
+      }
+      assert.equal(name, 'paystack_split_checkout');
+      return ok(params.p_checkout);
+    },
+  };
+  const caller = {
+    auth: { getUser: async () => ok({ user }) },
+    rpc: async name => {
+      assert.equal(name, 'prepare_web_paystack_split');
+      return ok({ paymentId: 'payment' });
+    },
+  };
+  const initialized = [];
+  const handler = organisationHandler((_url, key) => key === 'service' ? service : caller, async (url, options) => {
+    if (url.endsWith('/subaccount/ACCT_fixture')) return Response.json({ status: true, data: {
+      subaccount_code: 'ACCT_fixture', id: 51, domain: 'live', active: true, is_verified: true, currency: 'ZAR', percentage_charge: 0,
+      account_name: 'Test organisation',
+    } });
+    assert.equal(url, 'https://api.paystack.co/transaction/initialize');
+    initialized.push(JSON.parse(options.body));
+    return Response.json({ status: true, data: { authorization_url: checkoutUrl, access_code: 'fixture-code', reference: namedReference } });
+  }, { PAYSTACK_SECRET_KEY: 'sk_live_fixture', PAYSTACK_ORGANISATION_REFUND_FUNDING: 'confirmed' });
+  const web = await handler(post('paystack-organisation-settlement', { action: 'web_checkout', payment }));
+  assert.deepEqual(await web.json(), { authorizationUrl: checkoutUrl, accessCode: 'fixture-code' });
+  const nativeRequest = new Request(`${endpoint}/paystack-organisation-settlement`, {
+    method: 'POST', headers: { Authorization: 'Bearer service' },
+    body: JSON.stringify({ action: 'native_checkout', paymentId: 'payment', mode: 'pay' }),
+  });
+  assert.equal((await handler(nativeRequest)).status, 200);
+  for (const checkout of initialized) {
+    assert.equal(checkout.subaccount, 'ACCT_fixture');
+    assert.equal(checkout.bearer, 'subaccount');
+    assert.equal(checkout.transaction_charge, 12000);
+    assert.equal(checkout.amount, 42000);
+  }
+  assert.equal(initialized[0].callback_url, undefined);
+  assert.equal(initialized[1].callback_url, `${endpoint}/native-event-checkout/return?event_id=517&mode=pay`);
+});
+
+test('subaccount verification rejects a code from another environment and finance edits require a super admin', async () => {
+  let allowed = false;
+  let providerCalls = 0;
+  const caller = {
+    auth: { getUser: async () => ok({ user }) },
+    rpc: async name => {
+      assert.equal(name, 'can_manage_paystack_subaccounts');
+      return ok(allowed);
+    },
+  };
+  const handler = organisationHandler(() => caller, async () => {
+    providerCalls++;
+    return Response.json({ status: true, data: {
+      subaccount_code: 'ACCT_fixture', domain: 'test', id: 51, active: true, currency: 'ZAR', percentage_charge: 0,
+      account_name: 'Test organisation',
+    } });
+  }, { PAYSTACK_SECRET_KEY: 'sk_live_fixture' });
+  const request = () => post('paystack-organisation-settlement', { action: 'preview', code: 'ACCT_fixture' });
+  assert.equal((await handler(request())).status, 403);
+  assert.equal(providerCalls, 0);
+  allowed = true;
+  const result = await handler(request());
+  assert.equal(result.status, 400);
+  assert.match((await result.json()).error, /current Paystack environment/);
+  assert.equal(providerCalls, 1);
+});

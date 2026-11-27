@@ -103,3 +103,24 @@ test('cash verification consumes all batches and fails visibly if a batch is una
     const bad = await loadEventCashVerification({ functions: { invoke: async () => ({ error: new Error('offline') }) } }, 1);
     assert.equal(bad.complete, false); assert.equal(bad.unresolved.length, 1);
 });
+
+test('subaccount payout receipts are excluded from 4M commission and manual payouts even after gateway verification', () => {
+    const entry = pay('split', { amount: 610, metadata: {
+        covers: [{ type: 'entry', email: 'split@example.com', division: 'Open' }],
+        organisation_paystack: { organisation_id: 'org', entry_cents: 50000, processing_cents: 1500, net_cents: 48500 },
+    } });
+    const r = calculateEventSettlement({
+        event: { id: 1, entry_fee: 500 },
+        registrations: [reg('split')], payments: [entry],
+        refunds: [{ id: 'partial', payment_id: 'split', amount: 50, status: 'processed', metadata: { cover_type: 'entry', refund_funded_by: 'organiser' } }],
+        verification: { receipts: [proof(entry.reference, 610, { settlement_status: 'success', settlement_id: '42' })], complete: true },
+    });
+    assert.equal(r.dueToOrg, 0);
+    assert.equal(r.commission, 0);
+    assert.equal(r.collected4M, 0);
+    assert.deepEqual(r.subaccountSummary, { gross: 500, fees: 15, net: 485, refunded: 50, settledCount: 1 });
+    assert.deepEqual(r.subaccountPayouts[0], {
+        reference: entry.reference, gross: 500, processing: 15, net: 485, refunded: 50, pending: 0,
+        settlementStatus: 'success', settlementId: '42',
+    });
+});

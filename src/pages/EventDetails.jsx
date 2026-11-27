@@ -39,6 +39,7 @@ import {
 } from '../utils/playerSchedule';
 
 import { PAYSTACK_PUBLIC_KEY, isPaystackTestMode as isTestMode } from '../utils/paystackConfig';
+import { openEventPayment, prepareWebEventPayment } from '../utils/organisationPaystack';
 
 const tournamentHero = 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format&fit=crop&q=80';
 import logo4m from '../assets/logo_4m_lowercase.png';
@@ -3145,22 +3146,23 @@ const EventDetails = () => {
         }
         const reference = paymentReference || eventPaymentReference(event);
         let pending;
+        let checkout;
         try {
             pending = legacyEventCheckout({ event, profile: playerProfileData, email: payer.email,
                 name: formData.full_name, phone: formData.phone, divisions: selectedDivisions,
                 partners: divisionPartners, feeFor: division => entryCharge(getEntryFeeForCategory(division)),
                 reference, isTest: isTestMode, commerce });
-            const { error } = await supabase.from('payments').insert(pending);
-            if (error) throw error;
-        } catch {
-            toast.error('Your checkout could not be saved. Refresh this page and try again.');return;
+            checkout = await prepareWebEventPayment(pending);
+        } catch (error) {
+            toast.error(error.message || 'Your checkout could not be saved.');
+            return;
         }
         const paystackPop = new PaystackPop();
         if (event.is_manual && !isTestMode) {
             trackWebEvent('begin_checkout', { item_category: 'event_registration', currency: 'ZAR', value: pending.amount });
         }
 
-        await paystackPop.checkout({
+        await openEventPayment(paystackPop, checkout, {
             key: PAYSTACK_PUBLIC_KEY,
             reference,
             email: formData.email,
@@ -3169,6 +3171,8 @@ const EventDetails = () => {
             amount: toPaystackAmount(pending.amount),
             currency: 'ZAR',
             metadata: pending.metadata,
+        }, {
+            onError: () => toast.error('Could not load checkout. Please try again.'),
             onSuccess: (ref) => handlePaymentSuccess(ref),
             onCancel: () => {
                 console.log("Paystack payment cancelled.");

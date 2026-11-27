@@ -31,6 +31,7 @@ export function activeSettlementRegistrations(registrations = [], divisions = []
 /** The recipient is independent of the payment method. Legacy manual receipts
  * stay unconfirmed until a manager identifies who actually received the money. */
 export function collectionRecipient(payment) {
+    if (norm(payment?.payment_method) === 'paystack' && normalizePaymentMetadata(payment.metadata).organisation_paystack) return 'organiser';
     if (norm(payment?.payment_method) === 'paystack' && !isExplicitAdminMarkedPayment(payment)) return '4m';
     const recipient = norm(normalizePaymentMetadata(payment?.metadata).collection_recipient);
     if (recipient === '4m') return '4m';
@@ -40,7 +41,8 @@ export function collectionRecipient(payment) {
 
 export function collectionBucket(payment) {
     const recipient = payment?.recipient ?? collectionRecipient(payment);
-    if (recipient === 'organiser') return 'Club / organiser';
+    if (recipient === 'organiser') return normalizePaymentMetadata(payment.metadata).organisation_paystack
+        ? 'Paystack subaccount' : 'Club / organiser';
     if (recipient === '4m') return norm(payment.payment_method) === 'paystack' ? '4M Paystack' : '4M EFT / manual';
     return 'Recipient unconfirmed';
 }
@@ -101,7 +103,8 @@ export function calculateEventSettlement({ event = {}, registrations = [], divis
         const confirmedExternalEntries = external && /^T\d{10,}$/.test(reference)
             && claims.every(p => isExplicitAdminMarkedPayment(p) && collectionRecipient(p) === '4m' && p.metadata.registration_id)
             && new Set(claims.map(p => p.metadata.registration_id)).size === claims.length;
-        let amount = gateway && external ? Math.min(positive(gateway.amount), sum(claims))
+        const organisationPaystack = norm(primary.payment_method) === 'paystack' ? primary.metadata.organisation_paystack : null;
+        let amount = organisationPaystack ? positive(organisationPaystack.entry_cents / 100) : gateway && external ? Math.min(positive(gateway.amount), sum(claims))
             : confirmedExternalEntries ? sum(claims) : positive(primary.amount);
         if (gateway && amount > positive(gateway.amount)) {
             issues.push(`Receipt allocation exceeds Paystack amount: ${reference}`);
@@ -110,10 +113,10 @@ export function calculateEventSettlement({ event = {}, registrations = [], divis
         if (external && claims.length > 1 && (gateway ? sum(claims) > positive(gateway.amount) : !confirmedExternalEntries)) {
             issues.push(`Multiple entry confirmations share ${reference}; review the receipt allocation`);
         }
-        const recipient = gateway || external && /^T\d{10,}$/.test(reference) ? '4m' : collectionRecipient(primary);
+        const recipient = organisationPaystack ? 'organiser' : gateway || external && /^T\d{10,}$/.test(reference) ? '4m' : collectionRecipient(primary);
         if (!recipient) issues.push(`Confirm who received ${reference || primary.id}`);
         const unallocatedCredit = Math.min(amount, Math.max(0, ...claims.map(p => positive(p.metadata.unallocated_credit_amount))));
-        return { ...primary, reference, amount, recipient, gateway, claims, unallocatedCredit, paymentIds: claims.map(p => p.id),
+        return { ...primary, reference, amount, recipient, gateway, claims, unallocatedCredit, organisationPaystack, paymentIds: claims.map(p => p.id),
             payment_method: gateway || external && /^T\d{10,}$/.test(reference) ? 'paystack' : primary.payment_method };
     });
     const paymentById = new Map(payments.map(p => [p.id, p]));
@@ -211,6 +214,20 @@ export function calculateEventSettlement({ event = {}, registrations = [], divis
     const grossEntryFees = sum(receiptRows);
     const entryFeesRefunded = sum(processedRefundRows);
     const refundReserve = sum(reservedRefundRows);
+    const paystackSubaccountReceipts = receiptRows.filter(r => r.organisationPaystack);
+    const subaccountPayouts = paystackSubaccountReceipts.map(r => ({
+        reference: r.reference, gross: r.amount, processing: Number(r.organisationPaystack.processing_cents) / 100,
+        net: Number(r.organisationPaystack.net_cents) / 100, refunded: r.refunded, pending: r.reserved,
+        settlementStatus: r.gateway?.settlement_status || 'unconfirmed',
+        settlementId: r.gateway?.settlement_id || '',
+    }));
+    const subaccountSummary = {
+        gross: sum(paystackSubaccountReceipts),
+        fees: money(subaccountPayouts.reduce((n, r) => n + r.processing, 0)),
+        net: money(subaccountPayouts.reduce((n, r) => n + r.net, 0)),
+        refunded: money(subaccountPayouts.reduce((n, r) => n + r.refunded, 0)),
+        settledCount: subaccountPayouts.filter(r => r.settlementStatus === 'success').length,
+    };
     const collected4M = sum(receiptRows.filter(r => r.recipient === '4m'));
     const collectedManual = sum(receiptRows.filter(r => r.recipient === '4m' && norm(r.payment_method) !== 'paystack'));
     const paystackCollected = sum(receiptRows.filter(r => r.recipient === '4m' && norm(r.payment_method) === 'paystack'));
@@ -244,7 +261,7 @@ export function calculateEventSettlement({ event = {}, registrations = [], divis
         const tier = tiers.get(rate) || { rate, count: 0, total: 0 };
         tier.count++; tier.total = money(tier.total + invoice.amount); tiers.set(rate, tier);
     }
-    const result = { ...current, paystackCollected: currentPaystack, collectedManual: currentManual, unallocatedCredit4M, unallocatedCash4M,
+    const result = { ...current, subaccountPayouts, subaccountSummary, paystackCollected: currentPaystack, collectedManual: currentManual, unallocatedCredit4M, unallocatedCash4M,
         cashHistory: { collected4M, paystackCollected, collectedManual, collectedOrganiser, unconfirmedCollected,
             grossEntryFees, entryFeesRefunded, refundReserve, issues: historyIssues },
         netHeld4M: money(collected4M - sum(processedRefundRows.filter(r => r.fundedBy === '4m'))),

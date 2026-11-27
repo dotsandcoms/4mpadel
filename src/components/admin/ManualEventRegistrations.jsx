@@ -2944,6 +2944,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 lineItems: buildIncomeStatementRows(reportStats),
                 registrations: registrationRows,
                 activeRegistrationIds: reportStats.allocations.map(a => a.registration.id),
+                subaccountPayouts: reportStats.subaccountPayouts,
                 receiptReport: buildEventReceiptReport({ registrations, divisions, refunds, settlement: reportStats }),
                 payments: normalizedReportType === 'full'
                     ? (payments || []).map((p) => ({
@@ -3446,6 +3447,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                         </div>
                                         {overviewStats.organiserRetained > 0 && <p className="text-xs text-gray-400">Organiser entitlement including direct payments {fmtR(overviewStats.organiserEntitlement)}</p>}
                                         {overviewStats.entryFeesRefunded > 0 && <p className="text-xs text-gray-400">Completed entry refunds (cash history) {fmtR(overviewStats.entryFeesRefunded)}</p>}
+                                        {overviewStats.subaccountPayouts.length > 0 && (
+                                            <p className="text-xs text-gray-300">Paystack subaccount · Gross {fmtR(overviewStats.subaccountSummary.gross)} · Processing {fmtR(overviewStats.subaccountSummary.fees)} · Allocated payout {fmtR(overviewStats.subaccountSummary.net)} · Refunded {fmtR(overviewStats.subaccountSummary.refunded)}</p>
+                                        )}
                                         {overviewStats.unconfirmedCollected > 0 && <p className="text-xs text-amber-300">Recipient unconfirmed: {fmtR(overviewStats.unconfirmedCollected)}. Excluded from the amount due.</p>}
                                         {overviewStats.refundFundingAdjustment !== 0 && <p className="text-xs text-amber-300">Refund funding adjustment: {fmtR(overviewStats.refundFundingAdjustment)}.</p>}
                                         {overviewStats.refundReserve > 0 && <p className="text-xs text-amber-300">Pending entry refunds: {fmtR(overviewStats.refundReserve)}. Already excluded from current-entry paid amounts.</p>}

@@ -337,6 +337,24 @@ Deno.serve(async req => {
     if (saved.status === 'success') return json({ registered: true, quote });
     if (!nativeCheckoutDetailsMatch(saved, rows, covers, total, input.isTest === true)) fail('This checkout attempt has changed. Start again.');
     if (saved.metadata?.native_authorization_url) return json({ authorizationUrl: saved.metadata.native_authorization_url, reference, quote });
+    const split = await checked(admin.rpc('prepare_paystack_split', {
+      p_payment: saved.id, p_funding_confirmed: Deno.env.get('PAYSTACK_ORGANISATION_REFUND_FUNDING') === 'confirmed',
+    }));
+    if (split) {
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const routed = await fetch(`${url}/functions/v1/paystack-organisation-settlement`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'native_checkout', paymentId: saved.id, mode: payOnly ? 'pay' : 'register' }),
+      });
+      const checkout = await routed.json();
+      if (!routed.ok || !checkout.authorizationUrl) fail(checkout.error || 'Could not start checkout. Please try again.');
+      const authorizationUrl = await checked(admin.rpc('save_native_checkout_url', {
+        p_reference: saved.reference, p_url: checkout.authorizationUrl,
+      }));
+      if (!authorizationUrl) fail('Could not save checkout. Please try again.');
+      return json({ authorizationUrl, reference, quote });
+    }
     const gateway = await fetch('https://api.paystack.co/transaction/initialize', { method: 'POST',
       headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, amount: Math.round(total * 100), currency: 'ZAR', reference: saved.reference,

@@ -1,4 +1,5 @@
-import { calculateEventSettlement, summarizeEventSettlements } from '../../utils/eventSettlement';
+import { addSubaccountPayoutSheet } from '../../utils/eventFinanceExport';
+import { calculateEventSettlement, loadEventCashVerification, summarizeEventSettlements } from '../../utils/eventSettlement';
 import { hydrateEventLicenses } from '../../utils/licenses';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -278,14 +279,27 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
         };
     }, [localParticipants, selectedEvent, totalCollected, getResolvedLicenseType, eventPayments]);
 
+    const [payoutCheck, setPayoutCheck] = useState(null);
+    const currentPayoutCheck = payoutCheck?.eventId === selectedEvent?.id ? payoutCheck : null;
+    async function checkSubaccountPayouts() {
+        const eventId = selectedEvent.id;
+        setPayoutCheck({ eventId, loading: true });
+        try {
+            const verification = await loadEventCashVerification(supabase, eventId);
+            setPayoutCheck({ eventId, verification });
+        } catch {
+            setPayoutCheck({ eventId, error: 'Could not check Paystack payouts.' });
+        }
+    }
+
     const financialSummary = useMemo(() => calculateEventSettlement({
-        event: selectedEvent || {}, payments: eventPayments, refunds,
+        event: selectedEvent || {}, payments: eventPayments, refunds, verification: currentPayoutCheck?.verification,
         registrations: localParticipants.map(p => p._reg || { id: p.id, email: p.email, division: p.class_name, payment_status: p.is_paid ? 'paid' : 'pending', payment_method: p.registration_payment_method, status: p.status }),
         entryFeeForRegistration: reg => {
             const p = localParticipants.find(p => (p._reg?.id || p.id) === reg.id);
             return getParticipantEntryFee(p || {}, selectedEvent);
         },
-    }), [localParticipants, selectedEvent, eventPayments, refunds]);
+    }), [localParticipants, selectedEvent, eventPayments, refunds, currentPayoutCheck?.verification]);
 
     // The full player directory is needed for RankedIn matching/sync only,
     // never to display the event list. Reuse it across those explicit actions.
@@ -1262,6 +1276,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                 column.width = maxLen + 2 > 10 ? maxLen + 2 : 10;
             }
 
+            addSubaccountPayoutSheet(workbook, financialSummary.subaccountPayouts);
             const buffer = await workbook.xlsx.writeBuffer();
             const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             const url = window.URL.createObjectURL(blob);
@@ -1948,6 +1963,17 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                             </div>
                             <div className="flex items-center justify-between gap-4 text-sm"><span className="text-gray-300">Organiser entitlement</span><span className="text-white font-bold">{fmtR(financialSummary.organiserEntitlement)}</span></div>
                             <div className="flex items-center justify-between gap-4 text-sm"><span className="text-gray-400">Less: entry fees retained by organiser</span><span className="text-red-400 font-bold">−{fmtR(financialSummary.organiserRetained)}</span></div>
+                            {financialSummary.subaccountPayouts.length > 0 && (
+                                <p className="text-xs text-gray-300">
+                                    Paystack subaccount · Gross {fmtR(financialSummary.subaccountSummary.gross)} · Processing {fmtR(financialSummary.subaccountSummary.fees)} · Allocated payout {fmtR(financialSummary.subaccountSummary.net)} · Refunded {fmtR(financialSummary.subaccountSummary.refunded)}
+                                    {currentPayoutCheck?.verification && <> · {financialSummary.subaccountSummary.settledCount} of {financialSummary.subaccountPayouts.length} receipts matched to a completed Paystack payout</>}
+                                    {' '}<button type="button" onClick={checkSubaccountPayouts} disabled={currentPayoutCheck?.loading}
+                                        className="ml-2 rounded text-padel-green underline focus-visible:outline-2 focus-visible:outline-padel-green">
+                                        {currentPayoutCheck?.loading ? 'Checking payouts…' : 'Check Paystack payouts'}
+                                    </button>
+                                    {currentPayoutCheck?.error && <span role="alert" className="ml-2 text-amber-300">{currentPayoutCheck.error}</span>}
+                                </p>
+                            )}
                             {financialSummary.unallocatedCredit4M > 0 && <p className="text-xs text-amber-300">Unallocated credit held by 4M: {fmtR(financialSummary.unallocatedCredit4M)}. Available for payout after reserves: {fmtR(financialSummary.availableForPayout)}.</p>}
                             {financialSummary.issues.length > 0 && <p role="alert" className="text-xs text-amber-300">{financialSummary.issues.join('. ')}</p>}
                             {financialSummary.interimPaid > 0 && (

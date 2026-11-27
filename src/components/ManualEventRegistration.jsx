@@ -29,6 +29,7 @@ import sapaLogo from '../assets/sapa-logo.svg';
 
 import { isPaystackConfigured, isPaystackTestMode } from '../utils/paystackConfig';
 import { buildPaystackCheckoutConfig, isInAppBrowser } from '../utils/paystackCheckout';
+import { openEventPayment, prepareWebEventPayment } from '../utils/organisationPaystack';
 import { eventPaymentReference } from '../utils/eventPaymentReference';
 import PartnerProfileInvite from './PartnerProfileInvite';
 import ManualRegistrationEntryCard from './ManualRegistrationEntryCard';
@@ -456,9 +457,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const divisionPartnerSearchSeq = useRef({});
     const divisionPartnerSearchTimeout = useRef({});
     const paymentRetryRef = useRef(false);
-    const checkoutPrepRef = useRef(null);
     const openWizardRef = useRef(null);
-    const [checkoutPreparing, setCheckoutPreparing] = useState(false);
     const [wizardMode, setWizardMode] = useState('register'); // register | addPartner | payOnly
     const [addPartnerTarget, setAddPartnerTarget] = useState(null);
     const [confirmedPaidTotal, setConfirmedPaidTotal] = useState(null);
@@ -1127,7 +1126,6 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setDivisionPartnerSearch({});
         setIsCalendarMenuOpen(false);
         paymentRetryRef.current = false;
-        checkoutPrepRef.current = null;
         setCheckoutPreparing(false);
         setWizardMode('register');
         setAddPartnerTarget(null);
@@ -2739,7 +2737,6 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (error) { setProcessing(false); toast.error('Could not cancel checkout. Please check payment status before trying again.'); return; }
         if (data?.paymentReceived) { await handlePaymentSuccess(reference); return; }
         trackWebEvent('checkout_outcome', { item_category: 'event_registration', status: 'cancelled' });
-        checkoutPrepRef.current = null;
         setProcessing(false);
         if (wizardMode === 'payOnly') setWizardStep(2);
         else { setSelected({}); setWizardStep(1); }
@@ -2747,7 +2744,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         await loadMyRegs(); await loadDivisionRegs();
     }, [handlePaymentSuccess, loadMyRegs, loadDivisionRegs, hasRegistrations, wizardMode]);
 
-    const launchPaystackCheckout = useCallback(async (reference, amount, paymentMetadata) => {
+    const launchPaystackCheckout = useCallback(async (reference, amount, paymentMetadata, checkout) => {
         if (!isPaystackConfigured()) {
             toast.error('Payments not configured');
             return;
@@ -2765,13 +2762,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 source: 'manual_event',
             },
         });
-        await pop.checkout({
-            ...checkoutConfig,
+        await openEventPayment(pop, checkout, checkoutConfig, {
             onSuccess: async (response) => {
                 const paidRef = resolvePaystackReference(response, reference);
                 await handlePaymentSuccess(paidRef, amount);
             },
             onCancel: () => { void cancelUnpaidCheckout(reference); },
+            onError: () => { setProcessing(false); toast.error('Could not load checkout. Please try again.'); },
         });
     }, [userEmail, event.id, event.event_name, profile?.name, displayProfile?.name, handlePaymentSuccess, cancelUnpaidCheckout]);
 
@@ -2789,14 +2786,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         expireAbandonedCheckouts();
     }, [expireAbandonedCheckouts]);
 
-    const insertProcessingPayment = async (payload) => {
+    const prepareProcessingPayment = (payload) => {
         const metadata = {
             ...(payload.paymentMetadata || {}),
             // RLS ownership keys — must match auth JWT email for insert policy.
             email: userEmail,
             registrant_email: userEmail,
         };
-        return supabase.from('payments').insert([{
+        return prepareWebEventPayment({
             player_id: profile?.id || null,
             event_id: event.id,
             amount: payload.amount,
@@ -2807,83 +2804,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             reference: payload.reference,
             is_test: isPaystackTestMode,
             metadata,
-        }]);
+        });
     };
-
-    useEffect(() => {
-        if (
-            wizardStep !== 4
-            || total <= 0
-            || usesManualEntryPayment
-            || !userEmail
-            || !isPaystackConfigured()
-            || (allowPayLater && weeklyCheckoutIntent === 'reserve')
-        ) {
-            checkoutPrepRef.current = null;
-            setCheckoutPreparing(false);
-            return;
-        }
-
-        let cancelled = false;
-        setCheckoutPreparing(true);
-        checkoutPrepRef.current = null;
-
-        const prepareCheckout = async () => {
-            const payload = buildManualPaymentPayload();
-
-            if (cancelled) return;
-
-            try {
-                const pop = new PaystackPop();
-                const checkoutConfig = buildPaystackCheckoutConfig({
-                    reference: payload.reference,
-                    email: userEmail,
-                    amount: payload.amount,
-                    fullName: profile?.name || displayProfile?.name,
-                    metadata: payload.paymentMetadata,
-                });
-                const launcher = pop.preloadTransaction({
-                    ...checkoutConfig,
-                    onSuccess: async (response) => {
-                        const paidRef = resolvePaystackReference(response, payload.reference);
-                        await handlePaymentSuccess(paidRef, payload.amount);
-                    },
-                    onCancel: () => { void cancelUnpaidCheckout(payload.reference); },
-                });
-                if (!cancelled) {
-                    checkoutPrepRef.current = { ...payload, launcher };
-                    setCheckoutPreparing(false);
-                }
-            } catch (err) {
-                console.error('Paystack preload failed:', err);
-                if (!cancelled) setCheckoutPreparing(false);
-            }
-        };
-
-        prepareCheckout();
-
-        return () => {
-            cancelled = true;
-            checkoutPrepRef.current = null;
-            setCheckoutPreparing(false);
-        };
-    }, [
-        wizardStep,
-        total,
-        userEmail,
-        event.id,
-        usesManualEntryPayment,
-        profile?.id,
-        profile?.name,
-        displayProfile?.name,
-        buildManualPaymentPayload,
-        handlePaymentSuccess,
-        loadMyRegs,
-        loadDivisionRegs,
-        allowPayLater,
-        weeklyCheckoutIntent,
-        cancelUnpaidCheckout,
-    ]);
 
     const resumePaymentByReference = useCallback(async (reference) => {
         if (!userEmail) {
@@ -3086,8 +3008,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 }
                 paymentRetryRef.current = false;
 
-                const prep = checkoutPrepRef.current;
-                const payload = prep?.reference ? prep : buildManualPaymentPayload();
+                const payload = buildManualPaymentPayload();
 
                 registrationStep = 'reserve_places';
                 await expireAbandonedCheckouts();
@@ -3096,19 +3017,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     ...(accessGrantId ? { access_grant_id: accessGrantId } : {}),
                 })), payload.soloLinks || []);
                 registrationStep = 'save_checkout';
-                const { error: insertError } = await insertProcessingPayment(payload);
-                if (insertError) throw insertError;
+                const checkout = await prepareProcessingPayment(payload);
                 trackWebEvent('begin_checkout', { item_category: 'event_registration', currency: 'ZAR', value: payload.amount });
 
                 // Keep processing=true until Paystack onSuccess / onCancel clears it.
                 registrationStep = 'open_checkout';
-                if (prep?.launcher) {
-                    prep.launcher();
-                    paystackHandoff = true;
-                    return;
-                }
-
-                await launchPaystackCheckout(payload.reference, payload.amount, payload.paymentMetadata);
+                await launchPaystackCheckout(payload.reference, payload.amount, payload.paymentMetadata, checkout);
                 paystackHandoff = true;
                 return;
             }
@@ -3293,7 +3207,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     registrant_name: profile?.name,
                     reference,
                 };
-                const { error: payErr } = await supabase.from('payments').insert([{
+                const checkout = await prepareWebEventPayment({
                     player_id: profile?.id || null,
                     event_id: event.id,
                     amount: delta,
@@ -3304,16 +3218,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     reference,
                     is_test: isPaystackTestMode,
                     metadata,
-                }]);
-                if (payErr) throw payErr;
+                });
 
                 const pop = new PaystackPop();
                 const cfg = buildPaystackCheckoutConfig({
                     reference, email: userEmail, amount: delta,
                     fullName: profile?.name || displayProfile?.name, metadata,
                 });
-                await pop.checkout({
-                    ...cfg,
+                await openEventPayment(pop, checkout, cfg, {
                     onSuccess: async (response) => {
                         try {
                             const paidRef = resolvePaystackReference(response, reference);
@@ -3336,6 +3248,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         setSwitching(false);
                         toast.info('Payment cancelled — division not changed.');
                     },
+                    onError: () => { setSwitching(false); toast.error('Could not load checkout. Please try again.'); },
                 });
             } else {
                 const res = await invokePaystackRefund({
@@ -5277,7 +5190,6 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (wizardMode === 'addPartner' && wizardStep === 2) return 'Continue to Review';
         if (wizardStep === 4) {
             if (processing) return 'Processing...';
-            if (checkoutPreparing && total > 0 && weeklyCheckoutIntent !== 'reserve') return 'Preparing payment...';
             if (usesManualEntryPayment && reviewPaySummary.entryFeesTotal > 0) return 'Register — payment pending';
             if (wizardMode === 'addPartner') {
                 return total > 0 ? 'Pay & Add Partner' : 'Add Partner';
@@ -5559,7 +5471,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     <div className="flex-1">
                                         <PrimaryBtn
                                             onClick={wizardStep === 4 || wizardStep === 5 ? handleWizardPrimaryAction : (wizardMode === 'addPartner' && wizardStep === 2 ? goNext : goNext)}
-                                            disabled={processing || checkoutPreparing || (wizardStep === 1 && (!userEmail || (!isWeeklyEvent && hasRankedinAccount === null))) || (wizardStep === 4 && (!agreeRules || !agreeComplete || (requiresSapaAgreement && !agreeSapa)))}
+                                            disabled={processing || (wizardStep === 1 && (!userEmail || (!isWeeklyEvent && hasRankedinAccount === null))) || (wizardStep === 4 && (!agreeRules || !agreeComplete || (requiresSapaAgreement && !agreeSapa)))}
                                         >
                                             {processing && wizardStep === 4 ? <Loader2 className="animate-spin w-5 h-5" /> : (
                                                 <>

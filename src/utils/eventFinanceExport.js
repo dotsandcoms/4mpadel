@@ -81,6 +81,21 @@ const styleHeader = (row) => {
  *   receiptReport?: { withdrawals: Array<object>, receipts: Array<object> },
  * }} payload
  */
+export function addSubaccountPayoutSheet(workbook, payouts) {
+    if (payouts?.length) {
+        const sheet = workbook.addWorksheet('Paystack subaccount');
+        styleHeader(sheet.addRow(['Paystack reference', 'Gross entry fees (ZAR)', 'Processing fees (ZAR)',
+            'Allocated payout (ZAR)', 'Refunded (ZAR)', 'Refund pending (ZAR)', 'Payout status', 'Payout batch']));
+        for (const payout of payouts) {
+            const row = sheet.addRow([payout.reference, payout.gross, payout.processing, payout.net, payout.refunded,
+                payout.pending, payout.settlementStatus, payout.settlementId]);
+            for (let col = 2; col <= 6; col++) row.getCell(col).numFmt = MONEY_FMT;
+        }
+        sheet.views = [{ state: 'frozen', ySplit: 1 }];
+        autosize(sheet, 14, 38);
+    }
+}
+
 export function buildEventFinanceWorkbook(payload) {
     const {
         eventName,
@@ -340,6 +355,8 @@ export function buildEventFinanceWorkbook(payload) {
             { key: 'unallocatedCredit', label: 'Unallocated credit reserved (ZAR)', money: true },
         ], receiptReport.receipts || []);
     }
+
+    addSubaccountPayoutSheet(workbook, payload.subaccountPayouts);
 
     if (reportType === 'full') {
     const wsPay = workbook.addWorksheet('Payments ledger');
