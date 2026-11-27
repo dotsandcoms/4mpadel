@@ -371,6 +371,67 @@ test('Paystack subaccount verification explains which payout setting needs atten
   assert.doesNotMatch(JSON.stringify(body), /0123456789/);
 });
 
+test('a verified Paystack subaccount with no holder name can be reviewed and saved with masked bank details', async () => {
+  const verifiedAccount = {
+    subaccount_code: 'ACCT_fixture', domain: 'live', id: 51, active: true, currency: 'ZAR',
+    percentage_charge: 0, is_verified: true, business_name: 'Test organisation',
+    account_name: null, settlement_bank: 'Example Bank', account_number: '0123456789',
+  };
+  let account = verifiedAccount;
+  const writes = [];
+  const service = {
+    rpc: async (name, params) => {
+      assert.equal(name, 'manage_paystack_subaccounts');
+      assert.equal(params.p_action, 'save');
+      writes.push(params);
+      return ok({ code: params.p_payload.code });
+    },
+  };
+  const caller = {
+    auth: { getUser: async () => ok({ user }) },
+    rpc: async name => {
+      assert.equal(name, 'can_manage_paystack_subaccounts');
+      return ok(true);
+    },
+  };
+  const handler = organisationHandler((_url, key) => key === 'service' ? service : caller, async url => {
+    assert.equal(url, 'https://api.paystack.co/subaccount/ACCT_fixture');
+    return Response.json({ status: true, data: account });
+  }, { PAYSTACK_SECRET_KEY: 'sk_live_fixture' });
+  const request = (action, details = {}) => handler(post('paystack-organisation-settlement', {
+    action, code: 'ACCT_fixture', organisationId: 'organisation', ...details,
+  }));
+
+  for (const fields of [{ is_verified: false }, { business_name: '' }, { settlement_bank: '' }, { account_number: '••••' }]) {
+    account = { ...verifiedAccount, ...fields };
+    assert.equal((await request('preview')).status, 400);
+  }
+
+  account = verifiedAccount;
+  const preview = await request('preview');
+  assert.equal(preview.status, 200);
+  const { account: reviewed } = await preview.json();
+  assert.equal(reviewed.accountHolder, 'Paystack business name · Test organisation');
+  assert.equal(reviewed.bankName, 'Example Bank');
+  assert.equal(reviewed.lastFour, '6789');
+  assert.doesNotMatch(JSON.stringify(reviewed), /0123456789/);
+  assert.equal(writes.length, 0);
+
+  const approval = { accountHolder: reviewed.accountHolder, lastFour: reviewed.lastFour, expectedVersion: null };
+  account = { ...verifiedAccount, business_name: 'Changed since preview' };
+  assert.equal((await request('save', approval)).status, 400);
+  assert.equal(writes.length, 0);
+
+  account = verifiedAccount;
+  assert.equal((await request('save', approval)).status, 200);
+  assert.equal(writes[0].p_org, 'organisation');
+  assert.equal(writes[0].p_payload.businessName, 'Test organisation');
+  assert.doesNotMatch(JSON.stringify(writes), /0123456789/);
+  const enable = await request('enable', { eventId: 517 });
+  assert.match((await enable.json()).error, /disabled until Paystack confirms organisation-funded refunds/);
+  assert.equal(writes.length, 1);
+});
+
 test('a subaccount refund without funding approval never reaches Paystack', async () => {
   const registration = { id: 'entry', event_id: 517 };
   const payment = { id: 'payment', event_id: 517, status: 'success', reference: namedReference, currency: 'ZAR', is_test: false,

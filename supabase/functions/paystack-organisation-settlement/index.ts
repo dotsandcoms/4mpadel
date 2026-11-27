@@ -61,21 +61,30 @@ async function getSubaccount(code: unknown, domain: string, requireVerified: boo
     if (!Number.isSafeInteger(providerId) || providerId <= 0) {
         throw new Error('Paystack did not return a valid internal ID for this subaccount.');
     }
-    if (!a.account_name) {
-        throw new Error('Paystack did not return the bank account holder name for this subaccount.');
-    }
-    if (requireVerified && domain === 'live' && a.is_verified !== true) {
+    const verified = a.is_verified === true;
+    if (requireVerified && domain === 'live' && !verified) {
         throw new Error('Verify this payout subaccount in Paystack before enabling routing.');
+    }
+    const accountHolder = typeof a.account_name === 'string' ? a.account_name.trim() : '';
+    const businessName = typeof a.business_name === 'string' ? a.business_name.trim() : '';
+    const bankName = typeof a.settlement_bank === 'string' ? a.settlement_bank.trim() : '';
+    const lastFour = String(a.account_number || '').trim().match(/\d{4}$/)?.[0] || null;
+    if (!accountHolder && !verified) {
+        throw new Error('Paystack did not return the bank account holder name. Verify the subaccount in Paystack and try again.');
+    }
+    if (!accountHolder && (!businessName || !bankName || !lastFour)) {
+        throw new Error('Paystack did not return the business name or masked bank details needed to review this subaccount.');
     }
     return {
         code,
         providerId,
         domain,
-        businessName: String(a.business_name || a.account_name),
-        accountHolder: String(a.account_name),
-        bankName: String(a.settlement_bank || ''),
-        lastFour: String(a.account_number || '').match(/\d{4}$/)?.[0] || null,
-        verified: a.is_verified === true,
+        businessName: businessName || accountHolder,
+        // The Finance client displays and echoes this label when confirming the review.
+        accountHolder: accountHolder || `Paystack business name · ${businessName}`,
+        bankName,
+        lastFour,
+        verified,
     };
 }
 
