@@ -55,7 +55,7 @@ public final class FourMLiveScoresModule: Module {
       for activity in Activity<ProMatchScoreAttributes>.activities where activity.attributes.pin == pin {
         await activity.end(nil, dismissalPolicy: .immediate)
       }
-    }.runOnQueue(.main)
+    }
   }
 
   @available(iOS 17.0, *)
