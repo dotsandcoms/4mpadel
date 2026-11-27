@@ -40,7 +40,7 @@ if (Platform.OS !== 'web') {
   });
 }
 
-function easProjectId(): string | undefined {
+export function easProjectId(): string | undefined {
   return (
     process.env.EXPO_PUBLIC_EAS_PROJECT_ID ??
     Constants.easConfig?.projectId ??

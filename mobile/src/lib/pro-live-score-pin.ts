@@ -5,6 +5,7 @@ import { requireOptionalNativeModule } from 'expo';
 import { AppState, Platform } from 'react-native';
 import { useSyncExternalStore } from 'react';
 
+import { easProjectId } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
 
 type Pin = { pin: string; match: number; owner: string; installation: string; stopKey: string; token?: string };
@@ -101,10 +102,10 @@ async function registerToken(pin: Pin, token: string) {
   publish(next);
 }
 
-async function deviceToken() {
-  const token = await Notifications.getDevicePushTokenAsync();
-  if (typeof token.data !== 'string') throw new Error('This device could not register for live scores.');
-  return token.data;
+async function androidPushToken(devicePushToken?: Notifications.DevicePushToken) {
+  const projectId = easProjectId();
+  if (!projectId) throw new Error('This device could not register for live scores.');
+  return (await Notifications.getExpoPushTokenAsync({ projectId, devicePushToken })).data;
 }
 
 async function reconcile(owner: string | null) {
@@ -120,7 +121,7 @@ async function reconcile(owner: string | null) {
     if (!active || active.pin !== pin.pin) await clearPin(pin, false);
     else {
       publish(pin);
-      const token = Platform.OS === 'android' ? await deviceToken() : active.token;
+      const token = Platform.OS === 'android' ? await androidPushToken() : active.token;
       if (token) await registerToken(pin, token);
     }
   }
@@ -155,7 +156,7 @@ export function watchLiveScorePins() {
   const token = Platform.OS === 'android' ? Notifications.addPushTokenListener(value => {
     void serialize(async () => {
       const pin = await read<Pin>(pinKey);
-      if (pin && typeof value.data === 'string') await registerToken(pin, value.data);
+      if (pin && typeof value.data === 'string') await registerToken(pin, await androidPushToken(value));
     }).catch(() => {});
   }) : null;
   return () => {
@@ -184,7 +185,7 @@ export function pinLiveScore(match: number) {
     if (availability !== 'ready') {
       throw new Error(Platform.OS === 'ios' ? 'Allow Live Activities for 4M Padel in Settings.' : 'Allow 4M Padel notifications in Settings.');
     }
-    const androidToken = Platform.OS === 'android' ? await deviceToken() : undefined;
+    const androidToken = Platform.OS === 'android' ? await androidPushToken() : undefined;
     let installation = await read<{ owner: string; id: string }>(installationKey);
     if (installation?.owner !== owner) {
       installation = { owner, id: Crypto.randomUUID() };

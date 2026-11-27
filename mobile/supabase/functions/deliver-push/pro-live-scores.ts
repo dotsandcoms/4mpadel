@@ -1,10 +1,10 @@
 import { getScore, hasScoreChanged } from '../_shared/pro-live-score.mjs';
-import { credentialsAvailable, sendLiveScore, type ScorePin } from '../_shared/pro-live-score-push.ts';
+import { credentialsAvailable, sendLiveScore, type ExpoPush, type ScorePin } from '../_shared/pro-live-score-push.ts';
 
 type Database = { rpc(name: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: unknown }> };
 
-export async function refreshPinnedScores(client: Database, providerFetch: typeof fetch, token: string | undefined) {
-  if (!token || (!credentialsAvailable('ios') && !credentialsAvailable('android'))) return;
+export async function refreshPinnedScores(client: Database, providerFetch: typeof fetch, token: string | undefined, expo: ExpoPush) {
+  if (!token) return;
   const command = async (p_action: string, p_data: object = {}) => {
     const result = await client.rpc('pro_live_score_admin', { p_action, p_data });
     if (result.error) throw new Error('Live score storage unavailable');
@@ -30,7 +30,7 @@ export async function refreshPinnedScores(client: Database, providerFetch: typeo
           if (!changed && (pin.lastScore?.timestamp === score.timestamp || Date.now() - Date.parse(pin.lastSentAt || '') < 110_000)) return;
           const lease = { pin: pin.pin, lease: pin.lease };
           if (!await command('current', lease)) return;
-          const sent = await sendLiveScore(pin, score);
+          const sent = await sendLiveScore(pin, score, expo);
           if (sent === 'invalid' || (sent === 'accepted' && score.status === 'final')) await command('finish', lease);
           else if (sent === 'accepted') await command('sent', { ...lease, score });
           else console.warn('An active Pro Padel score update will retry');

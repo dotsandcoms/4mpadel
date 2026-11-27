@@ -94,7 +94,7 @@ Deno.serve(async request => {
       await Promise.all(jobs!.slice(i, i + 5).map(processJob));
     }
     await refreshFollowingActivity(client, Deno.env.get('PADEL_API_TOKEN'), providerFetch).catch(() => console.warn('Following activity refresh failed'));
-    const liveScores = refreshPinnedScores(client, providerFetch, Deno.env.get('PADEL_API_TOKEN'))
+    const liveScores = refreshPinnedScores(client, providerFetch, Deno.env.get('PADEL_API_TOKEN'), expo)
       .catch(() => console.warn('Pinned Pro Padel scores could not refresh'));
     const runtime = (globalThis as typeof globalThis & { EdgeRuntime?: { waitUntil(promise: Promise<unknown>): void } }).EdgeRuntime;
     if (runtime) runtime.waitUntil(liveScores);

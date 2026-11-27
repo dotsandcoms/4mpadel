@@ -46,7 +46,7 @@ Deno.serve(async request => {
       return Response.json({ ok: true });
     }
     if (body.action === 'token') {
-      if (typeof body.token !== 'string' || !/^[a-z0-9:_-]{20,4096}$/i.test(body.token)) return reply('Invalid push token.', 400);
+      if (typeof body.token !== 'string' || !/^(?:[a-f0-9]{20,1024}|(?:ExponentPushToken|ExpoPushToken)\[[A-Za-z0-9_-]{10,128}\])$/i.test(body.token)) return reply('Invalid push token.', 400);
       const active = await command('token', { ...identity, token: body.token });
       return Response.json({ active });
     }

@@ -8,29 +8,27 @@ export type ScorePin = {
   lastScore: Score | null; lastSentAt: string | null;
 };
 type Outcome = 'accepted' | 'invalid' | 'retry';
-type ServiceAccount = { project_id: string; client_email: string; private_key: string };
+export type ExpoPush = (endpoint: string, body: unknown) => Promise<{ status?: string; details?: { error?: string } }>;
 
 const env = (key: string) => Deno.env.get(key);
-const fcmScope = 'https://www.googleapis.com/auth/firebase.messaging';
-const oauthUrl = 'https://oauth2.googleapis.com/token';
 
 export function credentialsAvailable(platform: Platform) {
-  return platform === 'ios'
-    ? !!(env('LIVE_SCORE_APNS_KEY') && env('LIVE_SCORE_APNS_KEY_ID') && env('LIVE_SCORE_APNS_TEAM_ID'))
-    : !!env('LIVE_SCORE_FCM_SERVICE_ACCOUNT');
+  return platform === 'android'
+    || !!(env('LIVE_SCORE_APNS_KEY') && env('LIVE_SCORE_APNS_KEY_ID') && env('LIVE_SCORE_APNS_TEAM_ID'));
 }
 
 const bytesToBase64 = (value: Uint8Array) => btoa(String.fromCharCode(...value)).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
 const encode = (value: unknown) => bytesToBase64(new TextEncoder().encode(JSON.stringify(value)));
 const readKey = (key: string) => Uint8Array.from(atob(key.replaceAll('\\n', '\n').replace(/-----[^-]+-----|\s/g, '')), ch => ch.charCodeAt(0));
 
-async function sign(header: object, claims: object, pem: string, type: 'ES256' | 'RS256') {
-  const algorithm = type === 'ES256' ? { name: 'ECDSA', namedCurve: 'P-256' } : { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' };
-  const key = await crypto.subtle.importKey('pkcs8', readKey(pem), algorithm, false, ['sign']);
-  const payload = `${encode(header)}.${encode(claims)}`;
-  const signature = await crypto.subtle.sign(type === 'ES256' ? { name: 'ECDSA', hash: 'SHA-256' } : algorithm,
-    key, new TextEncoder().encode(payload));
-  return `${payload}.${bytesToBase64(new Uint8Array(signature))}`;
+async function signAppleToken() {
+  const key = await crypto.subtle.importKey('pkcs8', readKey(env('LIVE_SCORE_APNS_KEY')!),
+    { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const header = encode({ alg: 'ES256', kid: env('LIVE_SCORE_APNS_KEY_ID') });
+  const claims = encode({ iss: env('LIVE_SCORE_APNS_TEAM_ID'), iat: Math.floor(Date.now() / 1000) });
+  const data = new TextEncoder().encode(header + '.' + claims);
+  const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, data);
+  return header + '.' + claims + '.' + bytesToBase64(new Uint8Array(signature));
 }
 
 function cachedCredential<T>(load: () => Promise<T>) {
@@ -46,23 +44,7 @@ function cachedCredential<T>(load: () => Promise<T>) {
   };
 }
 
-const appleToken = cachedCredential(() => sign({ alg: 'ES256', kid: env('LIVE_SCORE_APNS_KEY_ID') },
-  { iss: env('LIVE_SCORE_APNS_TEAM_ID'), iat: Math.floor(Date.now() / 1000) }, env('LIVE_SCORE_APNS_KEY')!, 'ES256'));
-
-const googleToken = cachedCredential(async () => {
-  const account = JSON.parse(env('LIVE_SCORE_FCM_SERVICE_ACCOUNT')!) as ServiceAccount;
-  const now = Math.floor(Date.now() / 1000);
-  const assertion = await sign({ alg: 'RS256', typ: 'JWT' }, {
-    iss: account.client_email, aud: oauthUrl, scope: fcmScope, iat: now, exp: now + 3600,
-  }, account.private_key, 'RS256');
-  const response = await fetch(oauthUrl, {
-    method: 'POST', body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }),
-    signal: AbortSignal.timeout(6000),
-  });
-  const result = await response.json();
-  if (!response.ok || typeof result.access_token !== 'string') throw new Error('Live score authorization unavailable');
-  return { accessToken: result.access_token, project: account.project_id };
-});
+const appleToken = cachedCredential(signAppleToken);
 
 export function applePayload(score: Score, teams: ScorePin['teams'], now: number) {
   const final = score.status === 'final';
@@ -73,7 +55,7 @@ export function applePayload(score: Score, teams: ScorePin['teams'], now: number
   } };
 }
 
-export async function sendLiveScore(pin: ScorePin, score: Score): Promise<Outcome> {
+export async function sendLiveScore(pin: ScorePin, score: Score, expo: ExpoPush): Promise<Outcome> {
   const now = Math.floor(Date.now() / 1000);
   if (pin.platform === 'ios') {
     const host = env('LIVE_SCORE_APNS_ENVIRONMENT') === 'development' ? 'api.sandbox.push.apple.com' : 'api.push.apple.com';
@@ -91,19 +73,11 @@ export async function sendLiveScore(pin: ScorePin, score: Score): Promise<Outcom
     return response.status === 410 || ['BadDeviceToken', 'DeviceTokenNotForTopic'].includes(failure?.reason) ? 'invalid' : 'retry';
   }
 
-  const { accessToken, project } = await googleToken();
-  const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(project)}/messages:send`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: {
-      token: pin.token,
-      // This is a user-visible, explicitly pinned score. The native service updates one card in place.
-      android: { priority: 'HIGH', ttl: '180s' },
-      data: { type: 'pro_live_score', pin: pin.pin, match: String(pin.match), score: JSON.stringify({ ...score, teams: pin.teams }) },
-    } }),
-    signal: AbortSignal.timeout(7000),
+  // Use the same Expo-managed FCM credentials as the app’s existing Android notifications.
+  const ticket = await expo('send', {
+    to: pin.token, priority: 'high', ttl: 180, _contentAvailable: true,
+    data: { type: 'pro_live_score', pin: pin.pin, match: pin.match, score: { ...score, teams: pin.teams } },
   });
-  if (response.ok) return 'accepted';
-  const failure = await response.json().catch(() => null);
-  return failure?.error?.details?.some((detail: { errorCode?: string }) => detail.errorCode === 'UNREGISTERED') ? 'invalid' : 'retry';
+  if (ticket.status === 'ok') return 'accepted';
+  return ticket.details?.error === 'DeviceNotRegistered' ? 'invalid' : 'retry';
 }

@@ -56,3 +56,21 @@ test('APNs updates carry the provider stale date and leave the final result brie
   assert.equal(final.event, 'end');
   assert.equal(final['dismissal-date'], now + 300);
 });
+
+test('Android sends data-only scores through the existing Expo FCM transport', async () => {
+  const { scoreFromFeed } = await import('../supabase/functions/_shared/pro-live-score.mjs');
+  const { sendLiveScore } = await import('../supabase/functions/_shared/pro-live-score-push.ts');
+  const pin = { platform: 'android', pin: 'pin-fixture', match, token: 'ExpoPushToken[android-fixture]', teams: ['A', 'B'] };
+  const score = scoreFromFeed(observed('live', [openSet('4-2')]), match, time);
+  const result = await sendLiveScore(pin, score, async (endpoint, message) => {
+    assert.equal(endpoint, 'send');
+    assert.equal(message.to, pin.token);
+    assert.equal(message.title, undefined);
+    assert.equal(message.body, undefined);
+    assert.equal(message.data.pin, pin.pin);
+    assert.deepEqual(message.data.score.games, [4, 2]);
+    assert.equal(message.ttl, 180);
+    return { status: 'ok' };
+  });
+  assert.equal(result, 'accepted');
+});
