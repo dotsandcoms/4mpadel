@@ -47,6 +47,7 @@ GRANT INSERT ON public.payments TO authenticated;
 
 \ir ../supabase/migrations/20261126102552_organisation_paystack_subaccounts.sql
 \ir ../supabase/migrations/20261127092020_isolate_organisation_paystack_checkout.sql
+\ir ../supabase/migrations/20261127095117_fix_paystack_subaccount_list_alias.sql
 
 CREATE FUNCTION pg_temp.expect(ok boolean, message text) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'FAIL: %', message; END IF; END $$;
@@ -71,6 +72,8 @@ VALUES (1,'a0000000-0000-0000-0000-000000000001','Pilot',true,'platform',current
        (2,'a0000000-0000-0000-0000-000000000001','Legacy',true,'platform',current_date+7,now()+interval '2 days'),
        (3,'a0000000-0000-0000-0000-000000000002','Other',true,'platform',current_date+7,now()+interval '2 days');
 SELECT pg_temp.expect(NOT has_function_privilege('authenticated','public.manage_paystack_subaccounts(text,uuid,jsonb,uuid)','execute')
+    AND NOT has_function_privilege('anon','public.manage_paystack_subaccounts(text,uuid,jsonb,uuid)','execute')
+    AND has_function_privilege('service_role','public.manage_paystack_subaccounts(text,uuid,jsonb,uuid)','execute')
     AND NOT has_table_privilege('authenticated','private.organisation_paystack_accounts','select')
     AND NOT has_function_privilege('authenticated','public.verify_paystack_organisation_split(text,jsonb)','execute'),
     'configuration, private mapping and gateway verification are restricted');
@@ -83,9 +86,17 @@ INSERT INTO public.payments(event_id,amount,reference,metadata) VALUES(3,500,'LE
 SELECT pg_temp.expect((SELECT metadata IS NULL FROM public.payments WHERE reference='LEGACY-NO-ACCOUNT'), 'unconfigured payments keep their original metadata');
 
 SET ROLE service_role;
+SELECT pg_temp.expect(public.manage_paystack_subaccounts('list') = '[
+    {"id":"a0000000-0000-0000-0000-000000000002","name":"Another organisation","account":null},
+    {"id":"a0000000-0000-0000-0000-000000000001","name":"SA Grand","account":null}
+]'::jsonb, 'Finance lists organisations before any accounts are linked');
 SELECT public.manage_paystack_subaccounts('save','a0000000-0000-0000-0000-000000000001',
     '{"code":"ACCT_pilot","providerId":12,"domain":"live","businessName":"SA Grand","lastFour":"1234"}',
     'c0000000-0000-0000-0000-000000000001');
+SELECT pg_temp.expect(public.manage_paystack_subaccounts('list') @> '[
+    {"id":"a0000000-0000-0000-0000-000000000002","account":null},
+    {"id":"a0000000-0000-0000-0000-000000000001","account":{"code":"ACCT_pilot","last_four":"1234"}}
+]'::jsonb, 'Finance shows the linked account for its organisation only');
 SELECT pg_temp.expect(public.paystack_split_staff_permission(1,'owner@test.invalid') IS NULL, 'saving leaves routing off');
 SELECT pg_temp.expect((public.manage_paystack_subaccounts('events','a0000000-0000-0000-0000-000000000001')->'events'->0->>'status')='off',
     'saving a verified account does not enable tournament routing');
