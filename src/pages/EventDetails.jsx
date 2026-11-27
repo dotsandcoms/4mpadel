@@ -3152,7 +3152,7 @@ const EventDetails = () => {
                 name: formData.full_name, phone: formData.phone, divisions: selectedDivisions,
                 partners: divisionPartners, feeFor: division => entryCharge(getEntryFeeForCategory(division)),
                 reference, isTest: isTestMode, commerce });
-            checkout = await prepareWebEventPayment(pending);
+            checkout = await prepareWebEventPayment(pending, event.paystack_subaccount_checkout === true);
         } catch (error) {
             toast.error(error.message || 'Your checkout could not be saved.');
             return;

@@ -16,14 +16,15 @@ export async function organisationPaystack(action, input = {}) {
     return data;
 }
 
-export async function prepareWebEventPayment(payment) {
-    const checkout = await organisationPaystack('web_checkout', { payment });
-    if (checkout.legacy) {
+export async function prepareWebEventPayment(payment, usesSubaccount) {
+    if (!usesSubaccount) {
         const { error } = await supabase.from('payments').insert(payment);
         if (error) throw error;
-    } else if (!checkout.accessCode) {
-        throw new Error('Checkout did not start. Please try again.');
+        return { legacy: true };
     }
+
+    const checkout = await organisationPaystack('web_checkout', { payment });
+    if (!checkout.accessCode) throw new Error('This tournament’s checkout could not start. Refresh and try again.');
     return checkout;
 }
 

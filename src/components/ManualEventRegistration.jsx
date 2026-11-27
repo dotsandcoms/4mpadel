@@ -457,7 +457,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const divisionPartnerSearchSeq = useRef({});
     const divisionPartnerSearchTimeout = useRef({});
     const paymentRetryRef = useRef(false);
+    const checkoutPrepRef = useRef(null);
     const openWizardRef = useRef(null);
+    const [checkoutPreparing, setCheckoutPreparing] = useState(false);
     const [wizardMode, setWizardMode] = useState('register'); // register | addPartner | payOnly
     const [addPartnerTarget, setAddPartnerTarget] = useState(null);
     const [confirmedPaidTotal, setConfirmedPaidTotal] = useState(null);
@@ -540,17 +542,21 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 early_bird_ends_at: event.early_bird_ends_at,
                 registration_opens_at: event.registration_opens_at,
                 registration_closes_at: event.registration_closes_at,
+                paystack_subaccount_checkout: event.paystack_subaccount_checkout,
                 event_name: event.event_name,
                 slug: event.slug,
             }] : []);
             return;
         }
-        const { data, error } = await supabase
+        const columns = 'id, start_date, start_time, end_time, entry_fee, early_bird_fee, early_bird_ends_at, registration_opens_at, registration_closes_at, event_name, slug, is_weekly, series_id, weekly_payment_policy, max_teams_capacity';
+        const query = (projection) => supabase
             .from('calendar')
-            .select('id, start_date, start_time, end_time, entry_fee, early_bird_fee, early_bird_ends_at, registration_opens_at, registration_closes_at, event_name, slug, is_weekly, series_id, weekly_payment_policy, max_teams_capacity')
+            .select(projection)
             .eq('series_id', event.series_id)
             .eq('is_weekly', true)
             .order('start_date', { ascending: true });
+        let { data, error } = await query(`${columns}, paystack_subaccount_checkout`);
+        if (error?.code === '42703') ({ data, error } = await query(columns));
         if (error) {
             console.error('[ManualEventRegistration] loadSeriesWeeks failed:', error.message);
             setSeriesWeeks([]);
@@ -1126,6 +1132,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setDivisionPartnerSearch({});
         setIsCalendarMenuOpen(false);
         paymentRetryRef.current = false;
+        checkoutPrepRef.current = null;
         setCheckoutPreparing(false);
         setWizardMode('register');
         setAddPartnerTarget(null);
@@ -1633,6 +1640,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 fee: resolveDivisionEntryFee({ entry_fee: w.entry_fee }, w),
             }));
     }, [isWeeklyEvent, seriesWeeks, selectedWeekIds, registeredWeekIds]);
+
+    const usesSubaccountCheckout = selectedWeeks.length
+        ? selectedWeeks.some((week) => week.paystack_subaccount_checkout === true)
+        : event?.paystack_subaccount_checkout === true;
 
     /** Ensure weekly wizard always has the synthetic Open division selected. */
     useEffect(() => {
@@ -2737,6 +2748,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (error) { setProcessing(false); toast.error('Could not cancel checkout. Please check payment status before trying again.'); return; }
         if (data?.paymentReceived) { await handlePaymentSuccess(reference); return; }
         trackWebEvent('checkout_outcome', { item_category: 'event_registration', status: 'cancelled' });
+        checkoutPrepRef.current = null;
         setProcessing(false);
         if (wizardMode === 'payOnly') setWizardStep(2);
         else { setSelected({}); setWizardStep(1); }
@@ -2804,8 +2816,85 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             reference: payload.reference,
             is_test: isPaystackTestMode,
             metadata,
-        });
+        }, usesSubaccountCheckout);
     };
+
+    useEffect(() => {
+        if (
+            usesSubaccountCheckout
+            || wizardStep !== 4
+            || total <= 0
+            || usesManualEntryPayment
+            || !userEmail
+            || !isPaystackConfigured()
+            || (allowPayLater && weeklyCheckoutIntent === 'reserve')
+        ) {
+            checkoutPrepRef.current = null;
+            setCheckoutPreparing(false);
+            return;
+        }
+
+        let cancelled = false;
+        setCheckoutPreparing(true);
+        checkoutPrepRef.current = null;
+
+        const prepareCheckout = async () => {
+            const payload = buildManualPaymentPayload();
+
+            if (cancelled) return;
+
+            try {
+                const pop = new PaystackPop();
+                const checkoutConfig = buildPaystackCheckoutConfig({
+                    reference: payload.reference,
+                    email: userEmail,
+                    amount: payload.amount,
+                    fullName: profile?.name || displayProfile?.name,
+                    metadata: payload.paymentMetadata,
+                });
+                const launcher = pop.preloadTransaction({
+                    ...checkoutConfig,
+                    onSuccess: async (response) => {
+                        const paidRef = resolvePaystackReference(response, payload.reference);
+                        await handlePaymentSuccess(paidRef, payload.amount);
+                    },
+                    onCancel: () => { void cancelUnpaidCheckout(payload.reference); },
+                });
+                if (!cancelled) {
+                    checkoutPrepRef.current = { ...payload, launcher };
+                    setCheckoutPreparing(false);
+                }
+            } catch (err) {
+                console.error('Paystack preload failed:', err);
+                if (!cancelled) setCheckoutPreparing(false);
+            }
+        };
+
+        prepareCheckout();
+
+        return () => {
+            cancelled = true;
+            checkoutPrepRef.current = null;
+            setCheckoutPreparing(false);
+        };
+    }, [
+        usesSubaccountCheckout,
+        wizardStep,
+        total,
+        userEmail,
+        event.id,
+        usesManualEntryPayment,
+        profile?.id,
+        profile?.name,
+        displayProfile?.name,
+        buildManualPaymentPayload,
+        handlePaymentSuccess,
+        loadMyRegs,
+        loadDivisionRegs,
+        allowPayLater,
+        weeklyCheckoutIntent,
+        cancelUnpaidCheckout,
+    ]);
 
     const resumePaymentByReference = useCallback(async (reference) => {
         if (!userEmail) {
@@ -3008,7 +3097,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 }
                 paymentRetryRef.current = false;
 
-                const payload = buildManualPaymentPayload();
+                if (usesSubaccountCheckout && selectedWeeks.some((week) => String(week.id) !== String(event.id))) {
+                    toast.error('Pay for this tournament separately from its event page.');
+                    return;
+                }
+                const prep = usesSubaccountCheckout ? null : checkoutPrepRef.current;
+                const payload = prep?.reference ? prep : buildManualPaymentPayload();
 
                 registrationStep = 'reserve_places';
                 await expireAbandonedCheckouts();
@@ -3022,6 +3116,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
                 // Keep processing=true until Paystack onSuccess / onCancel clears it.
                 registrationStep = 'open_checkout';
+                if (prep?.launcher) {
+                    prep.launcher();
+                    paystackHandoff = true;
+                    return;
+                }
                 await launchPaystackCheckout(payload.reference, payload.amount, payload.paymentMetadata, checkout);
                 paystackHandoff = true;
                 return;
@@ -3218,7 +3317,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     reference,
                     is_test: isPaystackTestMode,
                     metadata,
-                });
+                }, event.paystack_subaccount_checkout === true);
 
                 const pop = new PaystackPop();
                 const cfg = buildPaystackCheckoutConfig({
@@ -5190,6 +5289,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (wizardMode === 'addPartner' && wizardStep === 2) return 'Continue to Review';
         if (wizardStep === 4) {
             if (processing) return 'Processing...';
+            if (checkoutPreparing && total > 0 && weeklyCheckoutIntent !== 'reserve') return 'Preparing payment...';
             if (usesManualEntryPayment && reviewPaySummary.entryFeesTotal > 0) return 'Register — payment pending';
             if (wizardMode === 'addPartner') {
                 return total > 0 ? 'Pay & Add Partner' : 'Add Partner';
@@ -5471,7 +5571,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     <div className="flex-1">
                                         <PrimaryBtn
                                             onClick={wizardStep === 4 || wizardStep === 5 ? handleWizardPrimaryAction : (wizardMode === 'addPartner' && wizardStep === 2 ? goNext : goNext)}
-                                            disabled={processing || (wizardStep === 1 && (!userEmail || (!isWeeklyEvent && hasRankedinAccount === null))) || (wizardStep === 4 && (!agreeRules || !agreeComplete || (requiresSapaAgreement && !agreeSapa)))}
+                                            disabled={processing || checkoutPreparing || (wizardStep === 1 && (!userEmail || (!isWeeklyEvent && hasRankedinAccount === null))) || (wizardStep === 4 && (!agreeRules || !agreeComplete || (requiresSapaAgreement && !agreeSapa)))}
                                         >
                                             {processing && wizardStep === 4 ? <Loader2 className="animate-spin w-5 h-5" /> : (
                                                 <>

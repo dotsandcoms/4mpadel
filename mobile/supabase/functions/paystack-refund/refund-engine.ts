@@ -20,6 +20,7 @@ export type Cover = {
     type: string;            // 'entry' | 'license'
     email: string;
     division?: string;
+    division_id?: string | null;
     license?: string;        // 'full' | 'temporary' (for type === 'license')
 };
 
@@ -104,6 +105,44 @@ function coversOf(payment: PaymentRow): Cover[] {
     return Array.isArray(meta.covers) ? (meta.covers as Cover[]) : [];
 }
 
+type VerifiedEntryTransfer = {
+    cover_position: number;
+    event_id: string | number;
+    registration_id: string;
+    email: string;
+    division: string;
+    division_id: string | null;
+};
+
+function refundEntryCover(payment: PaymentRow, registration: RegistrationRow): { cover: Cover; transferred: boolean } | undefined {
+    const aliases = parseMeta(payment.metadata).verified_entry_transfers;
+    const byPosition = new Map<number, VerifiedEntryTransfer>(Array.isArray(aliases)
+        ? aliases.map(alias => [(alias as VerifiedEntryTransfer).cover_position, alias as VerifiedEntryTransfer]) : []);
+    let position = 0;
+    for (const cover of coversOf(payment)) {
+        if (cover.type !== 'entry') continue;
+        const alias = byPosition.get(++position);
+        if (alias) {
+            if (String(alias.event_id) === String(registration.event_id) && alias.registration_id === registration.id
+                && normEmail(alias.email) === normEmail(registration.email)
+                && (cover.division_id ? cover.division_id === alias.division_id : cover.division === alias.division)
+                && (alias.division_id ? alias.division_id === registration.division_id : alias.division === registration.division)) {
+                return { cover, transferred: true };
+            }
+        } else if (normEmail(cover.email) === normEmail(registration.email) && String(cover.division || '') === String(registration.division || '')) {
+            return { cover, transferred: false };
+        }
+    }
+}
+
+export function paymentCoversRefundEntry(payment: PaymentRow, registration: RegistrationRow): boolean {
+    return Boolean(refundEntryCover(payment, registration));
+}
+
+export function paymentUsesVerifiedEntryTransfer(payment: PaymentRow, registration: RegistrationRow): boolean {
+    return refundEntryCover(payment, registration)?.transferred === true;
+}
+
 /**
  * Paystack only knows about the original checkout reference. License splits
  * create ledger-only rows (`LIC-<parent>` with metadata.parent_reference) that
@@ -174,7 +213,6 @@ export function resolveRefundableItems(
 ): RefundableItem[] {
     const refundLicense = options.refundLicense !== false;
     const regEmail = normEmail(registration.email);
-    const regDivision = String(registration.division || '');
 
     // Running total drawn (Rands) per payment: existing non-failed refunds plus
     // items chosen in this call, so an entry + license taken from one
@@ -216,18 +254,12 @@ export function resolveRefundableItems(
     // --- Entry fee: refund once ---
     const entryPayments = successPayments
         .filter(p => parseMeta(p.metadata).source !== 'native_entry_balance')
-        .filter((p) =>
-            coversOf(p).some(
-                (c) =>
-                    c.type === 'entry' &&
-                    normEmail(c.email) === regEmail &&
-                    String(c.division || '') === regDivision,
-            ),
-        )
+        .filter(p => paymentCoversRefundEntry(p, registration))
         .sort(byRoomThenRecent);
 
     for (const p of entryPayments) {
-        const entryFee = roundRands(Number(divisionFeesOf(p)[regDivision] || 0));
+        const cover = refundEntryCover(p, registration)?.cover;
+        const entryFee = roundRands(Number(divisionFeesOf(p)[cover?.division || registration.division] || 0));
         const remaining = remainingOf(p);
         if (entryFee <= 0 || remaining <= 0) continue;
         const amount = Math.min(entryFee, remaining);
@@ -316,12 +348,10 @@ export async function applyRegistrationWithdrawal(
 ): Promise<{ withdrawn: boolean; alreadyWithdrawn: boolean }> {
     const unlinkPartners = options.unlinkPartners !== false;
 
-    // Re-read current state for idempotency.
-    const { data: current } = await supabaseAdmin
-        .from('event_registrations')
-        .select('status')
-        .eq('id', reg.id)
-        .maybeSingle();
+    // Bind all writes to the same saved event and registration.
+    const { data: current, error: readError } = await supabaseAdmin.from('event_registrations')
+        .select('status').eq('id', reg.id).eq('event_id', reg.event_id).maybeSingle();
+    if (readError || !current) throw readError || new Error('Registration no longer belongs to this event.');
 
     if (current?.status === 'withdrawn') {
         return { withdrawn: false, alreadyWithdrawn: true };
@@ -342,28 +372,18 @@ export async function applyRegistrationWithdrawal(
     const { error } = await supabaseAdmin
         .from('event_registrations')
         .update(updates)
-        .eq('id', reg.id);
+        .eq('id', reg.id).eq('event_id', reg.event_id);
     if (error) throw error;
 
     if (unlinkPartners) {
-        // Partner's row (they had reg as partner) — they stay registered.
-        if (reg.partner_email) {
-            await supabaseAdmin
-                .from('event_registrations')
-                .update({ partner_name: null, partner_email: null, partner_payment_status: null })
-                .eq('event_id', reg.event_id)
-                .eq('division', reg.division)
-                .ilike('email', reg.partner_email)
-                .eq('status', 'registered');
-        }
-        // Any row that listed reg as their partner.
-        await supabaseAdmin
-            .from('event_registrations')
-            .update({ partner_name: null, partner_email: null, partner_payment_status: null })
-            .eq('event_id', reg.event_id)
-            .eq('division', reg.division)
-            .ilike('partner_email', reg.email)
-            .eq('status', 'registered');
+        // Only clear pointers back to the exact withdrawn player in this
+        // division. A saved partner email alone may be stale.
+        const columns = { partner_name: null, partner_email: null, partner_payment_status: null };
+        let query = supabaseAdmin.from('event_registrations').update(columns)
+            .eq('event_id', reg.event_id).ilike('partner_email', literalRefundEmail(reg.email)).eq('status', 'registered');
+        query = reg.division_id ? query.eq('division_id', reg.division_id) : query.eq('division', reg.division);
+        const { error: unlinkError } = await query;
+        if (unlinkError) throw unlinkError;
     }
 
     return { withdrawn: true, alreadyWithdrawn: false };
@@ -379,9 +399,10 @@ export async function applyRegistrationWithdrawal(
  */
 export async function transferBookingOwnership(
     supabaseAdmin: SupabaseClient,
-    _ownerReg: RegistrationRow,
+    ownerReg: RegistrationRow,
     partnerReg: RegistrationRow,
 ): Promise<void> {
+    if (String(ownerReg.event_id) !== String(partnerReg.event_id)) throw new Error('Partner belongs to another event.');
     const { error } = await supabaseAdmin
         .from('event_registrations')
         .update({
@@ -390,7 +411,7 @@ export async function transferBookingOwnership(
             partner_email: null,
             partner_payment_status: null,
         })
-        .eq('id', partnerReg.id);
+        .eq('id', partnerReg.id).eq('event_id', ownerReg.event_id);
     if (error) throw error;
 }
 
@@ -416,10 +437,10 @@ export async function cancelEventTempLicense(
 ): Promise<void> {
     const { data: player } = await supabaseAdmin
         .from('players')
-        .select('id, license_type')
-        .ilike('email', playerEmail)
+        .select('id, email, license_type')
+        .ilike('email', literalRefundEmail(playerEmail))
         .maybeSingle();
-    if (!player) return;
+    if (!player || normEmail(player.email) !== normEmail(playerEmail)) return;
 
     await supabaseAdmin
         .from('temporary_licenses')
@@ -520,8 +541,7 @@ function isClosed(division: DivisionRow | undefined, event: EventRow | undefined
 
 /**
  * Eligibility for self-service refund/withdrawal.
- * Admins bypass the close-date gate. `isAdmin` MUST be resolved server-side
- * (see resolveIsAdmin) — never trusted from the request body.
+ * Verified managers can bypass the close-date gate for the exact event.
  */
 export function checkRefundEligibility(
     reg: RegistrationRow,
@@ -561,79 +581,38 @@ export function checkRefundEligibility(
     return { eligible: true, reason: 'ok', closedForSelfService: false };
 }
 
-// ----------------------------------------------------------------------------
-// 6. resolveIsAdmin
-// ----------------------------------------------------------------------------
-
-/**
- * Platform admin authorization: presence of a row in
- * admin_sidebar_permissions for the given email.
- */
-export async function resolveIsAdmin(
-    supabaseAdmin: SupabaseClient,
-    email: string | null | undefined,
-): Promise<boolean> {
-    if (!email) return false;
-    const { data } = await supabaseAdmin
-        .from('admin_sidebar_permissions')
-        .select('email')
-        .ilike('email', email)
-        .maybeSingle();
-    return !!data;
+export function literalRefundEmail(email: string): string {
+    return normEmail(email).replace(/[\\%_]/g, '\\$&');
 }
 
-/**
- * Event-scoped manager: org owner/admin, organiser email, or event co-admin.
- * Mirrors public.can_manage_event used by RLS.
- */
-export async function resolveCanManageEvent(
-    supabaseAdmin: SupabaseClient,
-    email: string | null | undefined,
-    eventId: string | number | null | undefined,
-): Promise<boolean> {
-    if (!email || eventId == null || eventId === '') return false;
-    const caller = String(email).trim().toLowerCase();
+export function refundEventId(value: unknown): number | null {
+    if (typeof value !== 'number' && (typeof value !== 'string' || !/^[1-9]\d*$/.test(value))) return null;
+    const id = Number(value);
+    return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
 
-    const { data: event } = await supabaseAdmin
-        .from('calendar')
-        .select('id, organisation_id, organiser_email, event_co_admins')
-        .eq('id', eventId)
-        .maybeSingle();
-    if (!event) return false;
+export type RefundActor = { email: string; platform: boolean };
 
-    if (event.organiser_email && String(event.organiser_email).trim().toLowerCase() === caller) {
-        return true;
-    }
+export async function verifyRefundActor(client: SupabaseClient, email: string): Promise<RefundActor | null> {
+    const identity = normEmail(email);
+    if (!identity) return null;
+    const [active, platform] = await Promise.all([
+        client.rpc('account_is_active'),
+        client.rpc('is_super_admin', { user_email: identity }),
+    ]);
+    if (active.error || active.data !== true) return null;
+    return { email: identity, platform: !platform.error && platform.data === true };
+}
 
-    const coAdmins = Array.isArray(event.event_co_admins) ? event.event_co_admins : [];
-    if (coAdmins.some((e) => String(e || '').trim().toLowerCase() === caller)) {
-        return true;
-    }
+export async function canManageRefundEvent(client: SupabaseClient, actor: RefundActor, eventId: unknown): Promise<boolean> {
+    const id = refundEventId(eventId);
+    if (id === null) return false;
+    if (actor.platform) return true;
+    const result = await client.rpc('can_manage_event', { p_event_id: id });
+    return !result.error && result.data === true;
+}
 
-    const orgId = event.organisation_id;
-    if (!orgId) return false;
-
-    const { data: membership } = await supabaseAdmin
-        .from('organisation_members')
-        .select('role')
-        .eq('organisation_id', orgId)
-        .ilike('user_email', caller)
-        .in('role', ['owner', 'admin'])
-        .maybeSingle();
-    if (membership) return true;
-
-    const { data: org } = await supabaseAdmin
-        .from('organisations')
-        .select('created_by')
-        .eq('id', orgId)
-        .maybeSingle();
-    if (!org?.created_by) return false;
-
-    const { data: player } = await supabaseAdmin
-        .from('players')
-        .select('id')
-        .eq('id', org.created_by)
-        .ilike('email', caller)
-        .maybeSingle();
-    return !!player;
+export function ownsRefundRegistration(registration: RegistrationRow, email: string): boolean {
+    const actor = normEmail(email);
+    return Boolean(actor && [registration.email, registration.registered_by].some(value => normEmail(value) === actor));
 }

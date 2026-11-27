@@ -1,4 +1,6 @@
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getPaystackSecretForPayment, requiresOrganisationPaystack } from './paystack.ts';
+import { refundOrganisationPayment } from './organisation-refund.ts';
 import { getPaystackSecretKeys, parseMetadata, resolvePaystackVerifySecrets } from './paystack.ts';
 import { resolvePaystackGatewayReference, toPaystackCents, type PaymentRow } from './refund-engine.ts';
 
@@ -119,9 +121,30 @@ export async function handleReviewedRefundRetry(service: SupabaseClient, opts: {
     if (!Number.isSafeInteger(amountCents) || amountCents <= 0 || refund.currency !== 'ZAR') {
         return json(400, { error: 'Refund requires a positive recorded ZAR amount.' });
     }
-    const { data: split, error: splitError } = await service.rpc('paystack_split_refund_context', { p_reference: resolvePaystackGatewayReference(payment) });
-    if (splitError) throw splitError;
-    if (split) return json(409, { error: 'Use the original subaccount refund record to retry this refund.' });
+    if (requiresOrganisationPaystack(payment.metadata)) {
+        if (reconcile && readObject(refund.metadata).organisation_paystack_refund !== true) {
+            return json(409, { error: 'No Paystack reference is available for this refund.' });
+        }
+        if (!reconcile && refund.status !== 'failed') {
+            return json(409, { error: 'Only a failed refund can start a retry.', status: refund.status });
+        }
+        const reference = resolvePaystackGatewayReference(payment);
+        const secret = getPaystackSecretForPayment(payment);
+        const result = await refundOrganisationPayment(secret, reference, amountCents, service, refund.id,
+            reconcile ? 'reconcile' : 'submit');
+        const update = await service.from('payment_refunds').update({
+            ...(result.refundId ? { paystack_refund_id: result.refundId } : {}),
+            status: result.status,
+            metadata: { ...readObject(refund.metadata), ...(result.fundedBy ? { refund_funded_by: result.fundedBy } : {}),
+                ...(result.ok ? {} : { paystack_error: result.message }) },
+        }).eq('id', refund.id).neq('status', 'processed');
+        if (update.error) throw update.error;
+        return json(result.ok ? 200 : 409, {
+            status: result.status, retried: result.ok && !reconcile, reconciled: result.ok && reconcile,
+            paystack_reference: reference, paystack_refund_id: result.refundId, amount_rands: amountCents / 100,
+            ...(result.ok ? {} : { error: result.message, retry_held: result.status === 'needs_attention' }),
+        });
+    }
     const prior = reviewedRefundClaim(refund.metadata);
     const method = String(payment.payment_method || 'paystack').toLowerCase();
     const held = () => json(409, {

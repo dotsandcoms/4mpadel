@@ -337,10 +337,7 @@ Deno.serve(async req => {
     if (saved.status === 'success') return json({ registered: true, quote });
     if (!nativeCheckoutDetailsMatch(saved, rows, covers, total, input.isTest === true)) fail('This checkout attempt has changed. Start again.');
     if (saved.metadata?.native_authorization_url) return json({ authorizationUrl: saved.metadata.native_authorization_url, reference, quote });
-    const split = await checked(admin.rpc('prepare_paystack_split', {
-      p_payment: saved.id, p_funding_confirmed: Deno.env.get('PAYSTACK_ORGANISATION_REFUND_FUNDING') === 'confirmed',
-    }));
-    if (split) {
+    if (event.paystack_subaccount_checkout === true || saved.metadata.organisation_paystack_required === true) {
       const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const routed = await fetch(`${url}/functions/v1/paystack-organisation-settlement`, {
         method: 'POST',

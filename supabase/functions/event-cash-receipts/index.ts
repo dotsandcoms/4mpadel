@@ -75,11 +75,20 @@ export async function handleEventCashReceipts(req: Request) {
   if (!refs.size && !(body.discover_missing === true && internalService)) return json({ event_id: eventId, receipts: [], unresolved: [], candidates: [], verified_at: new Date().toISOString() });
   const secret = Deno.env.get('PAYSTACK_SECRET_KEY') || '';
   if (!secret) return json({ error: 'Paystack receipt verification is unavailable' }, 503);
-  const { data: splitReceipts, error: splitError } = await admin.rpc('paystack_event_split_receipts', {
-    p_event_id: eventId, p_references: references,
-  });
-  if (splitError) return json({ error: 'Could not check Paystack subaccount receipts.' }, 503);
-  const bySplitReference = new Map((splitReceipts || []).map((split: { reference: string; verified_at: string | null }) => [split.reference, split.verified_at]));
+  const splitReferences = (payments || []).filter(payment => {
+    const meta = metadata(payment.metadata);
+    return references.includes(payment.reference) && (meta.organisation_paystack_required === true || meta.organisation_paystack);
+  }).map(payment => payment.reference);
+  let splitReceipts: { reference: string; provider_id: number; verified_at: string | null }[] = [];
+  if (splitReferences.length) {
+    const response = await admin.rpc('paystack_event_split_receipts', {
+      p_event_id: eventId, p_references: splitReferences,
+    });
+    if (response.error) return json({ error: 'Could not check Paystack subaccount receipts.' }, 503);
+    splitReceipts = response.data || [];
+  }
+  const bySplitReference = new Map<string, string | null>(splitReferences.map(reference => [reference, null]));
+  for (const split of splitReceipts) bySplitReference.set(split.reference, split.verified_at);
   const receipts: Record<string, unknown>[] = [];
   const reversals: Record<string, unknown>[] = [];
   const gatewayRefunds: Record<string, unknown>[] = [];

@@ -2,7 +2,7 @@ import { matchReviewedRefund, reviewedRefundClaim, REVIEWED_REFUND_PREFIX } from
 import { traceEdgeRequest } from '../_shared/sentry-performance.ts';
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { assertPaystackPayment, parseMetadata, resolvePaystackVerifySecrets, verifyOrganisationPayment, verifyPaystackReference, verifyPaystackWebhookSignature } from './paystack.ts';
+import { assertPaystackPayment, parseMetadata, requiresOrganisationPaystack, resolvePaystackVerifySecrets, verifyOrganisationPayment, verifyPaystackReference, verifyPaystackWebhookSignature } from './paystack.ts';
 import { persistManualEventRegistrations, recordLicensePaymentSplit, markManualEventEntryCoversPaid } from './manual-event-payment.ts';
 import { fetchCommerceConfig, matchLicenseTypeByAmount } from './commerce.ts';
 
@@ -327,11 +327,6 @@ async function handleRefundEvent(
         || data.reference
         || '',
     );
-    if (reference) {
-        const { data: split, error } = await supabaseAdmin.rpc('paystack_split_refund_context', { p_reference: reference });
-        if (error) throw error;
-        if (split) return { updated: false, reason: 'organisation_refund_requires_exact_reference' };
-    }
     const amountRands = data.amount != null ? Number(data.amount) / 100 : null;
 
     let row: Record<string, unknown> | null = null;
@@ -353,6 +348,9 @@ async function handleRefundEvent(
         row = byId || null;
     }
 
+    if (row && parseMetadata(row.metadata).organisation_paystack_refund === true) {
+        return { updated: false, reason: 'organisation_refund_requires_exact_reference' };
+    }
     if (row && reviewedRefundClaim(row.metadata).reference) {
         const claim = reviewedRefundClaim(row.metadata);
         // Old webhook formats may omit the refund reference. In that case require
@@ -386,6 +384,9 @@ async function handleRefundEvent(
             .in('status', ['pending', 'processing', 'needs_attention', 'processed', 'failed']);
         const matchingAmount = (candidate: { amount: number }) => amountRands == null || Math.abs(Number(candidate.amount) - amountRands) < 0.01;
         const related = candidates || [];
+        if (related.some(candidate => parseMetadata(candidate.metadata).organisation_paystack_refund === true)) {
+            return { updated: false, reason: 'organisation_refund_requires_exact_reference' };
+        }
         // A callback without an exact refund reference or ID might be for the
         // reviewed attempt. It must never be applied to a neighbouring refund.
         if (related.some(candidate => reviewedRefundClaim(candidate.metadata).reference && matchingAmount(candidate))) {
@@ -491,10 +492,7 @@ serve(traceEdgeRequest('paystack-webhook', async (req: Request) => {
             .eq('reference', reference)
             .maybeSingle();
 
-        const { data: split, error: splitError } = await supabaseAdmin.rpc('paystack_split_refund_context', { p_reference: reference });
-        if (splitError) throw splitError;
-        if (split) {
-            if (!payment) throw new Error('A split Paystack charge has no saved payment.');
+        if (payment && requiresOrganisationPaystack(payment.metadata)) {
             const { secrets } = resolvePaystackVerifySecrets(payment);
             const verified = await verifyPaystackReference(reference, secrets);
             if (!verified.ok) throw new Error('Could not verify the Paystack split.');

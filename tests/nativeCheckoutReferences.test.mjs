@@ -110,7 +110,6 @@ test('native checkout initializes once, resumes after rename and returns the ins
         receipt.metadata.native_authorization_url = p.p_url;
         return ok(p.p_url);
       }
-      if (name === 'prepare_paystack_split') return ok(null);
       assert.equal(name, 'resolve_native_checkout_reference');
       return ok(p.p_reference === receipt.reference
         ? { app_reference: appToken, event_id: 517, gateway_reference: receipt.reference } : null);
@@ -175,7 +174,6 @@ for (const [requested, reference] of [[appToken, namedReference], [oldToken, old
           assert.equal(params.p_reference, reference);
           return ok(payment);
         }
-        if (name === 'verify_paystack_organisation_split') return ok('legacy');
         assert.equal(name, 'finalize_paid_event_checkout');
         assert.equal(params.p_payment_id, payment.id);
         return ok({ savedRows: [], persisted: true });
@@ -206,44 +204,50 @@ for (const [requested, reference] of [[appToken, namedReference], [oldToken, old
 
 for (const reference of [oldToken, namedReference]) {
   for (const licence of [false, true]) {
-    test(`retries a ${reference === oldToken ? 'legacy' : 'named'} ${licence ? 'split licence' : 'entry'} refund using the parent Paystack charge`, async () => {
-      const payment = { id: 'payment', reference: licence ? `LIC-${reference}` : reference, is_test: false,
-        metadata: licence ? { parent_reference: reference } : {} };
-      const refund = { id: 'refund', payment_id: payment.id, amount: licence ? 120 : 300, status: 'failed' };
-      let refundUpdates;
+    test(`keeps the live reviewed retry for a ${reference === oldToken ? 'legacy' : 'named'} ${licence ? 'licence' : 'entry'} refund`, async () => {
+      const retryReference = '4m-refund-fixture-42';
+      const registration = { id: 'registration', event_id: 517 };
+      const payment = { id: 'payment', event_id: 517, status: 'success', reference: licence ? `LIC-${reference}` : reference,
+        is_test: false, metadata: licence ? { parent_reference: reference } : {} };
+      const refund = { id: 'refund', payment_id: payment.id, event_registration_id: registration.id,
+        currency: 'ZAR', amount: licence ? 120 : 300, status: 'failed', metadata: { verify_failed: true } };
+      let saved;
       const service = {
-        rpc: async name => {
-          assert.ok(['paystack_split_refund_context', 'claim_paystack_split_refund'].includes(name), name);
-          return ok(null);
+        rpc: async (name, args) => {
+          if (name === 'claim_event_refund_retry') {
+            assert.equal(args.p_transaction_ref, reference);
+            return ok({ reference: retryReference });
+          }
+          assert.equal(name, 'apply_event_refund_retry_evidence');
+          assert.equal(args.p_reference, retryReference);
+          saved = args;
+          return ok({ id: refund.id, status: 'processing', paystack_refund_id: '42' });
         },
-        from: table => query((filters, changes) => {
-        if (table === 'payments') {
-          assert.equal(filters.id, payment.id);
-          return payment;
-        }
-        assert.equal(table, 'payment_refunds');
-        assert.equal(filters.id, refund.id);
-        if (changes) refundUpdates = changes;
-        return refund;
-      }) };
+        from: table => query(filters => {
+          const result = { payments: payment, payment_refunds: refund, event_registrations: registration }[table];
+          assert.equal(filters.id, result.id);
+          return result;
+        }),
+      };
       const providerCalls = [];
       const handler = refundHandler(() => service, async (url, options) => {
         providerCalls.push(url);
         if (url === `https://api.paystack.co/transaction/verify/${reference}`) {
-          return Response.json({ data: { reference, status: 'success', amount: 42000 } });
+          return Response.json({ status: true, data: { id: 517, reference, status: 'success', currency: 'ZAR', domain: 'live', amount: 42000 } });
         }
         assert.equal(url, 'https://api.paystack.co/refund');
-        assert.deepEqual(JSON.parse(options.body), { transaction: reference, amount: refund.amount * 100 });
-        return Response.json({ status: true, data: { id: 42, status: 'pending' } });
+        assert.deepEqual(JSON.parse(options.body), { transaction: reference, amount: refund.amount * 100, currency: 'ZAR', reference: retryReference });
+        return Response.json({ status: true, data: { id: 42, status: 'pending', reference: retryReference,
+          transaction: { id: 517, reference }, amount: refund.amount * 100, currency: 'ZAR', domain: 'live' } });
       });
       const result = await handler(new Request(`${endpoint}/paystack-refund`, {
         method: 'POST', headers: { Authorization: 'Bearer service' },
         body: JSON.stringify({ action: 'retry_failed', payment_refund_id: refund.id }),
       }));
-      assert.equal(result.status, 200);
-      assert.equal((await result.json()).paystack_reference, reference);
-      assert.equal(refundUpdates.paystack_reference, reference);
-      assert.equal(refundUpdates.status, 'processing');
+      const body = await result.json();
+      assert.equal(result.status, 200, body.error);
+      assert.equal(body.paystack_reference, reference);
+      assert.equal(saved.p_refund_id, refund.id);
       assert.equal(providerCalls.length, 2);
     });
   }
@@ -323,4 +327,31 @@ test('subaccount verification rejects a code from another environment and financ
   assert.equal(result.status, 400);
   assert.match((await result.json()).error, /current Paystack environment/);
   assert.equal(providerCalls, 1);
+});
+
+test('a subaccount refund without funding approval never reaches Paystack', async () => {
+  const registration = { id: 'entry', event_id: 517 };
+  const payment = { id: 'payment', event_id: 517, status: 'success', reference: namedReference, currency: 'ZAR', is_test: false,
+    metadata: { organisation_paystack_required: true } };
+  const refund = { id: 'refund', payment_id: payment.id, event_registration_id: registration.id, amount: 50, currency: 'ZAR', status: 'failed' };
+  const service = {
+    rpc: async (name, args) => {
+      assert.equal(name, 'claim_paystack_split_refund');
+      assert.equal(args.p_reference, namedReference);
+      assert.equal(args.p_funding_confirmed, false);
+      return { data: null, error: { message: 'This refund needs Paystack funding review before it can be sent.' } };
+    },
+    from: table => query(filters => {
+      const row = { payments: payment, payment_refunds: refund, event_registrations: registration }[table];
+      assert.equal(filters.id, row.id);
+      return row;
+    }),
+  };
+  const handler = refundHandler(() => service, () => assert.fail('A blocked refund must not call Paystack'));
+  const result = await handler(new Request(`${endpoint}/paystack-refund`, {
+    method: 'POST', headers: { Authorization: 'Bearer service' },
+    body: JSON.stringify({ action: 'retry_failed', payment_refund_id: refund.id }),
+  }));
+  assert.equal(result.status, 409);
+  assert.match((await result.json()).error, /funding review/);
 });

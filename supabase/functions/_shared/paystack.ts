@@ -198,6 +198,11 @@ export function resolvePaystackFetchSecrets(mode: PaystackFetchMode = 'both'): {
     return { secrets };
 }
 
+export function requiresOrganisationPaystack(metadata: unknown) {
+    const meta = parseMetadata(metadata);
+    return meta.organisation_paystack_required === true || Boolean(meta.organisation_paystack);
+}
+
 /** Verify the allocation from Paystack's server-side response, never checkout metadata. */
 export async function verifyOrganisationPayment(
     client: { rpc: (name: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: unknown }> },
@@ -213,5 +218,5 @@ export async function verifyOrganisationPayment(
         },
     });
     if (error) throw new Error('Could not verify the Paystack settlement destination.');
-    return data === 'verified' || data === 'legacy';
+    return data === 'verified';
 }
