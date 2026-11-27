@@ -42,23 +42,49 @@ async function getSubaccount(code: unknown, domain: string, requireVerified: boo
     if (!response.ok || !result.status || a?.subaccount_code !== code || a?.domain !== domain) {
         throw new Error('This subaccount was not found in the current Paystack environment.');
     }
-    if (![true, 1].includes(a.active) || a.currency !== 'ZAR'
-        || a.percentage_charge == null || Number(a.percentage_charge) !== 0 || !a.account_name
-        || !Number.isSafeInteger(Number(a.id)) || Number(a.id) <= 0) {
-        throw new Error('Use an active ZAR subaccount with the 4M share set to 0%.');
+    if (![true, 1].includes(a.active)) {
+        throw new Error('Paystack did not confirm this subaccount is active. Check its status in Paystack.');
     }
-    if (requireVerified && domain === 'live' && a.is_verified !== true) {
+    if (a.currency !== 'ZAR') {
+        throw new Error('Paystack did not confirm ZAR as the subaccount currency. Check the payout currency in Paystack.');
+    }
+    const rawShare = a.percentage_charge;
+    const mainShare = typeof rawShare === 'number' || (typeof rawShare === 'string' && rawShare.trim())
+        ? Number(rawShare) : NaN;
+    if (!Number.isFinite(mainShare) || mainShare < 0 || mainShare > 100) {
+        throw new Error('Paystack did not return a valid share for the 4M main account. Check Transaction Split on the subaccount in Paystack.');
+    }
+    if (mainShare !== 0) {
+        throw new Error(`Paystack shows a ${mainShare}% share for the 4M main account. Set the 4M share to 0% under Transaction Split and verify the code again.`);
+    }
+    const providerId = Number(a.id);
+    if (!Number.isSafeInteger(providerId) || providerId <= 0) {
+        throw new Error('Paystack did not return a valid internal ID for this subaccount.');
+    }
+    const verified = a.is_verified === true;
+    if (requireVerified && domain === 'live' && !verified) {
         throw new Error('Verify this payout subaccount in Paystack before enabling routing.');
+    }
+    const accountHolder = typeof a.account_name === 'string' ? a.account_name.trim() : '';
+    const businessName = typeof a.business_name === 'string' ? a.business_name.trim() : '';
+    const bankName = typeof a.settlement_bank === 'string' ? a.settlement_bank.trim() : '';
+    const lastFour = String(a.account_number || '').trim().match(/\d{4}$/)?.[0] || null;
+    if (!accountHolder && !verified) {
+        throw new Error('Paystack did not return the bank account holder name. Verify the subaccount in Paystack and try again.');
+    }
+    if (!accountHolder && (!businessName || !bankName || !lastFour)) {
+        throw new Error('Paystack did not return the business name or masked bank details needed to review this subaccount.');
     }
     return {
         code,
-        providerId: Number(a.id),
+        providerId,
         domain,
-        businessName: String(a.business_name || a.account_name),
-        accountHolder: String(a.account_name),
-        bankName: String(a.settlement_bank || ''),
-        lastFour: String(a.account_number || '').match(/\d{4}$/)?.[0] || null,
-        verified: a.is_verified === true,
+        businessName: businessName || accountHolder,
+        // The Finance client displays and echoes this label when confirming the review.
+        accountHolder: accountHolder || `Paystack business name · ${businessName}`,
+        bankName,
+        lastFour,
+        verified,
     };
 }
 
